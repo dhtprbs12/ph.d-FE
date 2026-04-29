@@ -6,25 +6,48 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#2D6A4F"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.phd.petfoodanalyzer",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PHD needs camera access to scan pet food labels and check food safety.",
+        "NSPhotoLibraryUsageDescription": "PHD needs photo library access to select pet food label images for analysis."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#2D6A4F"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.phd.petfoodanalyzer",
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PHD needs camera access to scan pet food labels."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "PHD needs photo library access to select pet food label images.",
+          "cameraPermission": "PHD needs camera access to scan pet food labels."
+        }
+      ],
+      "expo-asset"
+    ]
   }
 }

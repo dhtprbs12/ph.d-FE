@@ -1,0 +1,193 @@
+import React from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useApp } from '../context/AppContext';
+import type { RootStackParamList } from '../navigation/types';
+import { colors, shadows, spacing } from '../theme';
+
+type SectionDef = {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+};
+
+const SECTIONS: SectionDef[] = [
+  {
+    icon: 'information-circle',
+    title: 'For Informational Purposes Only',
+    body: 'PHD provides general information about pet food ingredients and nutritional analysis. The scores, grades, and recommendations provided by this app are for educational and informational purposes only and should not be considered as professional veterinary advice, diagnosis, or treatment.',
+  },
+  {
+    icon: 'medkit',
+    title: 'Not a Substitute for Veterinary Care',
+    body: "This app is not a substitute for professional veterinary advice. Always consult a qualified veterinarian before making any changes to your pet's diet, especially if your pet has health conditions, allergies, or special dietary needs.",
+  },
+  {
+    icon: 'bar-chart',
+    title: 'Accuracy of Information',
+    body: 'While we strive to provide accurate ingredient analysis based on AAFCO guidelines, we do not guarantee the completeness or accuracy of any information provided. Product formulations may change, and individual pet needs vary.',
+  },
+  {
+    icon: 'hand-left',
+    title: 'Limitation of Liability',
+    body: "PHD and its developers shall not be liable for any adverse effects, harm, or damages resulting from the use of information provided by this app. You assume full responsibility for any decisions made regarding your pet's nutrition.",
+  },
+  {
+    icon: 'checkmark-circle',
+    title: 'Your Acknowledgment',
+    body: 'By tapping "I Understand & Agree" below, you acknowledge that you have read, understood, and agree to these terms. You confirm that you will use this app as a supplementary informational tool and not as a replacement for professional veterinary guidance.',
+  },
+];
+
+export function DisclaimerScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Disclaimer'>>();
+  const insets = useSafeAreaInsets();
+  const { authenticateAndSync } = useApp();
+
+  const onAccept = async () => {
+    await AsyncStorage.setItem('hasAcceptedDisclaimer', 'true');
+    void authenticateAndSync();
+    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+  };
+
+  return (
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Ionicons name="shield" size={40} color={colors.primary} />
+        <Text style={styles.headerTitle}>Before You Begin</Text>
+        <Text style={styles.headerSubtitle}>Please read and accept our terms</Text>
+      </View>
+
+      {/* Scrollable content */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {SECTIONS.map((section) => (
+          <View key={section.title} style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconFrame}>
+                <Ionicons name={section.icon} size={16} color={colors.primary} />
+              </View>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+            </View>
+            <Text style={styles.sectionBody}>{section.body}</Text>
+          </View>
+        ))}
+      </ScrollView>
+
+      {/* Footer with button */}
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 30) }]}>
+        <View style={styles.divider} />
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.button,
+            shadows.button(colors.primary),
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={onAccept}
+        >
+          <Text style={styles.buttonLabel}>I Understand & Agree</Text>
+        </Pressable>
+
+        <Text style={styles.footerNote}>You must agree to continue using PHD</Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 20,
+    gap: 12,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: colors.textSecondary,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    gap: 20,
+  },
+  sectionCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionIconFrame: {
+    width: 24,
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  sectionBody: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  footer: {
+    gap: 12,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.divider,
+  },
+  button: {
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    marginHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonPressed: {
+    opacity: 0.92,
+  },
+  buttonLabel: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  footerNote: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+});
