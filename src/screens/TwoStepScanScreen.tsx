@@ -63,7 +63,13 @@ async function pollUntilComplete(
       onTick(tick % 4);
     }
     tick += 1;
-    await new Promise<void>(r => setTimeout(() => r(), 2000));
+    // Adaptive polling: catch fast cache-hit responses quickly, back off for
+    // slow first-time AI assessments so we don't spam the server.
+    //   ticks 1–3   → 700ms  (cached products usually finish here)
+    //   ticks 4–8   → 1500ms (typical merged Gemini call window)
+    //   ticks 9+    → 2500ms (long tail; many uncached ingredients)
+    const wait = tick <= 3 ? 700 : tick <= 8 ? 1500 : 2500;
+    await new Promise<void>(r => setTimeout(() => r(), wait));
   }
   throw new Error('Analysis timed out. Please try again.');
 }
@@ -564,7 +570,12 @@ export function TwoStepScanScreen() {
       </ScrollView>
 
       {/* Processing overlay */}
-      <Modal visible={showLoadingOverlay} transparent animationType="fade">
+      <Modal
+        visible={showLoadingOverlay}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { /* ignore back-press while processing */ }}
+      >
         <View style={s.overlayBg}>
           <View style={s.overlayPanel}>
             <ActivityIndicator size="large" color={colors.white} />

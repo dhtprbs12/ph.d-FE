@@ -56,18 +56,49 @@ api.interceptors.response.use(
   }
 );
 
+// Server already resizes to 1500x1500 for OCR; uploading bigger is pure waste
+// (and a major bottleneck on weak in-store cellular). Cap the longest side here.
+const UPLOAD_MAX_DIMENSION = 1500;
+
 /**
  * Multipart upload with field name `image` (JPEG). Optional string fields are appended for mixed forms.
+ *
+ * Resizes the image so the longest side is at most UPLOAD_MAX_DIMENSION before
+ * uploading. expo-image-manipulator preserves aspect ratio when only one of
+ * `width` / `height` is supplied, so we pick whichever side is the longer one.
+ * Falls back to a no-resize JPEG conversion if we can't read dimensions.
  */
 export async function uploadImage<T>(
   endpoint: string,
   imageUri: string,
   additionalFields?: Record<string, string>
 ): Promise<T> {
-  // Convert HEIC/HEIF to JPEG before uploading (iPhone default format not supported by server)
+  let probedWidth: number | undefined;
+  let probedHeight: number | undefined;
+  try {
+    const probe = await ImageManipulator.manipulateAsync(imageUri, [], {});
+    probedWidth = probe.width;
+    probedHeight = probe.height;
+  } catch {
+    // Probe failed — proceed with no resize, just HEIC→JPEG conversion.
+  }
+
+  const resizeAction: ImageManipulator.Action[] = [];
+  if (probedWidth && probedHeight) {
+    const longest = Math.max(probedWidth, probedHeight);
+    if (longest > UPLOAD_MAX_DIMENSION) {
+      resizeAction.push(
+        probedWidth >= probedHeight
+          ? { resize: { width: UPLOAD_MAX_DIMENSION } }
+          : { resize: { height: UPLOAD_MAX_DIMENSION } }
+      );
+    }
+  }
+
+  // Convert HEIC/HEIF to JPEG and (optionally) resize in one pass
   const manipulated = await ImageManipulator.manipulateAsync(
     imageUri,
-    [],
+    resizeAction,
     { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
   );
   const jpegUri = manipulated.uri;
