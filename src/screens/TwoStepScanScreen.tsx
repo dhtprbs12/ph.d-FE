@@ -20,10 +20,69 @@ import * as scanService from '../services/scanService';
 import { getDeviceId } from '../services/authService';
 import { useApp } from '../context/AppContext';
 import { colors, radius, shadows, spacing, typography } from '../theme';
-import type { Pet, PollScanResultResponse, ProductCandidate, ScanResult } from '../types';
+import type {
+  Pet,
+  PollScanResultResponse,
+  ProductCandidate,
+  ScanFrontResponse,
+  ScanResult,
+} from '../types';
 import { buildImageUrl } from '../utils/helpers';
+import type { CaptureMode } from '../components/scan/CaptureModeToggle';
+import { CaptureModeSheet } from '../components/scan/CaptureModeSheet';
+import { BurstCaptureView } from '../components/scan/BurstCaptureView';
+import { IngredientConfirmStep } from '../components/scan/IngredientConfirmStep';
+import { RecaptureModal } from '../components/scan/RecaptureModal';
+import type { PackageShape } from '../types';
 
-type ScanStep = 'front' | 'frontCaptured' | 'selectCandidate' | 'back' | 'analyzing';
+/** Maps Gemini's `packageShape` hint to the back-label capture pipeline. */
+function shapeToMode(shape?: PackageShape | null): CaptureMode {
+  if (shape === 'round' || shape === 'pouch') return shape;
+  return 'flat';
+}
+
+const MODE_LABELS: Record<CaptureMode, string> = {
+  flat: 'Flat label',
+  round: 'Round can',
+  pouch: 'Curved pouch',
+};
+
+const MODE_ICONS: Record<CaptureMode, keyof typeof Ionicons.glyphMap> = {
+  flat: 'square-outline',
+  round: 'ellipse-outline',
+  pouch: 'leaf-outline',
+};
+
+/**
+ * Build the mode-chip copy with one consistent rule:
+ *   - if Gemini actually chose this shape → "{mode} detected"
+ *   - if it's a fallback (null) or a manual override → "{mode}" plain
+ *
+ * Earlier we tried a fancier asymmetric scheme (flat never said
+ * "detected" because it was "the default anyway"), but the broken
+ * pattern made the chip harder to parse — users had to think about
+ * what the suffix meant. The single rule above is easier to read.
+ */
+function buildModeChipLabel(
+  mode: CaptureMode,
+  detectedShape: PackageShape | null,
+  overridden: boolean,
+): string {
+  const base = MODE_LABELS[mode];
+  if (overridden) return base;
+  if (detectedShape && shapeToMode(detectedShape) === mode) {
+    return `${base} detected`;
+  }
+  return base;
+}
+
+type ScanStep =
+  | 'front'
+  | 'frontCaptured'
+  | 'selectCandidate'
+  | 'back'
+  | 'confirming'
+  | 'analyzing';
 
 function extractScanId(data: unknown): string {
   if (data && typeof data === 'object') {
@@ -123,6 +182,7 @@ export function TwoStepScanScreen() {
     productName?: string;
     brand?: string;
     productType?: string;
+    packageShape?: PackageShape | null;
   }>({});
   const [analyzeStepsDone, setAnalyzeStepsDone] = useState([false, false, false, false]);
   const [processing, setProcessing] = useState(false);
@@ -134,7 +194,45 @@ export function TwoStepScanScreen() {
     'Generating report',
   ]);
 
+  // ── Multi-frame (round can / pouch) capture state ──────────────────────
+  // captureMode controls which capture pipeline the back-label step uses.
+  // It's auto-set from Gemini's `packageShape` after the front scan
+  // (option D from our UX discussion); the user can override via the
+  // small "Detected: <X> ▼" link, which opens CaptureModeSheet.
+  // burstVisible drives the BurstCaptureView modal. multiResult holds the
+  // OCR result while we route the user to either auto-commit, the
+  // confirmation step, or the recovery modal.
+  const [captureMode, setCaptureMode] = useState<CaptureMode>('flat');
+  // True iff the user has manually overridden the auto-detected mode via
+  // CaptureModeSheet. Resets every time we re-run the front scan. Used
+  // by `buildModeChipLabel` to drop the "detected"/"default" suffix
+  // (since the user's choice is the source of truth, not Gemini's).
+  const [modeOverridden, setModeOverridden] = useState(false);
+  const [modeSheetVisible, setModeSheetVisible] = useState(false);
+  const [burstVisible, setBurstVisible] = useState(false);
+  const [multiResult, setMultiResult] = useState<scanService.ScanBackMultiResponse | null>(null);
+  const [recoverVisible, setRecoverVisible] = useState(false);
+
   const showLoadingOverlay = processing && step !== 'analyzing';
+
+  // Loading overlay copy. Each step picks the most specific message
+  // available so the user always knows which phase is in flight (and
+  // never sees a generic "Processing image…" mid-multi-frame flow).
+  // Photo counts are omitted on purpose — they kept flickering between
+  // numbered and un-numbered variants as `step` transitioned.
+  const overlayText =
+    step === 'front'
+      ? 'Reading product…'
+      : step === 'selectCandidate'
+        ? 'Loading product…'
+        : step === 'back'
+          ? captureMode === 'flat'
+            ? 'Reading the label…'
+            : 'Reading photos…'
+          : step === 'confirming'
+            ? 'Submitting ingredients…'
+            : 'Working…';
+
   const petLabel = pet?.name ?? 'your pet';
 
   const pickImage = useCallback(async (fromCamera: boolean) => {
@@ -162,13 +260,27 @@ export function TwoStepScanScreen() {
   const runPoll = useCallback(
     async (scanId: string) => {
       setAnalyzeStepsDone([false, false, false, false]);
-      return pollUntilComplete(scanId, idx => {
+      const result = await pollUntilComplete(scanId, idx => {
         setAnalyzeStepsDone(prev => {
           const next = [...prev];
-          for (let i = 0; i <= idx; i += 1) next[i] = true;
+          // Cap at index 2: the last step ("Generating report") is only
+          // checked off once the result actually arrives. Otherwise the
+          // poll's artificial tick%4 progress can fill all 4 checkmarks
+          // long before the backend is done, leaving the user staring
+          // at a "done" screen for several seconds with nothing happening.
+          const capped = Math.min(idx, 2);
+          for (let i = 0; i <= capped; i += 1) next[i] = true;
           return next;
         });
       });
+      // Fill the final checkmark before navigating so the user sees a
+      // satisfying complete state instead of jumping mid-spinner.
+      setAnalyzeStepsDone([true, true, true, true]);
+      // Tiny pause so the final ✓ has time to render — without it, the
+      // navigation often beats React to the screen and the user never
+      // sees the "all done" frame.
+      await new Promise<void>(r => setTimeout(r, 250));
+      return result;
     },
     []
   );
@@ -180,6 +292,32 @@ export function TwoStepScanScreen() {
     [navigation]
   );
 
+  /**
+   * Shared front-scan tail: writes the captured metadata into state and
+   * auto-derives `captureMode` from Gemini's package-shape hint. Falls
+   * back to 'flat' when the hint is missing so the user always lands on
+   * the simplest pipeline.
+   */
+  const applyFrontResult = useCallback((res: ScanFrontResponse) => {
+    setPendingScanId(res.pendingScanId);
+    const shape = res.captured?.packageShape ?? null;
+    setFrontMeta({
+      productName: res.captured?.productName,
+      brand: res.captured?.brand,
+      productType: res.captured?.productType,
+      packageShape: shape,
+    });
+    setCaptureMode(shapeToMode(shape));
+    setModeOverridden(false); // fresh detection clears any prior override
+    const list = res.candidates ?? [];
+    if (list.length > 0) {
+      setCandidates(list);
+      setStep('selectCandidate');
+    } else {
+      setStep('frontCaptured');
+    }
+  }, []);
+
   const onFrontCapture = useCallback(async () => {
     if (!pet) return;
     const uri = await pickImage(true);
@@ -187,25 +325,13 @@ export function TwoStepScanScreen() {
     setProcessing(true);
     try {
       const res = await scanService.scanFrontLabel(uri);
-      setPendingScanId(res.pendingScanId);
-      setFrontMeta({
-        productName: res.captured?.productName,
-        brand: res.captured?.brand,
-        productType: res.captured?.productType,
-      });
-      const list = res.candidates ?? [];
-      if (list.length > 0) {
-        setCandidates(list);
-        setStep('selectCandidate');
-      } else {
-        setStep('frontCaptured');
-      }
+      applyFrontResult(res);
     } catch (e) {
       console.warn(e);
     } finally {
       setProcessing(false);
     }
-  }, [pet, pickImage]);
+  }, [pet, pickImage, applyFrontResult]);
 
   const onFrontLibrary = useCallback(async () => {
     if (!pet) return;
@@ -214,25 +340,13 @@ export function TwoStepScanScreen() {
     setProcessing(true);
     try {
       const res = await scanService.scanFrontLabel(uri);
-      setPendingScanId(res.pendingScanId);
-      setFrontMeta({
-        productName: res.captured?.productName,
-        brand: res.captured?.brand,
-        productType: res.captured?.productType,
-      });
-      const list = res.candidates ?? [];
-      if (list.length > 0) {
-        setCandidates(list);
-        setStep('selectCandidate');
-      } else {
-        setStep('frontCaptured');
-      }
+      applyFrontResult(res);
     } catch (e) {
       console.warn(e);
     } finally {
       setProcessing(false);
     }
-  }, [pet, pickImage]);
+  }, [pet, pickImage, applyFrontResult]);
 
   const onSelectCandidate = useCallback(
     async (c: ProductCandidate) => {
@@ -322,9 +436,95 @@ export function TwoStepScanScreen() {
     }
   }, [pet, pendingScanId, pickImage, runPoll, finishWithResult]);
 
+  // ── Multi-frame capture: shared commit + entry points ──────────────────
+
+  /**
+   * Final leg of the back-label flow when the ingredient list is ALREADY
+   * extracted (multi-frame OCR). Called either automatically (high
+   * confidence) or after the user confirms the list (medium confidence).
+   */
+  const commitMultiBack = useCallback(
+    async (ingredients: string[]) => {
+      if (!pet || !pendingScanId) return;
+      setAnalyzeLabels([
+        'Loading ingredients',
+        'Checking database',
+        `Scoring for ${pet.name}`,
+        'Generating report',
+      ]);
+      setProcessing(true);
+      try {
+        const deviceId = await getDeviceId();
+        const fields = petToBackFields(pet, deviceId);
+        const raw = await scanService.commitBackLabel(pendingScanId, ingredients, fields);
+        const scanId = extractScanId(raw);
+        setIngredientCount(ingredients.length);
+        setStep('analyzing');
+        setProcessing(false);
+        const result = await runPoll(scanId);
+        finishWithResult(result);
+      } catch (e) {
+        console.warn('[SCAN] commitMultiBack error:', e);
+        setProcessing(false);
+      }
+    },
+    [pet, pendingScanId, runPoll, finishWithResult]
+  );
+
+  /**
+   * Burst capture finished. Upload all frames, then route the user based
+   * on the server's confidence-derived `suggestedAction`:
+   *   "auto_commit"  → straight to scoring (high confidence)
+   *   "confirm"      → confirmation step UI (medium confidence)
+   *   "recapture"    → recovery modal (low confidence)
+   */
+  const onBurstComplete = useCallback(
+    async (uris: string[]) => {
+      if (!pet || !pendingScanId) {
+        setBurstVisible(false);
+        return;
+      }
+      setBurstVisible(false);
+      setProcessing(true);
+      try {
+        const result = await scanService.scanBackLabelMulti(uris, pendingScanId);
+        setMultiResult(result);
+        if (result.suggestedAction === 'auto_commit') {
+          setProcessing(false);
+          await commitMultiBack(result.ingredients);
+        } else if (result.suggestedAction === 'recapture') {
+          setProcessing(false);
+          setRecoverVisible(true);
+        } else {
+          setProcessing(false);
+          setStep('confirming');
+        }
+      } catch (e) {
+        console.warn('[SCAN] multi-back upload error:', e);
+        setProcessing(false);
+      }
+    },
+    [pet, pendingScanId, commitMultiBack]
+  );
+
+  /** User chose "Re-scan" from either the confirm step or the recovery modal. */
+  const restartBurstCapture = useCallback(() => {
+    setRecoverVisible(false);
+    setMultiResult(null);
+    setStep('back');
+    setBurstVisible(true);
+  }, []);
+
+  /** From recovery modal: "Show what we got anyway" → fall through to confirm. */
+  const onShowAnyway = useCallback(() => {
+    setRecoverVisible(false);
+    setStep('confirming');
+  }, []);
+
   const step1Active = step === 'front';
   const step1Complete = step !== 'front';
-  const step2Active = step === 'back' || step === 'frontCaptured';
+  const step2Active =
+    step === 'back' || step === 'frontCaptured' || step === 'confirming';
   /** Back label is only "done" after the user has submitted it and analysis is running. */
   const step2Complete = step === 'analyzing';
   const barActive = step !== 'front';
@@ -343,13 +543,97 @@ export function TwoStepScanScreen() {
       {/* Progress header */}
       <View style={s.progressHeader}>
         <View style={s.progressRow}>
-          <StepIndicator number={1} title="Front Label" subtitle="Name & Brand" isActive={step1Active} isComplete={step1Complete} />
+          <StepIndicator number={1} title="Identify" subtitle="Brand & name" isActive={step1Active} isComplete={step1Complete} />
           <View style={[s.progressBar, barActive && s.progressBarActive]} />
-          <StepIndicator number={2} title="Back Label" subtitle="Ingredients" isActive={step2Active} isComplete={step2Complete} />
+          <StepIndicator number={2} title="Ingredients" subtitle="" isActive={step2Active} isComplete={step2Complete} />
         </View>
       </View>
 
       {/* Content */}
+      {step === 'selectCandidate' ? (
+        // selectCandidate gets its own flex layout (NOT inside the outer
+        // ScrollView) so we can pin the "None of these" CTA to the bottom
+        // of the screen and let only the candidate list scroll. Nesting
+        // a ScrollView inside the outer ScrollView traps the gesture once
+        // the inner list bottoms out, which made the CTA hard to reach.
+        <View style={s.selectCandidateLayout}>
+          {!pet && (
+            <Text style={s.noPet}>Add a pet profile in the Pets tab to run a personalized scan.</Text>
+          )}
+          <View style={s.candidateHeader}>
+            <View style={s.candidateHeaderTitleRow}>
+              <Ionicons name="search" size={18} color={colors.primary} />
+              <Text style={s.candidateTitle}>Is this your product?</Text>
+            </View>
+            {(frontMeta.brand || frontMeta.productName) && (
+              <Text style={s.candidateSubtitle} numberOfLines={1}>
+                Matches for "{frontMeta.brand ?? ''} {frontMeta.productName ?? ''}"
+              </Text>
+            )}
+          </View>
+          <ScrollView
+            style={s.candidateList}
+            contentContainerStyle={s.candidateListContent}
+            showsVerticalScrollIndicator
+          >
+            {candidates.map(c => (
+              <Pressable
+                key={c.id}
+                style={({ pressed }) => [s.candidateCard, pressed && { opacity: 0.9 }]}
+                onPress={() => onSelectCandidate(c)}
+              >
+                {buildImageUrl(c.imageUrl ?? c.image_url) ? (
+                  <Image
+                    source={{ uri: buildImageUrl(c.imageUrl ?? c.image_url)! }}
+                    style={s.candidateImg}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[s.candidateImg, s.candidateImgPh]}>
+                    <Ionicons name="paw" size={28} color={colors.primary} />
+                  </View>
+                )}
+                <View style={s.candidateInfo}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    {c.brand ? (
+                      <Text style={s.candidateCardBrand} numberOfLines={1}>{c.brand.toUpperCase()}</Text>
+                    ) : null}
+                    <Text style={s.candidateCardName} numberOfLines={3}>
+                      {c.name ?? 'Unknown Product'}
+                    </Text>
+                    {(c.productType ?? c.product_type) ? (
+                      <View style={s.candidateTypePill}>
+                        <Text style={s.candidateTypeText}>
+                          {(c.productType ?? c.product_type ?? '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <View style={s.candidateFooter}>
+            <View style={s.candidateOrRow}>
+              <View style={s.candidateOrLine} />
+              <Text style={s.candidateOrText}>or</Text>
+              <View style={s.candidateOrLine} />
+            </View>
+            <Pressable
+              onPress={onNotHereScanBack}
+              style={({ pressed }) => [s.notHereCard, pressed && s.notHereCardPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="None of these products match. Continue to scan the back label."
+            >
+              <View style={s.notHereTextBlock}>
+                <Text style={s.notHereTitle}>None of these?</Text>
+                <Text style={s.notHereSub}>Continue to scan the back label</Text>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
       <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
         {!pet && (
           <Text style={s.noPet}>Add a pet profile in the Pets tab to run a personalized scan.</Text>
@@ -360,17 +644,14 @@ export function TwoStepScanScreen() {
             <View style={s.spacer} />
             <FrontIllustration variant="front" />
             <View style={s.textBlock}>
-              <Text style={s.stepTitle}>Step 1: Front Label</Text>
-              <Text style={s.stepDesc}>
-                Capture the <Text style={{ fontWeight: '700' }}>product name</Text> and{' '}
-                <Text style={{ fontWeight: '700' }}>brand</Text> from the front of the package
-              </Text>
+              <Text style={s.stepTitle}>Identify Product</Text>
+              <Text style={s.stepDesc}>Brand & product name</Text>
             </View>
             <View style={s.spacer} />
             <View style={s.buttonGroup}>
               <Pressable style={s.primaryBtn} onPress={onFrontCapture}>
                 <Ionicons name="camera" size={18} color={colors.white} />
-                <Text style={s.primaryBtnText}>Scan Front Label</Text>
+                <Text style={s.primaryBtnText}>Scan Product</Text>
               </Pressable>
               <Pressable style={s.secondaryBtn} onPress={onFrontLibrary}>
                 <Ionicons name="images-outline" size={18} color={colors.primary} />
@@ -387,7 +668,6 @@ export function TwoStepScanScreen() {
               <Ionicons name="checkmark-circle" size={50} color={colors.safe} />
             </View>
             <View style={s.capturedTextBlock}>
-              <Text style={s.stepTitle}>Front Label Captured!</Text>
               {(frontMeta.brand || frontMeta.productName) && (
                 <View style={s.capturedCard}>
                   {frontMeta.brand ? (
@@ -398,123 +678,116 @@ export function TwoStepScanScreen() {
               )}
             </View>
             <View style={s.flipBlock}>
-              <Ionicons name="refresh" size={28} color={colors.primary} />
-              <Text style={s.flipTitle}>Flip the package over</Text>
-              <Text style={s.flipSub}>We need the ingredients list from the back</Text>
+              <Text style={s.flipTitle}>Next</Text>
+              <Text style={s.flipSub}>Find the ingredient list on the package</Text>
             </View>
             <View style={s.spacer} />
             <Pressable style={s.primaryBtn} onPress={onFrontCapturedContinue}>
-              <Text style={s.primaryBtnText}>Continue to Back Label</Text>
+              <Text style={s.primaryBtnText}>Continue to Ingredients</Text>
               <Ionicons name="arrow-forward" size={14} color={colors.white} />
             </Pressable>
           </View>
         )}
 
-        {step === 'selectCandidate' && (
-          <View style={{ gap: 0 }}>
-            <View style={s.candidateHeader}>
-              <View style={s.candidateHeaderCircle}>
-                <Ionicons name="search" size={28} color={colors.primary} />
-              </View>
-              <Text style={s.candidateTitle}>Is this your product?</Text>
-              {(frontMeta.brand || frontMeta.productName) && (
-                <Text style={s.candidateSubtitle}>
-                  We found matches for "{frontMeta.brand ?? ''} {frontMeta.productName ?? ''}"
-                </Text>
-              )}
-            </View>
-            <ScrollView style={s.candidateList} nestedScrollEnabled>
-              {candidates.map(c => (
-                <Pressable
-                  key={c.id}
-                  style={({ pressed }) => [s.candidateCard, pressed && { opacity: 0.9 }]}
-                  onPress={() => onSelectCandidate(c)}
-                >
-                  {buildImageUrl(c.imageUrl ?? c.image_url) ? (
-                    <Image
-                      source={{ uri: buildImageUrl(c.imageUrl ?? c.image_url)! }}
-                      style={s.candidateImg}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[s.candidateImg, s.candidateImgPh]}>
-                      <Ionicons name="paw" size={28} color={colors.primary} />
-                    </View>
-                  )}
-                  <View style={s.candidateInfo}>
-                    <View style={{ flex: 1, gap: 4 }}>
-                      {c.brand ? (
-                        <Text style={s.candidateCardBrand}>{c.brand.toUpperCase()}</Text>
-                      ) : null}
-                      <Text style={s.candidateCardName} numberOfLines={2}>
-                        {c.name ?? 'Unknown Product'}
-                      </Text>
-                      {(c.productType ?? c.product_type) ? (
-                        <View style={s.candidateTypePill}>
-                          <Text style={s.candidateTypeText}>
-                            {(c.productType ?? c.product_type ?? '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-            <View style={s.candidateFooter}>
-              <View style={s.candidateOrRow}>
-                <View style={s.candidateOrLine} />
-                <Text style={s.candidateOrText}>or</Text>
-                <View style={s.candidateOrLine} />
-              </View>
-              <Pressable
-                onPress={onNotHereScanBack}
-                style={({ pressed }) => [s.notHereCard, pressed && s.notHereCardPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="None of these products match. Continue to scan the back label."
-              >
-                <View style={s.notHereTextBlock}>
-                  <Text style={s.notHereTitle}>None of these?</Text>
-                  <Text style={s.notHereSub}>Continue to scan the back label</Text>
+        {step === 'back' && (
+          <View style={s.stepContainer}>
+            {/* Captured chip pinned at top so the user always sees what
+                product they're scanning ingredients for. */}
+            {(frontMeta.brand || frontMeta.productName) && (
+              <View style={s.capturedChipTop}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color={colors.safe}
+                  style={s.capturedChipIcon}
+                />
+                <View style={s.capturedChipTextCol}>
+                  {frontMeta.brand ? (
+                    <Text style={s.capturedChipBrand} numberOfLines={1}>
+                      {frontMeta.brand.toUpperCase()}
+                    </Text>
+                  ) : null}
+                  <Text style={s.capturedChipName} numberOfLines={2}>
+                    {frontMeta.productName ?? 'Product'}
+                  </Text>
                 </View>
+              </View>
+            )}
+
+            <View style={s.spacer} />
+            <FrontIllustrationBack />
+            <View style={s.textBlock}>
+              <Text style={s.stepTitle}>Scan Ingredients</Text>
+            </View>
+            <View style={s.spacer} />
+
+            <View style={s.buttonGroup}>
+              {/*
+                Mode chip sits ABOVE the buttons (not below) so users
+                actually notice it — the mode determines whether the
+                primary button takes one shot or six, which is too
+                consequential to bury. Tap = override sheet.
+              */}
+              <Pressable
+                style={s.modeChip}
+                onPress={() => setModeSheetVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Capture mode: ${MODE_LABELS[captureMode]}. Tap to change.`}
+              >
+                <Ionicons
+                  name={MODE_ICONS[captureMode]}
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={s.modeChipText}>
+                  {buildModeChipLabel(
+                    captureMode,
+                    frontMeta.packageShape ?? null,
+                    modeOverridden,
+                  )}
+                </Text>
+                <View style={{ flex: 1 }} />
+                <Ionicons name="chevron-down" size={16} color={colors.primary} />
               </Pressable>
+
+              {captureMode === 'flat' ? (
+                <>
+                  <Pressable style={s.primaryBtn} onPress={onBackCapture}>
+                    <Ionicons name="camera" size={18} color={colors.white} />
+                    <Text style={s.primaryBtnText}>Scan Ingredients</Text>
+                  </Pressable>
+                  <Pressable style={s.secondaryBtn} onPress={onBackLibrary}>
+                    <Ionicons name="images-outline" size={18} color={colors.primary} />
+                    <Text style={s.secondaryBtnText}>Choose from Library</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable
+                  style={s.primaryBtn}
+                  onPress={() => setBurstVisible(true)}
+                  accessibilityLabel="Start burst capture"
+                >
+                  <Ionicons name="camera" size={18} color={colors.white} />
+                  <Text style={s.primaryBtnText}>Start Burst Capture</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         )}
 
-        {step === 'back' && (
-          <View style={s.stepContainer}>
-            <View style={s.spacer} />
-            <FrontIllustration variant="back" />
-            <View style={s.textBlock}>
-              <Text style={s.stepTitle}>Step 2: Back Label</Text>
-              <Text style={s.stepDesc}>
-                Now flip the package and capture the{' '}
-                <Text style={{ fontWeight: '700' }}>ingredients list</Text> and{' '}
-                <Text style={{ fontWeight: '700' }}>nutrition info</Text>
-              </Text>
-            </View>
-            {(frontMeta.brand || frontMeta.productName) && (
-              <View style={s.capturedChip}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.safe} />
-                <Text style={s.capturedChipText} numberOfLines={1}>
-                  {`${frontMeta.brand ?? ''} ${frontMeta.productName ?? ''}`.trim()}
-                </Text>
-              </View>
-            )}
-            <View style={s.spacer} />
-            <View style={s.buttonGroup}>
-              <Pressable style={s.primaryBtn} onPress={onBackCapture}>
-                <Ionicons name="camera" size={18} color={colors.white} />
-                <Text style={s.primaryBtnText}>Scan Back Label</Text>
-              </Pressable>
-              <Pressable style={s.secondaryBtn} onPress={onBackLibrary}>
-                <Ionicons name="images-outline" size={18} color={colors.primary} />
-                <Text style={s.secondaryBtnText}>Choose from Library</Text>
-              </Pressable>
-            </View>
-          </View>
+        {step === 'confirming' && multiResult && (
+          <IngredientConfirmStep
+            ingredients={multiResult.ingredients}
+            confidence={multiResult.confidence}
+            notes={multiResult.notes}
+            brand={frontMeta.brand}
+            productName={frontMeta.productName}
+            onConfirm={ingredients => {
+              setMultiResult(null);
+              commitMultiBack(ingredients);
+            }}
+            onRescan={restartBurstCapture}
+          />
         )}
 
         {step === 'analyzing' && (
@@ -568,6 +841,37 @@ export function TwoStepScanScreen() {
           </View>
         )}
       </ScrollView>
+      )}
+
+      {/* Burst capture (round can / pouch only) */}
+      <BurstCaptureView
+        visible={burstVisible}
+        mode={captureMode === 'pouch' ? 'pouch' : 'round'}
+        onCancel={() => setBurstVisible(false)}
+        onComplete={onBurstComplete}
+      />
+
+      {/* Capture-mode override sheet (escape hatch for auto-detect) */}
+      <CaptureModeSheet
+        visible={modeSheetVisible}
+        selected={captureMode}
+        onSelect={mode => {
+          setCaptureMode(mode);
+          setModeOverridden(true);
+        }}
+        onClose={() => setModeSheetVisible(false)}
+      />
+
+      {/* Recovery modal (low-confidence multi-frame OCR) */}
+      <RecaptureModal
+        visible={recoverVisible}
+        missingSection={multiResult?.missingSection ?? null}
+        notes={multiResult?.notes}
+        capturedCount={multiResult?.imageCount}
+        onRescan={restartBurstCapture}
+        onShowAnyway={onShowAnyway}
+        onCancel={() => setRecoverVisible(false)}
+      />
 
       {/* Processing overlay */}
       <Modal
@@ -579,9 +883,7 @@ export function TwoStepScanScreen() {
         <View style={s.overlayBg}>
           <View style={s.overlayPanel}>
             <ActivityIndicator size="large" color={colors.white} />
-            <Text style={s.overlayText}>
-              {step === 'front' ? 'Reading front label...' : 'Processing image...'}
-            </Text>
+            <Text style={s.overlayText}>{overlayText}</Text>
           </View>
         </View>
       </Modal>
@@ -663,6 +965,11 @@ function StepIndicator({
   );
 }
 
+/**
+ * Step 1 illustration. We deliberately do NOT label this "FRONT" — the
+ * brand+product name often lives on a side or top of the package, and a
+ * "FRONT" badge would mis-train users to flip the package the wrong way.
+ */
 function FrontIllustration({ variant }: { variant: 'front' | 'back' }) {
   return (
     <View style={s.illusOuter}>
@@ -679,15 +986,26 @@ function FrontIllustration({ variant }: { variant: 'front' | 'back' }) {
             {[1, 2, 3, 4].map(i => (
               <View key={i} style={s.illusIngBar} />
             ))}
-            <View style={{ height: 8 }} />
-            <Text style={s.illusNutrLabel}>Nutrition Facts</Text>
-            {[1, 2, 3].map(i => (
-              <View key={i} style={s.illusNutrBar} />
-            ))}
           </View>
         )}
       </View>
-      <Text style={s.illusSideLabel}>{variant === 'front' ? 'FRONT' : 'BACK'}</Text>
+    </View>
+  );
+}
+
+/**
+ * Trimmed variant used on Step 2. Smaller dashed frame, no nutrition
+ * mock (we don't actually parse nutrition yet), no "BACK" badge.
+ */
+function FrontIllustrationBack() {
+  return (
+    <View style={s.illusOuterSmall}>
+      <View style={s.illusDashedFrameSmall}>
+        <Text style={s.illusIngLabel}>Ingredients:</Text>
+        {[1, 2, 3].map(i => (
+          <View key={i} style={s.illusIngBar} />
+        ))}
+      </View>
     </View>
   );
 }
@@ -751,6 +1069,10 @@ const s = StyleSheet.create({
   stepIndicatorSub: {
     fontSize: 10,
     fontWeight: '500',
+    // Keep height stable even when one of the two indicators has no
+    // subtitle (e.g. Step 2 = "Ingredients" with no fine-print) so the
+    // step circles stay vertically aligned across the progress row.
+    minHeight: 14,
   },
   scrollContent: {
     flexGrow: 1,
@@ -870,45 +1192,53 @@ const s = StyleSheet.create({
   },
   candidateHeader: {
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.lg,
+    gap: 4,
+    paddingTop: spacing.sm,
   },
-  candidateHeaderCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(45,106,79,0.1)',
+  candidateHeaderTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
   },
   candidateTitle: {
-    fontSize: 22,
+    fontSize: 17,
     fontWeight: '700',
     color: colors.textPrimary,
   },
   candidateSubtitle: {
-    ...typography.bodySmall,
+    fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'center',
   },
+  // selectCandidate step is rendered OUTSIDE the screen-wide ScrollView
+  // so we own a flex column here: header (intrinsic) + list (flex: 1)
+  // + footer (intrinsic, pinned at bottom).
+  selectCandidateLayout: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
   candidateList: {
-    maxHeight: 420,
-    marginTop: spacing.md,
+    flex: 1,
+    marginTop: spacing.sm,
+  },
+  candidateListContent: {
+    paddingBottom: spacing.sm,
   },
   candidateCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
     backgroundColor: colors.card,
     borderRadius: radius.medium,
-    marginBottom: spacing.sm,
-    gap: 14,
+    marginBottom: 8,
+    gap: 10,
     ...shadows.card,
   },
   candidateImg: {
-    width: 88,
-    height: 88,
-    borderRadius: 12,
+    width: 68,
+    height: 68,
+    borderRadius: 10,
     backgroundColor: 'rgba(45,106,79,0.06)',
   },
   candidateImgPh: {
@@ -919,37 +1249,39 @@ const s = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   candidateCardBrand: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: colors.primary,
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
   },
   candidateCardName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.textPrimary,
-    lineHeight: 21,
+    lineHeight: 18,
   },
   candidateTypePill: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
     backgroundColor: 'rgba(45,106,79,0.08)',
-    marginTop: 2,
+    marginTop: 3,
   },
   candidateTypeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: colors.primary,
   },
   candidateFooter: {
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     gap: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+    backgroundColor: colors.background,
   },
   candidateOrRow: {
     flexDirection: 'row',
@@ -1006,9 +1338,51 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(64,145,108,0.1)',
     borderRadius: radius.medium,
   },
-  capturedChipText: {
+  capturedChipTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    alignSelf: 'stretch',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: spacing.md,
+    backgroundColor: 'rgba(64,145,108,0.1)',
+    borderRadius: radius.medium,
+    marginTop: spacing.xs,
+  },
+  capturedChipIcon: {
+    marginTop: 2,
+  },
+  capturedChipTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  capturedChipBrand: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 1.2,
+  },
+  capturedChipName: {
     ...typography.labelMedium,
     color: colors.textPrimary,
+    lineHeight: 18,
+  },
+  modeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radius.medium,
+    backgroundColor: 'rgba(45,106,79,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(45,106,79,0.18)',
+  },
+  modeChipText: {
+    ...typography.labelLarge,
+    color: colors.primary,
   },
   analyzingContainer: {
     flex: 1,
@@ -1085,6 +1459,16 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.lg,
   },
+  illusOuterSmall: {
+    alignSelf: 'center',
+    width: 130,
+    height: 150,
+    borderRadius: 16,
+    backgroundColor: 'rgba(45,106,79,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
   illusDashedFrame: {
     width: 140,
     height: 160,
@@ -1094,6 +1478,18 @@ const s = StyleSheet.create({
     borderColor: 'rgba(45,106,79,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  illusDashedFrameSmall: {
+    width: 100,
+    height: 110,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(45,106,79,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 4,
   },
   illusMockBrand: {
     fontSize: 11,
@@ -1106,35 +1502,16 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(45,106,79,0.6)',
   },
-  illusSideLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-    letterSpacing: 2,
-    marginTop: 10,
-  },
   illusIngLabel: {
     fontSize: 10,
     fontWeight: '700',
     color: 'rgba(45,106,79,0.6)',
   },
   illusIngBar: {
-    width: 100,
+    width: 70,
     height: 4,
     borderRadius: 1,
     backgroundColor: 'rgba(45,106,79,0.2)',
-    marginTop: 2,
-  },
-  illusNutrLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: 'rgba(45,106,79,0.5)',
-  },
-  illusNutrBar: {
-    width: 80,
-    height: 3,
-    borderRadius: 1,
-    backgroundColor: 'rgba(45,106,79,0.15)',
     marginTop: 2,
   },
   overlayBg: {
