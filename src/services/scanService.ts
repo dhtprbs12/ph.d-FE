@@ -1,5 +1,5 @@
 import api from './api';
-import { uploadImage } from './api';
+import { uploadImage, uploadImages } from './api';
 import type {
   CommunityStats,
   FoodCheckResult,
@@ -42,6 +42,68 @@ export async function scanBackLabel(
   if (petFields.petWeightKg !== undefined) fields.petWeightKg = petFields.petWeightKg;
 
   return uploadImage<unknown>(`/scan/back/${pendingScanId}`, imageUri, fields);
+}
+
+/**
+ * Multi-frame back-label OCR for cylindrical cans / pouches.
+ *
+ * Returns the extracted ingredient list + confidence metadata. The caller
+ * decides what to do based on `suggestedAction`:
+ *   "auto_commit" → call commitBackLabel(...) immediately
+ *   "confirm"     → show confirmation step, then commitBackLabel(...)
+ *   "recapture"   → show recovery modal, retry capture
+ *
+ * Pet fields are NOT sent here — they go with commitBackLabel so the
+ * server doesn't waste the per-pet scoring pipeline if the user cancels.
+ */
+export interface ScanBackMultiResponse {
+  pendingScanId: string;
+  ingredients: string[];
+  rawIngredientsText: string;
+  confidence: number;
+  isComplete: boolean;
+  missingSection: 'start' | 'middle' | 'end' | null;
+  notes: string;
+  imageCount: number;
+  suggestedAction: 'auto_commit' | 'confirm' | 'recapture';
+}
+
+export async function scanBackLabelMulti(
+  imageUris: string[],
+  pendingScanId: string,
+): Promise<ScanBackMultiResponse> {
+  return uploadImages<ScanBackMultiResponse>(
+    `/scan/back-multi/${pendingScanId}`,
+    imageUris,
+  );
+}
+
+/**
+ * Finalize the back-label step with the user-confirmed ingredient list and
+ * kick off the per-pet scoring pipeline. Pair with `scanBackLabelMulti`.
+ *
+ * Backend reuses the front-label data already attached to `pendingScanId`,
+ * so we only need to send ingredients + pet fields.
+ */
+export async function commitBackLabel(
+  pendingScanId: string,
+  ingredients: string[],
+  petFields: ScanBackPetFields,
+): Promise<unknown> {
+  const body: Record<string, unknown> = {
+    ingredients,
+    petName: petFields.petName,
+    petType: petFields.petType,
+    petAllergies: petFields.petAllergies,
+    petHealthConditions: petFields.petHealthConditions,
+    deviceId: petFields.deviceId,
+  };
+  if (petFields.petBreed !== undefined) body.petBreed = petFields.petBreed;
+  if (petFields.petAgeMonths !== undefined) body.petAgeMonths = petFields.petAgeMonths;
+  if (petFields.petWeightKg !== undefined) body.petWeightKg = petFields.petWeightKg;
+
+  const { data } = await api.post<unknown>(`/scan/commit-back/${pendingScanId}`, body);
+  return data;
 }
 
 export async function quickAnalyze(data: QuickAnalyzeData): Promise<unknown> {

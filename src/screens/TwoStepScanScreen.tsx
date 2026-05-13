@@ -31,7 +31,6 @@ import { buildImageUrl } from '../utils/helpers';
 import type { CaptureMode } from '../components/scan/CaptureModeToggle';
 import { CaptureModeSheet } from '../components/scan/CaptureModeSheet';
 import { BurstCaptureView } from '../components/scan/BurstCaptureView';
-import { IngredientConfirmStep } from '../components/scan/IngredientConfirmStep';
 import { RecaptureModal } from '../components/scan/RecaptureModal';
 import type { PackageShape } from '../types';
 
@@ -78,10 +77,8 @@ function buildModeChipLabel(
 
 type ScanStep =
   | 'front'
-  | 'frontCaptured'
   | 'selectCandidate'
   | 'back'
-  | 'confirming'
   | 'analyzing';
 
 function extractScanId(data: unknown): string {
@@ -190,7 +187,7 @@ export function TwoStepScanScreen() {
   const [analyzeLabels, setAnalyzeLabels] = useState([
     'Reading ingredients',
     'Checking database',
-    'Scoring for your pet',
+    'Scoring',
     'Generating report',
   ]);
 
@@ -200,8 +197,7 @@ export function TwoStepScanScreen() {
   // (option D from our UX discussion); the user can override via the
   // small "Detected: <X> ▼" link, which opens CaptureModeSheet.
   // burstVisible drives the BurstCaptureView modal. multiResult holds the
-  // OCR result while we route the user to either auto-commit, the
-  // confirmation step, or the recovery modal.
+  // OCR result for the recovery modal (low confidence); otherwise we commit immediately.
   const [captureMode, setCaptureMode] = useState<CaptureMode>('flat');
   // True iff the user has manually overridden the auto-detected mode via
   // CaptureModeSheet. Resets every time we re-run the front scan. Used
@@ -229,11 +225,7 @@ export function TwoStepScanScreen() {
           ? captureMode === 'flat'
             ? 'Reading the label…'
             : 'Reading photos…'
-          : step === 'confirming'
-            ? 'Submitting ingredients…'
-            : 'Working…';
-
-  const petLabel = pet?.name ?? 'your pet';
+          : 'Working…';
 
   const pickImage = useCallback(async (fromCamera: boolean) => {
     const perm = fromCamera
@@ -314,7 +306,7 @@ export function TwoStepScanScreen() {
       setCandidates(list);
       setStep('selectCandidate');
     } else {
-      setStep('frontCaptured');
+      setStep('back');
     }
   }, []);
 
@@ -356,7 +348,7 @@ export function TwoStepScanScreen() {
       setAnalyzeLabels([
         'Loading ingredients',
         'Checking database',
-        `Scoring for ${pet.name}`,
+        'Scoring',
         'Generating report',
       ]);
       try {
@@ -380,10 +372,6 @@ export function TwoStepScanScreen() {
     setStep('back');
   }, []);
 
-  const onFrontCapturedContinue = useCallback(() => {
-    setStep('back');
-  }, []);
-
   const onBackCapture = useCallback(async () => {
     if (!pet || !pendingScanId) return;
     const uri = await pickImage(true);
@@ -392,7 +380,7 @@ export function TwoStepScanScreen() {
     setAnalyzeLabels([
       'Reading ingredients',
       'Checking database',
-      `Scoring for ${pet.name}`,
+      'Scoring',
       'Generating report',
     ]);
     try {
@@ -418,7 +406,7 @@ export function TwoStepScanScreen() {
     setAnalyzeLabels([
       'Reading ingredients',
       'Checking database',
-      `Scoring for ${pet.name}`,
+      'Scoring',
       'Generating report',
     ]);
     try {
@@ -439,17 +427,18 @@ export function TwoStepScanScreen() {
   // ── Multi-frame capture: shared commit + entry points ──────────────────
 
   /**
-   * Final leg of the back-label flow when the ingredient list is ALREADY
-   * extracted (multi-frame OCR). Called either automatically (high
-   * confidence) or after the user confirms the list (medium confidence).
+   * Final leg of the back-label flow when the ingredient list is already
+   * extracted (multi-frame OCR). Always commits the server list as-is
+   * (no intermediate confirm screen).
    */
   const commitMultiBack = useCallback(
     async (ingredients: string[]) => {
       if (!pet || !pendingScanId) return;
+      setMultiResult(null);
       setAnalyzeLabels([
         'Loading ingredients',
         'Checking database',
-        `Scoring for ${pet.name}`,
+        'Scoring',
         'Generating report',
       ]);
       setProcessing(true);
@@ -472,11 +461,8 @@ export function TwoStepScanScreen() {
   );
 
   /**
-   * Burst capture finished. Upload all frames, then route the user based
-   * on the server's confidence-derived `suggestedAction`:
-   *   "auto_commit"  → straight to scoring (high confidence)
-   *   "confirm"      → confirmation step UI (medium confidence)
-   *   "recapture"    → recovery modal (low confidence)
+   * Burst capture finished. Upload all frames, then either open the recovery
+   * modal (recapture) or commit immediately (auto_commit / confirm).
    */
   const onBurstComplete = useCallback(
     async (uris: string[]) => {
@@ -489,15 +475,12 @@ export function TwoStepScanScreen() {
       try {
         const result = await scanService.scanBackLabelMulti(uris, pendingScanId);
         setMultiResult(result);
-        if (result.suggestedAction === 'auto_commit') {
-          setProcessing(false);
-          await commitMultiBack(result.ingredients);
-        } else if (result.suggestedAction === 'recapture') {
+        if (result.suggestedAction === 'recapture') {
           setProcessing(false);
           setRecoverVisible(true);
         } else {
           setProcessing(false);
-          setStep('confirming');
+          await commitMultiBack(result.ingredients);
         }
       } catch (e) {
         console.warn('[SCAN] multi-back upload error:', e);
@@ -507,7 +490,7 @@ export function TwoStepScanScreen() {
     [pet, pendingScanId, commitMultiBack]
   );
 
-  /** User chose "Re-scan" from either the confirm step or the recovery modal. */
+  /** User chose "Re-scan" from the recovery modal. */
   const restartBurstCapture = useCallback(() => {
     setRecoverVisible(false);
     setMultiResult(null);
@@ -515,16 +498,18 @@ export function TwoStepScanScreen() {
     setBurstVisible(true);
   }, []);
 
-  /** From recovery modal: "Show what we got anyway" → fall through to confirm. */
+  /** From recovery modal: "Show what we got anyway" → commit partial list and analyze. */
   const onShowAnyway = useCallback(() => {
     setRecoverVisible(false);
-    setStep('confirming');
-  }, []);
+    const ing = multiResult?.ingredients;
+    if (ing && ing.length > 0) {
+      void commitMultiBack(ing);
+    }
+  }, [multiResult, commitMultiBack]);
 
   const step1Active = step === 'front';
   const step1Complete = step !== 'front';
-  const step2Active =
-    step === 'back' || step === 'frontCaptured' || step === 'confirming';
+  const step2Active = step === 'back';
   /** Back label is only "done" after the user has submitted it and analysis is running. */
   const step2Complete = step === 'analyzing';
   const barActive = step !== 'front';
@@ -661,34 +646,6 @@ export function TwoStepScanScreen() {
           </View>
         )}
 
-        {step === 'frontCaptured' && (
-          <View style={s.stepContainer}>
-            <View style={s.spacer} />
-            <View style={s.successCircle}>
-              <Ionicons name="checkmark-circle" size={50} color={colors.safe} />
-            </View>
-            <View style={s.capturedTextBlock}>
-              {(frontMeta.brand || frontMeta.productName) && (
-                <View style={s.capturedCard}>
-                  {frontMeta.brand ? (
-                    <Text style={s.capturedBrand}>{frontMeta.brand.toUpperCase()}</Text>
-                  ) : null}
-                  <Text style={s.capturedName}>{frontMeta.productName ?? 'Product'}</Text>
-                </View>
-              )}
-            </View>
-            <View style={s.flipBlock}>
-              <Text style={s.flipTitle}>Next</Text>
-              <Text style={s.flipSub}>Find the ingredient list on the package</Text>
-            </View>
-            <View style={s.spacer} />
-            <Pressable style={s.primaryBtn} onPress={onFrontCapturedContinue}>
-              <Text style={s.primaryBtnText}>Continue to Ingredients</Text>
-              <Ionicons name="arrow-forward" size={14} color={colors.white} />
-            </Pressable>
-          </View>
-        )}
-
         {step === 'back' && (
           <View style={s.stepContainer}>
             {/* Captured chip pinned at top so the user always sees what
@@ -773,21 +730,6 @@ export function TwoStepScanScreen() {
               )}
             </View>
           </View>
-        )}
-
-        {step === 'confirming' && multiResult && (
-          <IngredientConfirmStep
-            ingredients={multiResult.ingredients}
-            confidence={multiResult.confidence}
-            notes={multiResult.notes}
-            brand={frontMeta.brand}
-            productName={frontMeta.productName}
-            onConfirm={ingredients => {
-              setMultiResult(null);
-              commitMultiBack(ingredients);
-            }}
-            onRescan={restartBurstCapture}
-          />
         )}
 
         {step === 'analyzing' && (
@@ -1142,54 +1084,6 @@ const s = StyleSheet.create({
     fontWeight: '500',
     color: colors.textSecondary,
   },
-  successCircle: {
-    alignSelf: 'center',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(64,145,108,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  capturedTextBlock: {
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  capturedCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.medium,
-    padding: spacing.md,
-    width: '100%',
-    alignItems: 'center',
-    ...shadows.card,
-  },
-  capturedBrand: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-    letterSpacing: 1.5,
-  },
-  capturedName: {
-    ...typography.labelLarge,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  flipBlock: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: spacing.md,
-  },
-  flipTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  flipSub: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
   candidateHeader: {
     alignItems: 'center',
     gap: 4,
@@ -1348,7 +1242,8 @@ const s = StyleSheet.create({
     marginHorizontal: spacing.md,
     backgroundColor: 'rgba(64,145,108,0.1)',
     borderRadius: radius.medium,
-    marginTop: spacing.xs,
+    /* Sit below the header / step indicator so the product chip reads as part of the main column, not stuck under the nav. */
+    marginTop: spacing.xxl + spacing.md,
   },
   capturedChipIcon: {
     marginTop: 2,

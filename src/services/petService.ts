@@ -3,6 +3,7 @@ import type { CreatePetData, Pet, PetHealthConditionInput, UpdatePetData } from 
 
 function mapHealthConditions(conditions: PetHealthConditionInput[]) {
   return conditions.map((c) => ({
+    type: c.conditionType,
     conditionType: c.conditionType,
     severity: c.severity,
     notes: c.notes,
@@ -12,12 +13,12 @@ function mapHealthConditions(conditions: PetHealthConditionInput[]) {
 function buildCreateBody(data: CreatePetData) {
   return {
     name: data.name,
-    pet_type: data.petType,
+    petType: data.petType,
     breed: data.breed,
-    age_months: data.ageMonths,
-    weight_kg: data.weightKg,
+    ageMonths: data.ageMonths,
+    weightKg: data.weightKg,
     sex: data.sex,
-    activity_level: data.activityLevel,
+    activityLevel: data.activityLevel,
     healthConditions: mapHealthConditions(data.healthConditions),
   };
 }
@@ -25,12 +26,12 @@ function buildCreateBody(data: CreatePetData) {
 function buildUpdateBody(data: UpdatePetData): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   if (data.name !== undefined) body.name = data.name;
-  if (data.petType !== undefined) body.pet_type = data.petType;
+  if (data.petType !== undefined) body.petType = data.petType;
   if (data.breed !== undefined) body.breed = data.breed;
-  if (data.ageMonths !== undefined) body.age_months = data.ageMonths;
-  if (data.weightKg !== undefined) body.weight_kg = data.weightKg;
+  if (data.ageMonths !== undefined) body.ageMonths = data.ageMonths;
+  if (data.weightKg !== undefined) body.weightKg = data.weightKg;
   if (data.sex !== undefined) body.sex = data.sex;
-  if (data.activityLevel !== undefined) body.activity_level = data.activityLevel;
+  if (data.activityLevel !== undefined) body.activityLevel = data.activityLevel;
   if (data.healthConditions !== undefined) {
     body.healthConditions = mapHealthConditions(data.healthConditions);
   }

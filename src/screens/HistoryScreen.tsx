@@ -21,7 +21,6 @@ import { getGradeColor, getPetTypeIcon } from '../theme';
 import type { ScanHistoryItem } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
-import * as productService from '../services/productService';
 import { getDeviceId } from '../services/authService';
 import { buildImageUrl, formatDate } from '../utils/helpers';
 
@@ -239,11 +238,10 @@ function HistoryCard({ item, onPress }: { item: ScanHistoryItem; onPress: () => 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const { pets, selectedPet } = useApp();
+  const { pets } = useApp();
 
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingResult, setIsLoadingResult] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filterPetId, setFilterPetId] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
@@ -281,44 +279,29 @@ export default function HistoryScreen() {
     setRefreshing(false);
   }, [loadHistory]);
 
-  const onCardPress = async (item: ScanHistoryItem) => {
-    if (!item.product_id || isLoadingResult) return;
-    setIsLoadingResult(true);
+  // Navigate INSTANTLY — Result screen has its own preload mode that
+  // shows the score ring + skeleton placeholders while it fetches the
+  // full analysis in the background. Awaiting analyzeProduct here
+  // produced 5–15s of blank "Loading analysis…" overlay (Tier 3 AI
+  // fallback + image fetch in the worst case).
+  const onCardPress = (item: ScanHistoryItem) => {
+    if (!item.product_id) return;
 
-    try {
-      const pet = selectedPet;
-      const result = pet
-        ? await productService.analyzeProduct(item.product_id, {
-            petName: pet.name,
-            petType: pet.pet_type,
-            petBreed: pet.breed,
-            petAgeMonths: pet.age_months,
-            petWeight: pet.weight_kg,
-            ...((pet.healthConditions?.length ?? 0) > 0
-              ? {
-                  healthConditions: pet.healthConditions.map((c) => ({
-                    id: c.id,
-                    condition_type: c.condition_type,
-                    severity: c.severity,
-                    ...(c.notes ? { notes: c.notes } : {}),
-                  })),
-                }
-              : {}),
-          })
-        : await productService.analyzeProduct(item.product_id, {
-            petType: item.pet_type ?? 'dog',
-            petName: item.pet_name ?? 'Pet',
-          });
-
-      setIsLoadingResult(false);
-      navigation.navigate('Result', {
-        scanResult: result,
-        ...(item.product_image ? { historyImageUrl: item.product_image } : {}),
-      });
-    } catch (e) {
-      console.warn('Load result failed:', e);
-      setIsLoadingResult(false);
-    }
+    navigation.navigate('Result', {
+      productId: item.product_id,
+      product: {
+        id: item.product_id,
+        name: item.product_name ?? 'Product',
+        ...(item.product_brand ? { brand: item.product_brand } : {}),
+        ...(item.product_image ? { image_url: item.product_image } : {}),
+      },
+      preloadedScore: {
+        score: item.final_score,
+        ...(item.grade ? { grade: item.grade } : {}),
+        ...(item.recommendation ? { recommendation: item.recommendation } : {}),
+      },
+      ...(item.product_image ? { historyImageUrl: item.product_image } : {}),
+    });
   };
 
   return (
@@ -374,20 +357,13 @@ export default function HistoryScreen() {
         </ScrollView>
       )}
 
-      {/* Loading overlay */}
-      {isLoadingResult && (
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingPanel}>
-            <ActivityIndicator size="large" color={colors.white} />
-            <Text style={[typography.bodyMedium, { color: colors.white, marginTop: spacing.sm }]}>
-              Loading analysis...
-            </Text>
-          </View>
-        </View>
-      )}
-
       {/* Filter Modal */}
-      <Modal visible={showFilter} transparent animationType="fade">
+      <Modal
+        visible={showFilter}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFilter(false)}
+      >
         <Pressable style={styles.modalBg} onPress={() => setShowFilter(false)}>
           <View style={styles.filterSheet}>
             <Text style={[typography.titleMedium, { color: colors.textPrimary, marginBottom: spacing.md }]}>
@@ -528,18 +504,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.lightGray + '80',
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingPanel: {
-    padding: spacing.lg,
-    borderRadius: radius.large,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
   },
   modalBg: {
     flex: 1,

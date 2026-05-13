@@ -572,5 +572,6 @@ const styles = StyleSheet.create({
   btnDisabled: {
     backgroundColor: colors.textSecondary + '66',
     shadowOpacity: 0,
+    elevation: 0,
   },
 });

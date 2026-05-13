@@ -56,9 +56,14 @@ api.interceptors.response.use(
   }
 );
 
-// Server already resizes to 1500x1500 for OCR; uploading bigger is pure waste
-// (and a major bottleneck on weak in-store cellular). Cap the longest side here.
-const UPLOAD_MAX_DIMENSION = 1500;
+// Cap on the longest image side before upload. Server downsizes the
+// final image again (sharp ➜ JPEG) so going bigger here than the
+// server's bound is pure waste; going smaller here is the OCR
+// bottleneck because small printed text on ingredient panels needs
+// pixel headroom. 2000 was chosen to keep ~7-pt label text legible
+// after the JPEG round-trip while staying under typical cellular
+// upload budgets (~600KB/frame).
+const UPLOAD_MAX_DIMENSION = 2000;
 
 /**
  * Multipart upload with field name `image` (JPEG). Optional string fields are appended for mixed forms.
@@ -124,6 +129,82 @@ export async function uploadImage<T>(
     return data;
   } catch (e) {
     logApiError(e, `uploadImage ${endpoint}`);
+    throw e;
+  }
+}
+
+/**
+ * Multi-image multipart upload (used by burst capture for cylindrical
+ * cans / pouches). Each image is resized to UPLOAD_MAX_DIMENSION on the
+ * longest side and converted to JPEG, then appended under `fieldName`
+ * (default `images`) so the server-side `multer.array(...)` picks them up.
+ *
+ * Resizes are sequential rather than parallel on purpose — RN devices
+ * (especially older Androids) OOM when expo-image-manipulator processes
+ * many large frames simultaneously.
+ */
+export async function uploadImages<T>(
+  endpoint: string,
+  imageUris: string[],
+  additionalFields?: Record<string, string>,
+  fieldName = 'images',
+): Promise<T> {
+  if (!imageUris.length) {
+    throw new Error('uploadImages: imageUris is empty');
+  }
+
+  const formData = new FormData();
+
+  for (let i = 0; i < imageUris.length; i += 1) {
+    const uri = imageUris[i];
+
+    let probedWidth: number | undefined;
+    let probedHeight: number | undefined;
+    try {
+      const probe = await ImageManipulator.manipulateAsync(uri, [], {});
+      probedWidth = probe.width;
+      probedHeight = probe.height;
+    } catch {
+      // No probe → just compress without resize on this frame.
+    }
+
+    const actions: ImageManipulator.Action[] = [];
+    if (probedWidth && probedHeight) {
+      const longest = Math.max(probedWidth, probedHeight);
+      if (longest > UPLOAD_MAX_DIMENSION) {
+        actions.push(
+          probedWidth >= probedHeight
+            ? { resize: { width: UPLOAD_MAX_DIMENSION } }
+            : { resize: { height: UPLOAD_MAX_DIMENSION } }
+        );
+      }
+    }
+
+    const manipulated = await ImageManipulator.manipulateAsync(uri, actions, {
+      compress: 0.85,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+
+    formData.append(fieldName, {
+      uri: manipulated.uri,
+      type: 'image/jpeg',
+      name: `image_${i + 1}.jpg`,
+    } as unknown as Blob);
+  }
+
+  if (additionalFields) {
+    for (const [key, value] of Object.entries(additionalFields)) {
+      if (value !== undefined && value !== null) {
+        formData.append(key, String(value));
+      }
+    }
+  }
+
+  try {
+    const { data } = await api.post<T>(endpoint, formData);
+    return data;
+  } catch (e) {
+    logApiError(e, `uploadImages ${endpoint} (${imageUris.length} files)`);
     throw e;
   }
 }

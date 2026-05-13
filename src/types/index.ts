@@ -59,6 +59,10 @@ export interface AuthResult {
   isNewUser: boolean;
 }
 
+/** Physical shape of the package, used to pick a capture pipeline on the
+ *  back-label step (single shutter vs. multi-frame burst). */
+export type PackageShape = 'flat' | 'round' | 'pouch';
+
 /** Front label scan API response. */
 export interface ScanFrontResponse {
   success: boolean;
@@ -68,6 +72,8 @@ export interface ScanFrontResponse {
     brand?: string;
     targetPet?: string;
     productType?: string;
+    /** Hint for the back-label capture UI; null when Gemini wasn't sure. */
+    packageShape?: PackageShape | null;
   };
   candidates: ProductCandidate[];
   nextStep: string;

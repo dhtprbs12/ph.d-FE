@@ -445,5 +445,5 @@ const styles = StyleSheet.create({
     ...shadows.button?.(colors.primary),
   },
   saveBtnText: { fontSize: 16, fontWeight: '600', color: colors.white },
-  btnDisabled: { backgroundColor: colors.textSecondary + '66', shadowOpacity: 0 },
+  btnDisabled: { backgroundColor: colors.textSecondary + '66', shadowOpacity: 0, elevation: 0 },
 });

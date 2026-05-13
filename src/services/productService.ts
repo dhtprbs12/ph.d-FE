@@ -100,3 +100,28 @@ export async function getProductImage(productId: string): Promise<ProductImageRe
   const { data } = await api.get<ProductImageResponse>(`/products/${productId}/image`);
   return data;
 }
+
+/**
+ * TEST-ONLY: hard-delete a product from the backend DB.
+ *
+ * Used during the OCR-tuning phase so we can purge a row when ingredient
+ * extraction was clearly wrong. Backend cascades to product_ingredients /
+ * alternatives / reviews and also clears the matching product_review_cache
+ * entries (so a future scan with the same ingredient_hash doesn't reuse a
+ * stale holistic AI review).
+ */
+export interface DeleteProductResponse {
+  success: boolean;
+  deleted: {
+    productId: string;
+    name: string | null;
+    brand: string | null;
+    ingredientHash: string | null;
+    reviewCacheRowsDeleted: number;
+  };
+}
+
+export async function deleteProduct(productId: string): Promise<DeleteProductResponse> {
+  const { data } = await api.delete<DeleteProductResponse>(`/products/${productId}`);
+  return data;
+}

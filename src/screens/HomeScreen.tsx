@@ -421,28 +421,6 @@ function LabelScanPromptCard({
           color={colors.textSecondary}
         />
       </View>
-
-      <View style={styles.divider} />
-
-      <View style={styles.stepRow}>
-        <View style={styles.stepBadgeWrap}>
-          <View style={styles.stepSquare}>
-            <Text style={styles.stepSquareText}>1</Text>
-          </View>
-          <Text style={styles.stepLabel}>Front Label</Text>
-        </View>
-        <Ionicons
-          name="arrow-forward"
-          size={12}
-          color={withOpacity(colors.primary, 0.5)}
-        />
-        <View style={styles.stepBadgeWrap}>
-          <View style={styles.stepSquare}>
-            <Text style={styles.stepSquareText}>2</Text>
-          </View>
-          <Text style={styles.stepLabel}>Back Label</Text>
-        </View>
-      </View>
     </Pressable>
   );
 }
@@ -594,7 +572,12 @@ function PetSelectorModal({
   const sheetH = winH * 0.88;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
       <View style={styles.modalRoot}>
         <Pressable
           style={styles.modalDim}
@@ -909,42 +892,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: colors.textPrimary,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.divider,
-    marginHorizontal: spacing.md,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: spacing.md,
-  },
-  stepBadgeWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  stepSquare: {
-    width: 18,
-    height: 18,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepSquareText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  stepLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textSecondary,
   },
   /** Pet sheet: match iOS .sheet large detent (Swift PetSelectorSheet) */
   modalRoot: {

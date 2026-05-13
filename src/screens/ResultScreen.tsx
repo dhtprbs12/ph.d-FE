@@ -1,14 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
   InteractionManager,
   LayoutAnimation,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   Share,
+  StatusBar,
   StyleSheet,
   Text,
   UIManager,
@@ -618,32 +621,48 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
   }, [product?.id, historyImageUrlRaw]);
 
   const showRemote = Boolean(img) && !hideRemoteImage;
+  const [imageZoomOpen, setImageZoomOpen] = useState(false);
+  const canZoom = showRemote && !!img;
+
+  const ImageSlot = (
+    <View style={st.headerImageSlot} accessibilityLabel="No product image" accessibilityRole="image">
+      <View style={st.headerProductImgFallbackInner} pointerEvents="none">
+        <Text style={st.headerProductImgNoImageLabel} allowFontScaling={false}>
+          No image
+        </Text>
+        <Text style={st.headerProductImgNoImageKicker} allowFontScaling={false}>
+          🐾
+        </Text>
+      </View>
+      {showRemote && img ? (
+        <Image
+          key={img}
+          source={{ uri: img }}
+          style={st.headerProductImgOverlay}
+          resizeMode="cover"
+          onError={() => {
+            setHideRemoteImage(true);
+            recoverFromError();
+          }}
+        />
+      ) : null}
+    </View>
+  );
 
   return (
     <View style={st.card}>
-      {/* “No image” is always in the stack; remote image is drawn on top when it loads */}
-      <View style={st.headerImageSlot} accessibilityLabel="No product image" accessibilityRole="image">
-        <View style={st.headerProductImgFallbackInner} pointerEvents="none">
-          <Text style={st.headerProductImgNoImageLabel} allowFontScaling={false}>
-            No image
-          </Text>
-          <Text style={st.headerProductImgNoImageKicker} allowFontScaling={false}>
-            🐾
-          </Text>
-        </View>
-        {showRemote && img ? (
-          <Image
-            key={img}
-            source={{ uri: img }}
-            style={st.headerProductImgOverlay}
-            resizeMode="cover"
-            onError={() => {
-              setHideRemoteImage(true);
-              recoverFromError();
-            }}
-          />
-        ) : null}
-      </View>
+      {canZoom ? (
+        <Pressable
+          onPress={() => setImageZoomOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="View product image full-screen"
+          accessibilityHint="Tap to enlarge"
+        >
+          {ImageSlot}
+        </Pressable>
+      ) : (
+        ImageSlot
+      )}
 
       {/* Brand */}
       {product?.brand && (
@@ -682,6 +701,43 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
           {petIcon} Scored for a healthy {scanResult.pet?.petType ?? 'pet'}
         </Text>
       </View>
+
+      {/* Tap-to-enlarge: simple full-screen viewer. We deliberately don't add
+          pinch-to-zoom — the headers serve a marketing/SerpAPI thumbnail, not
+          a high-res user-captured label, so contain-fit on a black backdrop is
+          enough for "is this really my product?" verification. */}
+      <Modal
+        visible={imageZoomOpen && canZoom}
+        animationType="fade"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setImageZoomOpen(false)}
+      >
+        <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.95)" />
+        <Pressable
+          style={st.imageZoomBackdrop}
+          onPress={() => setImageZoomOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Close image"
+        >
+          {img ? (
+            <Image
+              source={{ uri: img }}
+              style={st.imageZoomImg}
+              resizeMode="contain"
+            />
+          ) : null}
+          <Pressable
+            onPress={() => setImageZoomOpen(false)}
+            hitSlop={16}
+            style={st.imageZoomCloseBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Ionicons name="close" size={28} color={colors.white} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 });
@@ -995,6 +1051,80 @@ function ShareResultButton({ onPress }: { onPress: () => void }) {
   );
 }
 
+/* ---------- Dev-only Delete Button (testing) ----------
+ * Removed before public launch. While we are still tuning OCR, this lets us
+ * purge a product whose ingredients were extracted incorrectly so the bad
+ * row (and its cached AI review) doesn't keep coming back on re-scan.
+ */
+function DevDeleteButton({
+  productId,
+  productLabel,
+  onDeleted,
+}: {
+  productId: string;
+  productLabel: string;
+  onDeleted: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const onPress = useCallback(() => {
+    if (busy) return;
+    Alert.alert(
+      'Delete from DB?',
+      `This permanently removes "${productLabel}" and its cached AI review from the database. Use only for testing wrong scans.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            try {
+              const res = await productService.deleteProduct(productId);
+              const cacheCount = res.deleted.reviewCacheRowsDeleted;
+              Alert.alert(
+                'Deleted',
+                `Product purged.${cacheCount > 0 ? `\n${cacheCount} cached AI review${cacheCount === 1 ? '' : 's'} cleared.` : ''}`,
+                [{ text: 'OK', onPress: onDeleted }],
+              );
+            } catch (e) {
+              console.warn('[DevDelete]', e);
+              Alert.alert(
+                'Delete failed',
+                'Could not remove product. See console for details.',
+              );
+              setBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [busy, productId, productLabel, onDeleted]);
+
+  return (
+    <View style={{ paddingHorizontal: spacing.md }}>
+      <Pressable
+        onPress={onPress}
+        disabled={busy}
+        style={({ pressed }) => [
+          st.devDeleteBtn,
+          pressed && { opacity: 0.85 },
+          busy && { opacity: 0.6 },
+        ]}
+      >
+        {busy ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <>
+            <Ionicons name="trash" size={16} color={colors.white} />
+            <Text style={st.devDeleteText}>DELETE FROM DB (TEST)</Text>
+          </>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 /* ---------- Trust Footer ---------- */
 function TrustDisclaimerFooter({
   community,
@@ -1205,7 +1335,7 @@ export function ResultScreen() {
         const alts = await productService.getAlternatives(productId, {
           petType: selectedPet.pet_type,
           petName: selectedPet.name,
-          limit: 12,
+          limit: 6,
         });
         if (!cancelled) setAlternatives(alts);
       } catch {
@@ -1418,6 +1548,19 @@ export function ResultScreen() {
           </View>
         )}
 
+        {/* Dev-only: remove before public launch. */}
+        {!analysisLoading && !analysisError && productId && (
+          <DevDeleteButton
+            productId={productId}
+            productLabel={
+              displayProduct?.name ??
+              scanResult?.extracted?.productName ??
+              'this product'
+            }
+            onDeleted={() => navigation.goBack()}
+          />
+        )}
+
         <TrustDisclaimerFooter community={community} />
 
         <View style={{ height: spacing.xxl }} />
@@ -1580,6 +1723,45 @@ const st = StyleSheet.create({
   },
   shareTitle: { ...typography.bodyMedium, fontWeight: '600', color: colors.white },
   shareSub: { ...typography.labelSmall, color: 'rgba(255,255,255,0.8)' },
+  imageZoomBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  imageZoomImg: {
+    width: '100%',
+    height: '100%',
+  },
+  imageZoomCloseBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 56 : 32,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.danger,
+    borderRadius: radius.large,
+    minHeight: 44,
+  },
+  devDeleteText: {
+    ...typography.labelMedium,
+    fontWeight: '700',
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
   footer: {
     marginHorizontal: spacing.md, padding: spacing.md,
     backgroundColor: 'rgba(92,107,102,0.05)', borderRadius: radius.large,

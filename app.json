@@ -2,10 +2,11 @@
   "expo": {
     "name": "PHD",
     "slug": "PHD",
-    "version": "1.0.0",
+    "version": "2.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -13,10 +14,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.phd.petfoodanalyzer",
+      "bundleIdentifier": "com.petfoodanalyzer.app",
       "infoPlist": {
         "NSCameraUsageDescription": "PHD needs camera access to scan pet food labels and check food safety.",
-        "NSPhotoLibraryUsageDescription": "PHD needs photo library access to select pet food label images for analysis."
+        "NSPhotoLibraryUsageDescription": "PHD needs photo library access to select pet food label images for analysis.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -25,9 +27,10 @@
         "backgroundColor": "#2D6A4F"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.phd.petfoodanalyzer",
+      "package": "com.petfoodanalyzer.app",
       "permissions": [
-        "CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -48,6 +51,11 @@
         }
       ],
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ce843dcc-b505-4c1c-95d0-f0300d959f87"
+      }
+    }
   }
 }
