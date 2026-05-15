@@ -28,11 +28,12 @@ import { colors, radius, shadows, spacing, typography } from '../../theme';
  *
  * The user can cancel anytime; partial captures are discarded.
  */
-const TOTAL_FRAMES = 10;
-const FRAME_INTERVAL_MS = 500;
+const TOTAL_FRAMES = 30;
+/** Gap between shots — keep sequential `takePictureAsync` from overlapping on slower devices. */
+const FRAME_INTERVAL_MS = 420;
 /** Progress bar duration ≈ (frames−1)×interval + small tail so the bar matches the burst. */
-const BAR_FILL_MS = (TOTAL_FRAMES - 1) * FRAME_INTERVAL_MS + 600;
-const COUNTDOWN_SECONDS = Math.max(4, Math.ceil(BAR_FILL_MS / 1000));
+const BAR_FILL_MS = (TOTAL_FRAMES - 1) * FRAME_INTERVAL_MS + 900;
+const COUNTDOWN_SECONDS = Math.max(5, Math.ceil(BAR_FILL_MS / 1000));
 
 type Phase = 'permission' | 'ready' | 'capturing' | 'finalizing';
 

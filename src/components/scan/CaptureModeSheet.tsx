@@ -20,8 +20,8 @@ const MODES: {
   hint: string;
 }[] = [
   { id: 'flat',  icon: 'square-outline',  label: 'Flat',       hint: 'Box, bag, or pouch with a flat ingredient panel' },
-  { id: 'round', icon: 'ellipse-outline', label: 'Round can',  hint: 'Cylindrical can — captures 6 photos as you rotate it' },
-  { id: 'pouch', icon: 'leaf-outline',    label: 'Curved pouch', hint: 'Soft pouch with curved face — captures 6 photos' },
+  { id: 'round', icon: 'ellipse-outline', label: 'Round can',  hint: 'Cylindrical can — capture photos while you slowly rotate so we can read the full label' },
+  { id: 'pouch', icon: 'leaf-outline',    label: 'Curved pouch', hint: 'Curved pouch — capture photos while you slowly rotate along the ingredient panel' },
 ];
 
 interface Props {

@@ -1,5 +1,5 @@
 import api from './api';
-import { uploadImage, uploadImages } from './api';
+import { uploadImage, uploadImages, uploadVideo } from './api';
 import type {
   CommunityStats,
   FoodCheckResult,
@@ -78,9 +78,18 @@ export async function scanBackLabelMulti(
   );
 }
 
+/** Round can / pouch: upload one short spin video; server extracts frames + OCR (same response shape as multi). */
+export async function scanBackLabelVideo(
+  videoUri: string,
+  pendingScanId: string,
+): Promise<ScanBackMultiResponse> {
+  return uploadVideo<ScanBackMultiResponse>(`/scan/back-video/${pendingScanId}`, videoUri);
+}
+
 /**
  * Finalize the back-label step with the user-confirmed ingredient list and
- * kick off the per-pet scoring pipeline. Pair with `scanBackLabelMulti`.
+ * kick off the per-pet scoring pipeline. Pair with `scanBackLabelMulti` or
+ * `scanBackLabelVideo`.
  *
  * Backend reuses the front-label data already attached to `pendingScanId`,
  * so we only need to send ingredients + pet fields.

@@ -9,8 +9,9 @@ import { colors, radius, spacing, typography } from '../../theme';
  *   "flat"  – flat box, sachet, or bag where the whole ingredient panel
  *             is visible in one frame. Single-shot OCR.
  *   "round" – cylindrical can / bottle. The label wraps around, so we
- *             burst-capture several frames as the user rotates the can.
- *   "pouch" – soft pouch / stand-up bag. Same multi-frame flow as round
+ *             ask for a burst of photos while you slowly rotate; the server
+ *             stitches strips and OCRs.
+ *   "pouch" – soft pouch / stand-up bag. Same burst flow as round
  *             because the label often curves and creates glare.
  */
 export type CaptureMode = 'flat' | 'round' | 'pouch';
@@ -24,8 +25,8 @@ interface ModeOption {
 
 const MODES: ModeOption[] = [
   { id: 'flat',  icon: 'square-outline',     label: 'Flat',  hint: 'Box, bag, or pouch with a flat label' },
-  { id: 'round', icon: 'ellipse-outline',    label: 'Can',   hint: 'Cylindrical cans — we capture 10 photos' },
-  { id: 'pouch', icon: 'leaf-outline',       label: 'Pouch', hint: 'Curved soft pouches — we capture 10 photos' },
+  { id: 'round', icon: 'ellipse-outline',    label: 'Can',   hint: 'Cylindrical cans — capture photos while you slowly rotate along the label' },
+  { id: 'pouch', icon: 'leaf-outline',       label: 'Pouch', hint: 'Curved soft pouches — capture photos while you slowly rotate along the panel' },
 ];
 
 interface Props {
@@ -37,7 +38,7 @@ interface Props {
  * Three-pill segmented selector for the back-label capture mode.
  * The hint underneath updates based on the selection so the user
  * understands WHY the next screen will look different (single shutter
- * vs. burst capture).
+ * vs. rotating burst).
  */
 export function CaptureModeToggle({ value, onChange }: Props) {
   const activeHint = MODES.find(m => m.id === value)?.hint ?? '';

@@ -551,6 +551,57 @@ function FindSafeFoodCard({
   );
 }
 
+/** Dev / QA: cylindrical can interval OCR (Cloud Vision). */
+function RealtimeCanScanCard({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        shadows.card,
+        { opacity: pressed ? 0.92 : 1 },
+      ]}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.md,
+        }}
+      >
+        <View
+          style={[
+            styles.iconPlate,
+            { backgroundColor: withOpacity(colors.primaryLight, 0.2) },
+          ]}
+        >
+          <Ionicons name="scan-outline" size={26} color={colors.primary} />
+        </View>
+        <View style={{ flex: 1, gap: spacing.xxs }}>
+          <Text
+            style={[
+              typography.bodyLarge,
+              { fontWeight: '600', color: colors.textPrimary },
+            ]}
+          >
+            통 캔 실시간 OCR
+          </Text>
+          <Text
+            style={[typography.bodySmall, { color: colors.textSecondary }]}
+          >
+            Cloud Vision · 1.5초 간격 3프레임 (테스트)
+          </Text>
+        </View>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={colors.textSecondary}
+        />
+      </View>
+    </Pressable>
+  );
+}
+
 /* ─── Pet Selector Modal ───────────────────────────────────────── */
 
 function PetSelectorModal({
@@ -797,6 +848,12 @@ export default function HomeScreen() {
               <FindSafeFoodCard
                 pet={selectedPet}
                 onPress={() => navigation.navigate('ProductSearch')}
+              />
+            </StaggeredView>
+
+            <StaggeredView index={7}>
+              <RealtimeCanScanCard
+                onPress={() => navigation.navigate('RealtimeIngredientScan')}
               />
             </StaggeredView>
           </View>

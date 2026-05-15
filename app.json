@@ -17,6 +17,7 @@
       "bundleIdentifier": "com.petfoodanalyzer.app",
       "infoPlist": {
         "NSCameraUsageDescription": "PHD needs camera access to scan pet food labels and check food safety.",
+        "NSMicrophoneUsageDescription": "PHD uses the microphone only while recording short label videos on round packages; audio is not analyzed.",
         "NSPhotoLibraryUsageDescription": "PHD needs photo library access to select pet food label images for analysis.",
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -40,7 +41,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "PHD needs camera access to scan pet food labels."
+          "cameraPermission": "PHD needs camera access to scan pet food labels.",
+          "microphonePermission": "PHD needs microphone access to record short label spin videos on round cans and pouches."
         }
       ],
       [

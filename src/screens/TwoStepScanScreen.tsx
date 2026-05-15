@@ -28,6 +28,7 @@ import type {
   ScanResult,
 } from '../types';
 import { buildImageUrl } from '../utils/helpers';
+import { normalizeScanIngredientList } from '../utils/ingredientMerge';
 import type { CaptureMode } from '../components/scan/CaptureModeToggle';
 import { CaptureModeSheet } from '../components/scan/CaptureModeSheet';
 import { BurstCaptureView } from '../components/scan/BurstCaptureView';
@@ -191,12 +192,12 @@ export function TwoStepScanScreen() {
     'Generating report',
   ]);
 
-  // ── Multi-frame (round can / pouch) capture state ──────────────────────
+  // ── Round / pouch: in-app burst photos → POST /scan/back-multi ────────
   // captureMode controls which capture pipeline the back-label step uses.
   // It's auto-set from Gemini's `packageShape` after the front scan
   // (option D from our UX discussion); the user can override via the
   // small "Detected: <X> ▼" link, which opens CaptureModeSheet.
-  // burstVisible drives the BurstCaptureView modal. multiResult holds the
+  // burstCaptureVisible drives BurstCaptureView. multiResult holds the
   // OCR result for the recovery modal (low confidence); otherwise we commit immediately.
   const [captureMode, setCaptureMode] = useState<CaptureMode>('flat');
   // True iff the user has manually overridden the auto-detected mode via
@@ -205,7 +206,7 @@ export function TwoStepScanScreen() {
   // (since the user's choice is the source of truth, not Gemini's).
   const [modeOverridden, setModeOverridden] = useState(false);
   const [modeSheetVisible, setModeSheetVisible] = useState(false);
-  const [burstVisible, setBurstVisible] = useState(false);
+  const [burstCaptureVisible, setBurstCaptureVisible] = useState(false);
   const [multiResult, setMultiResult] = useState<scanService.ScanBackMultiResponse | null>(null);
   const [recoverVisible, setRecoverVisible] = useState(false);
 
@@ -224,7 +225,7 @@ export function TwoStepScanScreen() {
         : step === 'back'
           ? captureMode === 'flat'
             ? 'Reading the label…'
-            : 'Reading photos…'
+            : 'Reading label photos…'
           : 'Working…';
 
   const pickImage = useCallback(async (fromCamera: boolean) => {
@@ -424,7 +425,7 @@ export function TwoStepScanScreen() {
     }
   }, [pet, pendingScanId, pickImage, runPoll, finishWithResult]);
 
-  // ── Multi-frame capture: shared commit + entry points ──────────────────
+  // ── Multi-image OCR (round/pouch burst uses same response shape as video) ─
 
   /**
    * Final leg of the back-label flow when the ingredient list is already
@@ -461,29 +462,29 @@ export function TwoStepScanScreen() {
   );
 
   /**
-   * Burst capture finished. Upload all frames, then either open the recovery
-   * modal (recapture) or commit immediately (auto_commit / confirm).
+   * Burst capture finished. Upload ordered JPEGs; server builds strip panorama + OCR.
+   * Same recovery / commit branching as the spin-video flow.
    */
   const onBurstComplete = useCallback(
-    async (uris: string[]) => {
+    async (imageUris: string[]) => {
       if (!pet || !pendingScanId) {
-        setBurstVisible(false);
+        setBurstCaptureVisible(false);
         return;
       }
-      setBurstVisible(false);
+      setBurstCaptureVisible(false);
       setProcessing(true);
       try {
-        const result = await scanService.scanBackLabelMulti(uris, pendingScanId);
+        const result = await scanService.scanBackLabelMulti(imageUris, pendingScanId);
         setMultiResult(result);
         if (result.suggestedAction === 'recapture') {
           setProcessing(false);
           setRecoverVisible(true);
         } else {
           setProcessing(false);
-          await commitMultiBack(result.ingredients);
+          await commitMultiBack(normalizeScanIngredientList(result.ingredients));
         }
       } catch (e) {
-        console.warn('[SCAN] multi-back upload error:', e);
+        console.warn('[SCAN] back-multi upload error:', e);
         setProcessing(false);
       }
     },
@@ -495,7 +496,7 @@ export function TwoStepScanScreen() {
     setRecoverVisible(false);
     setMultiResult(null);
     setStep('back');
-    setBurstVisible(true);
+    setBurstCaptureVisible(true);
   }, []);
 
   /** From recovery modal: "Show what we got anyway" → commit partial list and analyze. */
@@ -503,7 +504,7 @@ export function TwoStepScanScreen() {
     setRecoverVisible(false);
     const ing = multiResult?.ingredients;
     if (ing && ing.length > 0) {
-      void commitMultiBack(ing);
+      void commitMultiBack(normalizeScanIngredientList(ing));
     }
   }, [multiResult, commitMultiBack]);
 
@@ -682,7 +683,7 @@ export function TwoStepScanScreen() {
               {/*
                 Mode chip sits ABOVE the buttons (not below) so users
                 actually notice it — the mode determines whether the
-                primary button takes one shot or six, which is too
+                primary button is single-shot or a rotating burst, which is too
                 consequential to bury. Tap = override sheet.
               */}
               <Pressable
@@ -721,11 +722,11 @@ export function TwoStepScanScreen() {
               ) : (
                 <Pressable
                   style={s.primaryBtn}
-                  onPress={() => setBurstVisible(true)}
-                  accessibilityLabel="Start burst capture"
+                  onPress={() => setBurstCaptureVisible(true)}
+                  accessibilityLabel="Capture rotating label photos"
                 >
                   <Ionicons name="camera" size={18} color={colors.white} />
-                  <Text style={s.primaryBtnText}>Start Burst Capture</Text>
+                  <Text style={s.primaryBtnText}>Capture while rotating</Text>
                 </Pressable>
               )}
             </View>
@@ -785,11 +786,11 @@ export function TwoStepScanScreen() {
       </ScrollView>
       )}
 
-      {/* Burst capture (round can / pouch only) */}
+      {/* Burst photos (round can / pouch): ordered stills → /scan/back-multi */}
       <BurstCaptureView
-        visible={burstVisible}
+        visible={burstCaptureVisible}
         mode={captureMode === 'pouch' ? 'pouch' : 'round'}
-        onCancel={() => setBurstVisible(false)}
+        onCancel={() => setBurstCaptureVisible(false)}
         onComplete={onBurstComplete}
       />
 
