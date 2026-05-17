@@ -25,7 +25,6 @@ import EditPetScreen from '../screens/EditPetScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { TwoStepScanScreen } from '../screens/TwoStepScanScreen';
 import { FoodCheckScreen } from '../screens/FoodCheckScreen';
-import ScanScreen from '../screens/ScanScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -48,11 +47,6 @@ function HomeStackNavigator() {
       <HomeStack.Screen
         name="FoodCheck"
         component={FoodCheckScreen}
-        options={{ presentation: 'fullScreenModal', headerShown: false }}
-      />
-      <HomeStack.Screen
-        name="RealtimeIngredientScan"
-        component={ScanScreen}
         options={{ presentation: 'fullScreenModal', headerShown: false }}
       />
       <HomeStack.Screen

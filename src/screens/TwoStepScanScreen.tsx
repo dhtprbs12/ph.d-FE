@@ -28,53 +28,6 @@ import type {
   ScanResult,
 } from '../types';
 import { buildImageUrl } from '../utils/helpers';
-import { normalizeScanIngredientList } from '../utils/ingredientMerge';
-import type { CaptureMode } from '../components/scan/CaptureModeToggle';
-import { CaptureModeSheet } from '../components/scan/CaptureModeSheet';
-import { BurstCaptureView } from '../components/scan/BurstCaptureView';
-import { RecaptureModal } from '../components/scan/RecaptureModal';
-import type { PackageShape } from '../types';
-
-/** Maps Gemini's `packageShape` hint to the back-label capture pipeline. */
-function shapeToMode(shape?: PackageShape | null): CaptureMode {
-  if (shape === 'round' || shape === 'pouch') return shape;
-  return 'flat';
-}
-
-const MODE_LABELS: Record<CaptureMode, string> = {
-  flat: 'Flat label',
-  round: 'Round can',
-  pouch: 'Curved pouch',
-};
-
-const MODE_ICONS: Record<CaptureMode, keyof typeof Ionicons.glyphMap> = {
-  flat: 'square-outline',
-  round: 'ellipse-outline',
-  pouch: 'leaf-outline',
-};
-
-/**
- * Build the mode-chip copy with one consistent rule:
- *   - if Gemini actually chose this shape → "{mode} detected"
- *   - if it's a fallback (null) or a manual override → "{mode}" plain
- *
- * Earlier we tried a fancier asymmetric scheme (flat never said
- * "detected" because it was "the default anyway"), but the broken
- * pattern made the chip harder to parse — users had to think about
- * what the suffix meant. The single rule above is easier to read.
- */
-function buildModeChipLabel(
-  mode: CaptureMode,
-  detectedShape: PackageShape | null,
-  overridden: boolean,
-): string {
-  const base = MODE_LABELS[mode];
-  if (overridden) return base;
-  if (detectedShape && shapeToMode(detectedShape) === mode) {
-    return `${base} detected`;
-  }
-  return base;
-}
 
 type ScanStep =
   | 'front'
@@ -180,35 +133,15 @@ export function TwoStepScanScreen() {
     productName?: string;
     brand?: string;
     productType?: string;
-    packageShape?: PackageShape | null;
   }>({});
   const [analyzeStepsDone, setAnalyzeStepsDone] = useState([false, false, false, false]);
   const [processing, setProcessing] = useState(false);
-  const [ingredientCount, setIngredientCount] = useState(0);
   const [analyzeLabels, setAnalyzeLabels] = useState([
     'Reading ingredients',
     'Checking database',
     'Scoring',
     'Generating report',
   ]);
-
-  // ── Round / pouch: in-app burst photos → POST /scan/back-multi ────────
-  // captureMode controls which capture pipeline the back-label step uses.
-  // It's auto-set from Gemini's `packageShape` after the front scan
-  // (option D from our UX discussion); the user can override via the
-  // small "Detected: <X> ▼" link, which opens CaptureModeSheet.
-  // burstCaptureVisible drives BurstCaptureView. multiResult holds the
-  // OCR result for the recovery modal (low confidence); otherwise we commit immediately.
-  const [captureMode, setCaptureMode] = useState<CaptureMode>('flat');
-  // True iff the user has manually overridden the auto-detected mode via
-  // CaptureModeSheet. Resets every time we re-run the front scan. Used
-  // by `buildModeChipLabel` to drop the "detected"/"default" suffix
-  // (since the user's choice is the source of truth, not Gemini's).
-  const [modeOverridden, setModeOverridden] = useState(false);
-  const [modeSheetVisible, setModeSheetVisible] = useState(false);
-  const [burstCaptureVisible, setBurstCaptureVisible] = useState(false);
-  const [multiResult, setMultiResult] = useState<scanService.ScanBackMultiResponse | null>(null);
-  const [recoverVisible, setRecoverVisible] = useState(false);
 
   const showLoadingOverlay = processing && step !== 'analyzing';
 
@@ -223,9 +156,7 @@ export function TwoStepScanScreen() {
       : step === 'selectCandidate'
         ? 'Loading product…'
         : step === 'back'
-          ? captureMode === 'flat'
-            ? 'Reading the label…'
-            : 'Reading label photos…'
+          ? 'Reading the label…'
           : 'Working…';
 
   const pickImage = useCallback(async (fromCamera: boolean) => {
@@ -285,23 +216,14 @@ export function TwoStepScanScreen() {
     [navigation]
   );
 
-  /**
-   * Shared front-scan tail: writes the captured metadata into state and
-   * auto-derives `captureMode` from Gemini's package-shape hint. Falls
-   * back to 'flat' when the hint is missing so the user always lands on
-   * the simplest pipeline.
-   */
+  /** Shared front-scan tail: metadata + candidate list or straight to back step. */
   const applyFrontResult = useCallback((res: ScanFrontResponse) => {
     setPendingScanId(res.pendingScanId);
-    const shape = res.captured?.packageShape ?? null;
     setFrontMeta({
       productName: res.captured?.productName,
       brand: res.captured?.brand,
       productType: res.captured?.productType,
-      packageShape: shape,
     });
-    setCaptureMode(shapeToMode(shape));
-    setModeOverridden(false); // fresh detection clears any prior override
     const list = res.candidates ?? [];
     if (list.length > 0) {
       setCandidates(list);
@@ -424,89 +346,6 @@ export function TwoStepScanScreen() {
       setProcessing(false);
     }
   }, [pet, pendingScanId, pickImage, runPoll, finishWithResult]);
-
-  // ── Multi-image OCR (round/pouch burst uses same response shape as video) ─
-
-  /**
-   * Final leg of the back-label flow when the ingredient list is already
-   * extracted (multi-frame OCR). Always commits the server list as-is
-   * (no intermediate confirm screen).
-   */
-  const commitMultiBack = useCallback(
-    async (ingredients: string[]) => {
-      if (!pet || !pendingScanId) return;
-      setMultiResult(null);
-      setAnalyzeLabels([
-        'Loading ingredients',
-        'Checking database',
-        'Scoring',
-        'Generating report',
-      ]);
-      setProcessing(true);
-      try {
-        const deviceId = await getDeviceId();
-        const fields = petToBackFields(pet, deviceId);
-        const raw = await scanService.commitBackLabel(pendingScanId, ingredients, fields);
-        const scanId = extractScanId(raw);
-        setIngredientCount(ingredients.length);
-        setStep('analyzing');
-        setProcessing(false);
-        const result = await runPoll(scanId);
-        finishWithResult(result);
-      } catch (e) {
-        console.warn('[SCAN] commitMultiBack error:', e);
-        setProcessing(false);
-      }
-    },
-    [pet, pendingScanId, runPoll, finishWithResult]
-  );
-
-  /**
-   * Burst capture finished. Upload ordered JPEGs; server builds strip panorama + OCR.
-   * Same recovery / commit branching as the spin-video flow.
-   */
-  const onBurstComplete = useCallback(
-    async (imageUris: string[]) => {
-      if (!pet || !pendingScanId) {
-        setBurstCaptureVisible(false);
-        return;
-      }
-      setBurstCaptureVisible(false);
-      setProcessing(true);
-      try {
-        const result = await scanService.scanBackLabelMulti(imageUris, pendingScanId);
-        setMultiResult(result);
-        if (result.suggestedAction === 'recapture') {
-          setProcessing(false);
-          setRecoverVisible(true);
-        } else {
-          setProcessing(false);
-          await commitMultiBack(normalizeScanIngredientList(result.ingredients));
-        }
-      } catch (e) {
-        console.warn('[SCAN] back-multi upload error:', e);
-        setProcessing(false);
-      }
-    },
-    [pet, pendingScanId, commitMultiBack]
-  );
-
-  /** User chose "Re-scan" from the recovery modal. */
-  const restartBurstCapture = useCallback(() => {
-    setRecoverVisible(false);
-    setMultiResult(null);
-    setStep('back');
-    setBurstCaptureVisible(true);
-  }, []);
-
-  /** From recovery modal: "Show what we got anyway" → commit partial list and analyze. */
-  const onShowAnyway = useCallback(() => {
-    setRecoverVisible(false);
-    const ing = multiResult?.ingredients;
-    if (ing && ing.length > 0) {
-      void commitMultiBack(normalizeScanIngredientList(ing));
-    }
-  }, [multiResult, commitMultiBack]);
 
   const step1Active = step === 'front';
   const step1Complete = step !== 'front';
@@ -680,55 +519,14 @@ export function TwoStepScanScreen() {
             <View style={s.spacer} />
 
             <View style={s.buttonGroup}>
-              {/*
-                Mode chip sits ABOVE the buttons (not below) so users
-                actually notice it — the mode determines whether the
-                primary button is single-shot or a rotating burst, which is too
-                consequential to bury. Tap = override sheet.
-              */}
-              <Pressable
-                style={s.modeChip}
-                onPress={() => setModeSheetVisible(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Capture mode: ${MODE_LABELS[captureMode]}. Tap to change.`}
-              >
-                <Ionicons
-                  name={MODE_ICONS[captureMode]}
-                  size={16}
-                  color={colors.primary}
-                />
-                <Text style={s.modeChipText}>
-                  {buildModeChipLabel(
-                    captureMode,
-                    frontMeta.packageShape ?? null,
-                    modeOverridden,
-                  )}
-                </Text>
-                <View style={{ flex: 1 }} />
-                <Ionicons name="chevron-down" size={16} color={colors.primary} />
+              <Pressable style={s.primaryBtn} onPress={onBackCapture}>
+                <Ionicons name="camera" size={18} color={colors.white} />
+                <Text style={s.primaryBtnText}>Scan Ingredients</Text>
               </Pressable>
-
-              {captureMode === 'flat' ? (
-                <>
-                  <Pressable style={s.primaryBtn} onPress={onBackCapture}>
-                    <Ionicons name="camera" size={18} color={colors.white} />
-                    <Text style={s.primaryBtnText}>Scan Ingredients</Text>
-                  </Pressable>
-                  <Pressable style={s.secondaryBtn} onPress={onBackLibrary}>
-                    <Ionicons name="images-outline" size={18} color={colors.primary} />
-                    <Text style={s.secondaryBtnText}>Choose from Library</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <Pressable
-                  style={s.primaryBtn}
-                  onPress={() => setBurstCaptureVisible(true)}
-                  accessibilityLabel="Capture rotating label photos"
-                >
-                  <Ionicons name="camera" size={18} color={colors.white} />
-                  <Text style={s.primaryBtnText}>Capture while rotating</Text>
-                </Pressable>
-              )}
+              <Pressable style={s.secondaryBtn} onPress={onBackLibrary}>
+                <Ionicons name="images-outline" size={18} color={colors.primary} />
+                <Text style={s.secondaryBtnText}>Choose from Library</Text>
+              </Pressable>
             </View>
           </View>
         )}
@@ -742,9 +540,6 @@ export function TwoStepScanScreen() {
                   <Text style={s.analyzingBrand}>{frontMeta.brand.toUpperCase()}</Text>
                 ) : null}
                 <Text style={s.analyzingName}>{frontMeta.productName ?? 'Product'}</Text>
-                {ingredientCount > 0 && (
-                  <Text style={s.analyzingIngCount}>{ingredientCount} ingredients detected</Text>
-                )}
               </View>
             )}
             <View style={{ height: 32 }} />
@@ -785,36 +580,6 @@ export function TwoStepScanScreen() {
         )}
       </ScrollView>
       )}
-
-      {/* Burst photos (round can / pouch): ordered stills → /scan/back-multi */}
-      <BurstCaptureView
-        visible={burstCaptureVisible}
-        mode={captureMode === 'pouch' ? 'pouch' : 'round'}
-        onCancel={() => setBurstCaptureVisible(false)}
-        onComplete={onBurstComplete}
-      />
-
-      {/* Capture-mode override sheet (escape hatch for auto-detect) */}
-      <CaptureModeSheet
-        visible={modeSheetVisible}
-        selected={captureMode}
-        onSelect={mode => {
-          setCaptureMode(mode);
-          setModeOverridden(true);
-        }}
-        onClose={() => setModeSheetVisible(false)}
-      />
-
-      {/* Recovery modal (low-confidence multi-frame OCR) */}
-      <RecaptureModal
-        visible={recoverVisible}
-        missingSection={multiResult?.missingSection ?? null}
-        notes={multiResult?.notes}
-        capturedCount={multiResult?.imageCount}
-        onRescan={restartBurstCapture}
-        onShowAnyway={onShowAnyway}
-        onCancel={() => setRecoverVisible(false)}
-      />
 
       {/* Processing overlay */}
       <Modal
