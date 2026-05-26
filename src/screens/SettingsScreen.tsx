@@ -12,11 +12,16 @@ import {
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import { useApp } from '../context/AppContext';
 
-const APP_VERSION = '1.0.0';
+/** Mirrors `expo.version` from app.json; falls back after native build */
+const APP_VERSION =
+  Constants.expoConfig?.version ??
+  Constants.nativeApplicationVersion ??
+  '2.0.4';
 const PRIVACY_URL = 'https://phd-be-production.up.railway.app/privacy';
 const TERMS_URL = 'https://phd-be-production.up.railway.app/terms';
 
@@ -26,7 +31,7 @@ const TERMS_URL = 'https://phd-be-production.up.railway.app/terms';
  * Android: app.json의 `expo.android.package` 와 동일.
  */
 const IOS_APP_STORE_ID = '0000000000';
-const ANDROID_PLAY_PACKAGE = 'com.phd.petfoodanalyzer';
+const ANDROID_PLAY_PACKAGE = 'com.petfoodanalyzer.app';
 
 function openUrl(url: string) {
   Linking.openURL(url).catch(() => {});
