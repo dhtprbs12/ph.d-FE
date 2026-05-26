@@ -43,7 +43,7 @@ import {
 } from '../theme';
 import type { AlternativeProduct, ConditionWarning, IngredientAnalysis, ScanResult } from '../types';
 import { formatCommunityScans } from '../types';
-import { buildImageUrl, productTypeLabel } from '../utils/helpers';
+import { buildImageUrl, formatProductTitleText, productTypeLabel } from '../utils/helpers';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -97,8 +97,10 @@ const ResultSharePngCard = React.forwardRef<
     const a = scanResult.analysis;
     const pet = scanResult.pet;
     const ai = scanResult.aiInsights;
-    const name = p?.name ?? scanResult.extracted?.productName ?? 'Product';
-    const brand = p?.brand ?? scanResult.extracted?.brand;
+    const nameRaw = p?.name ?? scanResult.extracted?.productName ?? 'Product';
+    const brandRaw = p?.brand ?? scanResult.extracted?.brand;
+    const name = formatProductTitleText(nameRaw);
+    const brand = brandRaw ? formatProductTitleText(brandRaw) : undefined;
     const score = Math.round(a?.finalScore ?? 0);
     const grade = (a?.grade ?? '—').toString().toUpperCase();
     const gDesc = getGradeDescription(grade);
@@ -202,7 +204,7 @@ const ResultSharePngCard = React.forwardRef<
                   <View style={sharePngStyles.productTextCol}>
                     {brand ? (
                       <Text style={sharePngStyles.pBrand} allowFontScaling={false} numberOfLines={1}>
-                        {brand.toUpperCase()}
+                        {brand}
                       </Text>
                     ) : null}
                     <Text style={sharePngStyles.pNameFieldLabel} allowFontScaling={false}>
@@ -528,14 +530,40 @@ function ScoreRing({ score, grade, animatedScore }: { score: number; grade: stri
   );
 }
 
+function ScoreRingLoadingPlaceholder() {
+  return (
+    <View style={{ alignItems: 'center', marginTop: 0 }}>
+      <View
+        style={{
+          width: RING_SIZE,
+          height: RING_SIZE,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        accessibilityLabel="Loading score"
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ ...typography.labelSmall, color: colors.textSecondary, marginTop: spacing.sm }}>
+          Calculating score…
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 /* ---------- Score Header Card (VERTICAL centered) ---------- */
 const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
-  scanResult, animatedScore, historyImageUrlRaw,
+  scanResult, animatedScore, historyImageUrlRaw, scoreStatus = 'ready',
+  suppressProductImage = false,
 }: {
   scanResult: ScanResult;
   animatedScore: number;
   /** Same path as list `product_image` — fills gaps when `analyze` omits or lies about `image_url`. */
   historyImageUrlRaw?: string;
+  /** `loading`: show placeholders instead of placeholder 0/C while analyze runs. */
+  scoreStatus?: 'ready' | 'loading' | 'error';
+  /** Hide hero product image (ingredients-only / manual entry flows). */
+  suppressProductImage?: boolean;
 }) {
   const analysis = scanResult.analysis;
   const grade = analysis.grade ?? 'C';
@@ -543,13 +571,17 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
   const extractedImg =
     scanResult.extracted && typeof scanResult.extracted === 'object' && 'imageUrl' in scanResult.extracted
       ? (scanResult.extracted as { imageUrl?: string }).imageUrl : undefined;
-  const fromResult =
-    buildImageUrl(product?.imageUrl ?? product?.image_url) ??
-    buildImageUrl(extractedImg) ??
-    buildImageUrl(historyImageUrlRaw);
+  const fromResult = suppressProductImage
+    ? null
+    : (
+        buildImageUrl(product?.imageUrl ?? product?.image_url) ??
+        buildImageUrl(extractedImg) ??
+        buildImageUrl(historyImageUrlRaw)
+      );
   const [headerImg, setHeaderImg] = useState<string | null>(fromResult);
   const [imgFailed, setImgFailed] = useState(false);
   const [hideRemoteImage, setHideRemoteImage] = useState(false);
+  const [howWeScoreVisible, setHowWeScoreVisible] = useState(false);
   const recoverInFlight = useRef(false);
 
   useEffect(() => {
@@ -557,6 +589,11 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
   }, [headerImg]);
 
   useEffect(() => {
+    if (suppressProductImage) {
+      setHeaderImg(null);
+      setImgFailed(false);
+      return;
+    }
     const next =
       buildImageUrl(product?.imageUrl ?? product?.image_url) ??
       buildImageUrl(extractedImg) ??
@@ -582,7 +619,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
     return () => {
       cancelled = true;
     };
-  }, [product?.id, product?.imageUrl, product?.image_url, extractedImg, historyImageUrlRaw]);
+  }, [suppressProductImage, product?.id, product?.imageUrl, product?.image_url, extractedImg, historyImageUrlRaw]);
 
   const img = imgFailed ? null : headerImg;
   const pType = product?.productType ?? product?.product_type;
@@ -591,6 +628,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
   const pillColor = productTypePillColor(pType);
 
   const recoverFromError = useCallback(() => {
+    if (suppressProductImage) return;
     if (recoverInFlight.current) return;
     recoverInFlight.current = true;
     (async () => {
@@ -618,7 +656,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
         recoverInFlight.current = false;
       }
     })();
-  }, [product?.id, historyImageUrlRaw]);
+  }, [product?.id, historyImageUrlRaw, suppressProductImage]);
 
   const showRemote = Boolean(img) && !hideRemoteImage;
   const [imageZoomOpen, setImageZoomOpen] = useState(false);
@@ -651,7 +689,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
 
   return (
     <View style={st.card}>
-      {canZoom ? (
+      {suppressProductImage ? null : canZoom ? (
         <Pressable
           onPress={() => setImageZoomOpen(true)}
           accessibilityRole="button"
@@ -666,12 +704,12 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
 
       {/* Brand */}
       {product?.brand && (
-        <Text style={st.headerBrand}>{product.brand.toUpperCase()}</Text>
+        <Text style={st.headerBrand}>{formatProductTitleText(product.brand)}</Text>
       )}
 
       {/* Name */}
       <Text style={st.headerName}>
-        {product?.name ?? scanResult.extracted?.productName ?? 'Product'}
+        {formatProductTitleText(product?.name ?? scanResult.extracted?.productName ?? 'Product')}
       </Text>
 
       {/* Product type pill */}
@@ -683,22 +721,124 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
 
       {/* Score ring */}
       <View style={{ marginTop: spacing.md }}>
-        <ScoreRing score={analysis.finalScore ?? 0} grade={grade} animatedScore={animatedScore} />
+        {scoreStatus === 'loading' ? (
+          <ScoreRingLoadingPlaceholder />
+        ) : scoreStatus === 'error' ? (
+          <View
+            style={{
+              minHeight: RING_SIZE,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: spacing.md,
+            }}
+            accessibilityLabel="Score unavailable"
+          >
+            <Ionicons name="alert-circle-outline" size={40} color={colors.textSecondary} />
+            <Text style={{ ...typography.bodyMedium, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
+              Score could not be loaded. Use Retry below.
+            </Text>
+          </View>
+        ) : (
+          <ScoreRing score={analysis.finalScore ?? 0} grade={grade} animatedScore={animatedScore} />
+        )}
       </View>
+
+      {/* How we score — link opens sheet */}
+      <Pressable
+        onPress={() => setHowWeScoreVisible(true)}
+        disabled={scoreStatus !== 'ready'}
+        style={({ pressed }) => [
+          st.howWeScoreLink,
+          pressed && scoreStatus === 'ready' && { opacity: 0.75 },
+          scoreStatus !== 'ready' && { opacity: 0.35 },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="How we score"
+        accessibilityHint="Opens explanation of how the product score is calculated"
+      >
+        <Text style={st.howWeScoreLinkText}>How we score</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+      </Pressable>
+
+      <Modal
+        visible={howWeScoreVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setHowWeScoreVisible(false)}
+      >
+        <View style={st.howWeScoreModalRoot} pointerEvents="box-none">
+          <Pressable
+            style={st.howWeScoreBackdrop}
+            onPress={() => setHowWeScoreVisible(false)}
+            accessibilityLabel="Close scoring explanation"
+          />
+          <View style={st.howWeScoreSheet}>
+            <View style={st.howWeScoreHandle} />
+            <Text style={st.howWeScoreSheetTitle}>How we score</Text>
+            <ScrollView
+              style={st.howWeScoreSheetScroll}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <Text style={st.howWeScoreBullet}>
+                • <Text style={st.howWeScoreBulletBold}>Weight order (AAFCO):</Text> Ingredient lists are heaviest →
+                lightest. Ingredients at the top of the list influence the final number more than trace items near the
+                bottom.
+              </Text>
+              <Text style={st.howWeScoreBullet}>
+                • <Text style={st.howWeScoreBulletBold}>Combining lines:</Text> Each ingredient is assessed from our
+                database and models. We merge those assessments using position weights so the score matches how much of
+                the formula each item likely represents.
+              </Text>
+              <Text style={st.howWeScoreBullet}>
+                • <Text style={st.howWeScoreBulletBold}>Healthy-pet guide:</Text> This score is a general product-quality
+                signal for a typical healthy pet — not a diagnosis or individualized medical plan.
+              </Text>
+              <Text style={st.howWeScoreBullet}>
+                • <Text style={st.howWeScoreBulletBold}>Not veterinary advice:</Text> Always talk to your veterinarian
+                before changing what your pet eats.
+              </Text>
+            </ScrollView>
+            <Pressable
+              onPress={() => setHowWeScoreVisible(false)}
+              style={({ pressed }) => [st.howWeScoreDoneBtn, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+            >
+              <Text style={st.howWeScoreDoneText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       {/* Grade badge */}
       <View style={st.gradeRow}>
         <Text style={{ ...typography.labelMedium, color: colors.textSecondary }}>Grade</Text>
-        <Text style={{ ...typography.gradeDisplay, color: getGradeColor(grade) }}>{grade}</Text>
-        <Text style={{ ...typography.bodyMedium, color: colors.textSecondary }}>
-          - {getGradeDescription(grade)}
-        </Text>
+        {scoreStatus === 'loading' ? (
+          <>
+            <ActivityIndicator size="small" color={colors.primary} accessibilityLabel="Loading grade" />
+            <Text style={{ ...typography.bodyMedium, color: colors.textSecondary }}>Loading…</Text>
+          </>
+        ) : scoreStatus === 'error' ? (
+          <Text style={{ ...typography.bodyMedium, color: colors.textSecondary }}>—</Text>
+        ) : (
+          <>
+            <Text style={{ ...typography.gradeDisplay, color: getGradeColor(grade) }}>{grade}</Text>
+            <Text style={{ ...typography.bodyMedium, color: colors.textSecondary }}>
+              - {getGradeDescription(grade)}
+            </Text>
+          </>
+        )}
       </View>
 
       {/* Pet context pill */}
       <View style={st.petPill}>
         <Text style={st.petPillText}>
-          {petIcon} Scored for a healthy {scanResult.pet?.petType ?? 'pet'}
+          {scoreStatus === 'loading'
+            ? `${petIcon} Preparing analysis…`
+            : scoreStatus === 'error'
+              ? `${petIcon} Analysis unavailable`
+              : `${petIcon} Scored for a healthy ${scanResult.pet?.petType ?? 'pet'}`}
         </Text>
       </View>
 
@@ -1019,8 +1159,8 @@ function AltCard({ alt, onPress }: { alt: AlternativeProduct; onPress: () => voi
           <Text style={{ fontSize: 18, fontWeight: '700', color: gradeColor }}>{Math.round(alt.score)}</Text>
         </View>
       )}
-      <Text style={st.altName} numberOfLines={2}>{p.name}</Text>
-      {p.brand && <Text style={st.altBrand} numberOfLines={1}>{p.brand}</Text>}
+      <Text style={st.altName} numberOfLines={2}>{formatProductTitleText(p.name)}</Text>
+      {p.brand && <Text style={st.altBrand} numberOfLines={1}>{formatProductTitleText(p.brand)}</Text>}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
         <Text style={{ fontSize: 14, fontWeight: '700', color: gradeColor }}>{Math.round(alt.score)}</Text>
         <View style={{ backgroundColor: gradeColor, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
@@ -1154,17 +1294,6 @@ function TrustDisclaimerFooter({
         </View>
       </View>
 
-      {/* How we score */}
-      <View style={{ alignItems: 'center', gap: spacing.xs }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Text style={{ fontSize: 11, color: colors.textSecondary }}>ƒ</Text>
-          <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary }}>HOW WE SCORE</Text>
-        </View>
-        <Text style={st.methodText}>
-          Per AAFCO guidelines, ingredients are listed in descending order by weight. Our score reflects this — ingredients making up more of the product have a greater impact on your pet's safety rating.
-        </Text>
-      </View>
-
       {/* Disclaimer */}
       <View style={{ alignItems: 'center', gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1232,6 +1361,12 @@ export function ResultScreen() {
       ? String(route.params.historyImageUrl)
       : undefined;
 
+  const suppressProductImage = !!(
+    route.params &&
+    'suppressProductImage' in route.params &&
+    route.params.suppressProductImage
+  );
+
   const isPreloadMode = !paramScanResult && !!paramProductId;
 
   const [scanResult, setScanResult] = useState<ScanResult | null>(paramScanResult ?? null);
@@ -1255,6 +1390,12 @@ export function ResultScreen() {
     productType: paramProduct.product_type,
     product_type: paramProduct.product_type,
   } : undefined);
+
+  const heroScoreStatus = useMemo((): 'ready' | 'loading' | 'error' => {
+    if (analysisLoading) return 'loading';
+    if (analysisError && !scanResult) return 'error';
+    return 'ready';
+  }, [analysisLoading, analysisError, scanResult]);
 
   const petParams = useMemo((): productService.AnalyzeProductParams | undefined => {
     if (!selectedPet) return undefined;
@@ -1494,6 +1635,8 @@ export function ResultScreen() {
           scanResult={preloadedScanResult}
           animatedScore={animatedScore}
           historyImageUrlRaw={historyImageParam}
+          scoreStatus={heroScoreStatus}
+          suppressProductImage={suppressProductImage}
         />
 
         {/* Detail sections: show skeletons while loading */}
@@ -1553,9 +1696,11 @@ export function ResultScreen() {
           <DevDeleteButton
             productId={productId}
             productLabel={
-              displayProduct?.name ??
-              scanResult?.extracted?.productName ??
-              'this product'
+              formatProductTitleText(
+                displayProduct?.name ??
+                  scanResult?.extracted?.productName ??
+                  'this product'
+              )
             }
             onDeleted={() => navigation.goBack()}
           />
@@ -1777,5 +1922,77 @@ const st = StyleSheet.create({
     fontSize: 11, color: 'rgba(92,107,102,0.8)',
     textAlign: 'center', lineHeight: 16,
     paddingHorizontal: spacing.md,
+  },
+  howWeScoreLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  howWeScoreLinkText: {
+    ...typography.labelMedium,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  howWeScoreModalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  howWeScoreBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  howWeScoreSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radius.large,
+    borderTopRightRadius: radius.large,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    maxHeight: '78%',
+    ...shadows.card,
+  },
+  howWeScoreHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.divider,
+    marginBottom: spacing.md,
+  },
+  howWeScoreSheetTitle: {
+    ...typography.titleMedium,
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  howWeScoreSheetScroll: {
+    maxHeight: 360,
+  },
+  howWeScoreBullet: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: spacing.md,
+  },
+  howWeScoreBulletBold: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  howWeScoreDoneBtn: {
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: radius.medium,
+    minHeight: 48,
+  },
+  howWeScoreDoneText: {
+    ...typography.labelLarge,
+    color: colors.white,
+    fontWeight: '700',
   },
 });

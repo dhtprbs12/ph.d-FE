@@ -329,38 +329,49 @@ function NoPetCard({ onAddPet }: { onAddPet: () => void }) {
   );
 }
 
-/* ─── Community Trust Banner ───────────────────────────────────── */
+/* ─── Community Trust Banner (scans only) ───────────────────── */
 
 function CommunityTrustBanner({
   stats,
 }: {
   stats: CommunityStats | null;
 }) {
+  if (stats == null || stats.totalScans < 100) {
+    return null;
+  }
   return (
     <View style={styles.communityBanner}>
-      {stats != null && stats.totalScans >= 100 && (
-        <View style={styles.communityScansRow}>
-          <Ionicons name="people" size={14} color={colors.primary} />
-          <Text style={styles.communityLabel}>
-            {formatCommunityScans(stats.totalScans)} community scans
-          </Text>
+      <View style={styles.communityScansRow}>
+        <View style={styles.communityIconPlate}>
+          <Ionicons name="people" size={17} color={colors.textSecondary} />
         </View>
-      )}
-      <View style={{ flex: 1, gap: 4 }}>
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.xs,
-          }}
-        >
-          <Ionicons name="shield-checkmark" size={14} color={colors.safe} />
-          <Text style={styles.communityLabel}>AAFCO Guidelines</Text>
-        </View>
-        <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-          The U.S. standard for pet food nutrition & labeling
+        <Text style={[styles.communityBannerText, { flex: 1, minWidth: 0 }]}>
+          <Text style={styles.communityCount}>{formatCommunityScans(stats.totalScans)}</Text>
+          {' labels checked by pet parents'}
         </Text>
       </View>
+    </View>
+  );
+}
+
+/* ─── AAFCO info (below Find Safe Food to reduce clutter up top) ─ */
+
+function AafcoGuidelinesCallout() {
+  return (
+    <View style={styles.aafcoCallout}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.xs,
+        }}
+      >
+        <Ionicons name="shield-checkmark" size={14} color={colors.safe} />
+        <Text style={styles.communityLabel}>AAFCO Guidelines</Text>
+      </View>
+      <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+        The U.S. standard for pet food nutrition & labeling
+      </Text>
     </View>
   );
 }
@@ -413,6 +424,65 @@ function LabelScanPromptCard({
             style={[typography.bodySmall, { color: colors.textSecondary }]}
           >
             Full ingredient analysis for your pet
+          </Text>
+        </View>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={colors.textSecondary}
+        />
+      </View>
+    </Pressable>
+  );
+}
+
+/** Enter ingredients manually (no label photo) — same flow as round packs from label scan. */
+function IngredientManualCard({
+  isEnabled,
+  onPress,
+}: {
+  isEnabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!isEnabled}
+      style={({ pressed }) => [
+        styles.cardBase,
+        shadows.card,
+        { opacity: isEnabled ? (pressed ? 0.92 : 1) : 0.6 },
+      ]}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          padding: spacing.md,
+          gap: spacing.md,
+        }}
+      >
+        <View
+          style={[
+            styles.iconPlate,
+            { backgroundColor: withOpacity(colors.accent, 0.18) },
+          ]}
+        >
+          <Ionicons name="list-outline" size={26} color={colors.accent} />
+        </View>
+        <View style={{ flex: 1, gap: spacing.xxs }}>
+          <Text
+            style={[
+              typography.bodyLarge,
+              { fontWeight: '600', color: colors.textPrimary },
+            ]}
+          >
+            Type ingredients
+          </Text>
+          <Text
+            style={[typography.bodySmall, { color: colors.textSecondary }]}
+          >
+            One line at a time — no product photo in results
           </Text>
         </View>
         <Ionicons
@@ -755,34 +825,19 @@ export default function HomeScreen() {
             <CommunityTrustBanner stats={communityStats} />
           </StaggeredView>
 
-          {/* Section Header */}
-          <StaggeredView index={3}>
-            <View style={{ gap: spacing.xs }}>
-              <Text
-                style={[
-                  typography.displaySmall,
-                  { color: colors.textPrimary },
-                ]}
-              >
-                Analyze Food
-              </Text>
-              <Text
-                style={[
-                  typography.bodyMedium,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                Check ingredients or find safe options
-              </Text>
-            </View>
-          </StaggeredView>
-
           {/* Action Cards */}
           <View style={{ gap: spacing.md, paddingBottom: spacing.lg }}>
-            <StaggeredView index={4}>
+            <StaggeredView index={3}>
               <LabelScanPromptCard
                 isEnabled={selectedPet != null}
                 onPress={() => navigation.navigate('TwoStepScan')}
+              />
+            </StaggeredView>
+
+            <StaggeredView index={4}>
+              <IngredientManualCard
+                isEnabled={selectedPet != null}
+                onPress={() => navigation.navigate('ManualIngredients')}
               />
             </StaggeredView>
 
@@ -798,6 +853,10 @@ export default function HomeScreen() {
                 pet={selectedPet}
                 onPress={() => navigation.navigate('ProductSearch')}
               />
+            </StaggeredView>
+
+            <StaggeredView index={7}>
+              <AafcoGuidelinesCallout />
             </StaggeredView>
           </View>
         </View>
@@ -877,21 +936,51 @@ const styles = StyleSheet.create({
   communityBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    justifyContent: 'flex-start',
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: withOpacity(colors.primary, 0.08),
+    backgroundColor: colors.card,
     borderRadius: radius.medium,
-    gap: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    gap: spacing.sm,
   },
   communityScansRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    flex: 1,
+  },
+  communityIconPlate: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.lightGray,
+  },
+  communityBannerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    lineHeight: 18,
+  },
+  communityCount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
   },
   communityLabel: {
     fontSize: 13,
     fontWeight: '500',
     color: colors.textPrimary,
+  },
+  aafcoCallout: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: withOpacity(colors.safe, 0.1),
+    borderRadius: radius.medium,
+    gap: 4,
   },
   /** Pet sheet: match iOS .sheet large detent (Swift PetSelectorSheet) */
   modalRoot: {

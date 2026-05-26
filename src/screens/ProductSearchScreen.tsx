@@ -22,7 +22,7 @@ import { useApp } from '../context/AppContext';
 import { colors, getGradeColor, radius, shadows, spacing, typography } from '../theme';
 import type { CachedScore, Product, ProductFilterParams } from '../types';
 
-import { buildImageUrl } from '../utils/helpers';
+import { buildImageUrl, formatProductTitleText } from '../utils/helpers';
 
 const PAGE = 20;
 const DEBOUNCE_MS = 600;
@@ -224,9 +224,9 @@ const ProductCard = React.memo(function ProductCard({
       {/* Product info */}
       <View style={{ flex: 1, gap: spacing.xxs }}>
         {product.brand && (
-          <Text style={st.productBrand} numberOfLines={1}>{product.brand.toUpperCase()}</Text>
+          <Text style={st.productBrand} numberOfLines={1}>{formatProductTitleText(product.brand)}</Text>
         )}
-        <Text style={st.productName} numberOfLines={2}>{product.name}</Text>
+        <Text style={st.productName} numberOfLines={2}>{formatProductTitleText(product.name)}</Text>
         {product.product_type && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
             <Ionicons name={productTypeIcon(product.product_type) as any} size={10} color={colors.textSecondary} />

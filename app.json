@@ -2,7 +2,7 @@
   "expo": {
     "name": "PHD",
     "slug": "PHD",
-    "version": "2.0.2",
+    "version": "2.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -42,7 +42,7 @@
         "expo-camera",
         {
           "cameraPermission": "PHD needs camera access to scan pet food labels.",
-          "microphonePermission": "PHD needs microphone access to record short label spin videos on round cans and pouches."
+          "microphonePermission": "PHD needs microphone access to record short label spin videos on round cans."
         }
       ],
       [

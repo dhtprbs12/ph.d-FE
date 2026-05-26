@@ -51,3 +51,28 @@ export function formatDate(dateString: string): string {
     return dateString;
   }
 }
+
+/** First Latin letter of each space-separated word (and hyphen-separated part) upper; other Latin letters lower. */
+function titleCaseLatinChunk(chunk: string): string {
+  if (!chunk) return chunk;
+  const lower = chunk.toLowerCase();
+  const i = lower.search(/[a-z]/);
+  if (i === -1) return chunk;
+  return lower.slice(0, i) + lower.charAt(i).toUpperCase() + lower.slice(i + 1);
+}
+
+/** Brand / product name display: title-style Latin words (e.g. BLUE BUFFALO → Blue Buffalo). */
+export function formatProductTitleText(value: string | null | undefined): string {
+  if (value == null) return '';
+  const t = value.trim();
+  if (!t) return '';
+  return t
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .split(/(-)/)
+        .map((part) => (part === '-' ? '-' : titleCaseLatinChunk(part)))
+        .join('')
+    )
+    .join(' ');
+}

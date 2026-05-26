@@ -3,10 +3,12 @@ import { uploadImage } from './api';
 import type {
   CommunityStats,
   FoodCheckResult,
+  HealthCondition,
   PollScanResultResponse,
   QuickAnalyzeData,
   ScanFrontResponse,
   ScanHistoryItem,
+  ScanResult,
   UserStats,
 } from '../types';
 
@@ -51,6 +53,30 @@ export async function quickAnalyze(data: QuickAnalyzeData): Promise<unknown> {
 
 export async function pollResult(scanId: string): Promise<PollScanResultResponse> {
   const { data } = await api.get<PollScanResultResponse>(`/scan/${scanId}/result`);
+  return data;
+}
+
+export async function suggestIngredients(q: string, limit = 15): Promise<string[]> {
+  const { data } = await api.get<{ suggestions: string[] }>('/scan/ingredient-suggest', {
+    params: { q, limit },
+  });
+  return data.suggestions ?? [];
+}
+
+export interface ScanManualRequest {
+  ingredientsText: string;
+  /** Required from app for correct cache keys (healthy_food vs healthy_treats). */
+  productType: 'food' | 'treats';
+  productName?: string;
+  petName: string;
+  petType: string;
+  petAllergies?: string[];
+  petHealthConditions?: Pick<HealthCondition, 'condition_type' | 'severity' | 'notes'>[];
+  deviceId: string;
+}
+
+export async function scanManual(body: ScanManualRequest): Promise<ScanResult> {
+  const { data } = await api.post<ScanResult>('/scan/manual', body);
   return data;
 }
 

@@ -8,6 +8,11 @@ export type PreloadedScore = {
 };
 
 /** Raw `product_image` from history (same as DB `image_url`); use when analysis payload omits the image. */
+/** Params for manual ingredient entry from Home (optional product hint when re-used). */
+export type ManualIngredientsParams = {
+  productHint?: { brand?: string; productName?: string; productType?: string };
+};
+
 export type ResultParams =
   | {
       scanResult: ScanResult;
@@ -15,6 +20,8 @@ export type ResultParams =
       product?: undefined;
       preloadedScore?: undefined;
       historyImageUrl?: string;
+      /** When true (e.g. ingredients-only flow), hide hero product image on Result. */
+      suppressProductImage?: boolean;
     }
   | {
       scanResult?: undefined;
@@ -22,6 +29,7 @@ export type ResultParams =
       product: Product;
       preloadedScore: PreloadedScore;
       historyImageUrl?: string;
+      suppressProductImage?: boolean;
     };
 
 export type HomeStackParamList = {
@@ -29,6 +37,7 @@ export type HomeStackParamList = {
   ProductSearch: undefined;
   Result: ResultParams;
   TwoStepScan: undefined;
+  ManualIngredients: ManualIngredientsParams | undefined;
   FoodCheck: undefined;
   AddPet: undefined;
 };

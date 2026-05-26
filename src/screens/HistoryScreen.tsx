@@ -22,7 +22,7 @@ import type { ScanHistoryItem } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
 import { getDeviceId } from '../services/authService';
-import { buildImageUrl, formatDate } from '../utils/helpers';
+import { buildImageUrl, formatDate, formatProductTitleText } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<HistoryStackParamList>;
 
@@ -169,14 +169,14 @@ function HistoryCard({ item, onPress }: { item: ScanHistoryItem; onPress: () => 
       onPress={onPress}
       style={({ pressed }) => [pressed && { opacity: 0.95 }]}
       accessibilityRole="button"
-      accessibilityLabel={`${item.product_name ?? 'Product'}, ${formatDate(item.created_at)}`}
+      accessibilityLabel={`${formatProductTitleText(item.product_name ?? 'Product')}, ${formatDate(item.created_at)}`}
     >
       <View style={[styles.card, shadows.card]}>
         {/* Top section: thumbnail + text + score */}
         <View style={styles.cardTop}>
           <ProductThumb
             imageUrl={productImageUrl}
-            brandHint={item.product_brand}
+            brandHint={item.product_brand ? formatProductTitleText(item.product_brand) : null}
             isListFocused={isListFocused}
           />
 
@@ -187,11 +187,11 @@ function HistoryCard({ item, onPress }: { item: ScanHistoryItem; onPress: () => 
                   style={[typography.bodyLarge, { fontWeight: '500', color: colors.textPrimary }]}
                   numberOfLines={2}
                 >
-                  {item.product_name ?? 'Unknown Product'}
+                  {formatProductTitleText(item.product_name ?? 'Unknown Product')}
                 </Text>
                 {item.product_brand ? (
                   <Text style={[typography.labelSmall, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-                    {item.product_brand}
+                    {formatProductTitleText(item.product_brand)}
                   </Text>
                 ) : null}
               </View>

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -22,18 +22,29 @@ import { useApp } from '../context/AppContext';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 import type {
   Pet,
+  PackageShape,
   PollScanResultResponse,
   ProductCandidate,
   ScanFrontResponse,
   ScanResult,
 } from '../types';
-import { buildImageUrl } from '../utils/helpers';
+import { ManualIngredientsFlow } from './ManualIngredientsScreen';
+import { buildImageUrl, formatProductTitleText } from '../utils/helpers';
 
 type ScanStep =
   | 'front'
   | 'selectCandidate'
   | 'back'
+  | 'manualIngredients'
   | 'analyzing';
+
+/** Shown above manual ingredient entry when embedded in label scan (round pack only). */
+function manualIngredientsExplainer(shape: PackageShape | null): string {
+  if (shape === 'round') {
+    return 'Round pack detected - Type ingredients in label order';
+  }
+  return 'Enter ingredients manually in label order (top of the label first).';
+}
 
 function extractScanId(data: unknown): string {
   if (data && typeof data === 'object') {
@@ -126,6 +137,9 @@ export function TwoStepScanScreen() {
   const { selectedPet } = useApp();
   const pet = selectedPet;
 
+  const packageShapeRef = useRef<PackageShape | null>(null);
+  const manualReturnStepRef = useRef<'front' | 'selectCandidate'>('front');
+
   const [step, setStep] = useState<ScanStep>('front');
   const [pendingScanId, setPendingScanId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<ProductCandidate[]>([]);
@@ -143,7 +157,7 @@ export function TwoStepScanScreen() {
     'Generating report',
   ]);
 
-  const showLoadingOverlay = processing && step !== 'analyzing';
+  const showLoadingOverlay = processing && step !== 'analyzing' && step !== 'manualIngredients';
 
   // Loading overlay copy. Each step picks the most specific message
   // available so the user always knows which phase is in flight (and
@@ -155,7 +169,7 @@ export function TwoStepScanScreen() {
       ? 'Reading product…'
       : step === 'selectCandidate'
         ? 'Loading product…'
-        : step === 'back'
+        : step === 'back' || step === 'manualIngredients'
           ? 'Reading the label…'
           : 'Working…';
 
@@ -210,8 +224,11 @@ export function TwoStepScanScreen() {
   );
 
   const finishWithResult = useCallback(
-    (result: ScanResult) => {
-      navigation.replace('Result', { scanResult: result });
+    (result: ScanResult, suppressProductImage?: boolean) => {
+      navigation.replace('Result', {
+        scanResult: result,
+        ...(suppressProductImage ? { suppressProductImage: true } : {}),
+      });
     },
     [navigation]
   );
@@ -219,6 +236,7 @@ export function TwoStepScanScreen() {
   /** Shared front-scan tail: metadata + candidate list or straight to back step. */
   const applyFrontResult = useCallback((res: ScanFrontResponse) => {
     setPendingScanId(res.pendingScanId);
+    packageShapeRef.current = res.captured?.packageShape ?? null;
     setFrontMeta({
       productName: res.captured?.productName,
       brand: res.captured?.brand,
@@ -229,7 +247,13 @@ export function TwoStepScanScreen() {
       setCandidates(list);
       setStep('selectCandidate');
     } else {
-      setStep('back');
+      manualReturnStepRef.current = 'front';
+      const shape = packageShapeRef.current;
+      if (shape === 'round') {
+        setStep('manualIngredients');
+      } else {
+        setStep('back');
+      }
     }
   }, []);
 
@@ -292,7 +316,13 @@ export function TwoStepScanScreen() {
   );
 
   const onNotHereScanBack = useCallback(() => {
-    setStep('back');
+    manualReturnStepRef.current = 'selectCandidate';
+    const shape = packageShapeRef.current;
+    if (shape === 'round') {
+      setStep('manualIngredients');
+    } else {
+      setStep('back');
+    }
   }, []);
 
   const onBackCapture = useCallback(async () => {
@@ -349,7 +379,7 @@ export function TwoStepScanScreen() {
 
   const step1Active = step === 'front';
   const step1Complete = step !== 'front';
-  const step2Active = step === 'back';
+  const step2Active = step === 'back' || step === 'manualIngredients';
   /** Back label is only "done" after the user has submitted it and analysis is running. */
   const step2Complete = step === 'analyzing';
   const barActive = step !== 'front';
@@ -368,7 +398,7 @@ export function TwoStepScanScreen() {
       {/* Progress header */}
       <View style={s.progressHeader}>
         <View style={s.progressRow}>
-          <StepIndicator number={1} title="Identify" subtitle="Brand & name" isActive={step1Active} isComplete={step1Complete} />
+          <StepIndicator number={1} title="Identify" subtitle="" isActive={step1Active} isComplete={step1Complete} />
           <View style={[s.progressBar, barActive && s.progressBarActive]} />
           <StepIndicator number={2} title="Ingredients" subtitle="" isActive={step2Active} isComplete={step2Complete} />
         </View>
@@ -392,7 +422,12 @@ export function TwoStepScanScreen() {
             </View>
             {(frontMeta.brand || frontMeta.productName) && (
               <Text style={s.candidateSubtitle} numberOfLines={1}>
-                Matches for "{frontMeta.brand ?? ''} {frontMeta.productName ?? ''}"
+                Matches for "
+                {[frontMeta.brand, frontMeta.productName]
+                  .filter(Boolean)
+                  .map((x) => formatProductTitleText(String(x)))
+                  .join(' ')}
+                "
               </Text>
             )}
           </View>
@@ -421,10 +456,10 @@ export function TwoStepScanScreen() {
                 <View style={s.candidateInfo}>
                   <View style={{ flex: 1, gap: 2 }}>
                     {c.brand ? (
-                      <Text style={s.candidateCardBrand} numberOfLines={1}>{c.brand.toUpperCase()}</Text>
+                      <Text style={s.candidateCardBrand} numberOfLines={1}>{formatProductTitleText(c.brand)}</Text>
                     ) : null}
                     <Text style={s.candidateCardName} numberOfLines={3}>
-                      {c.name ?? 'Unknown Product'}
+                      {formatProductTitleText(c.name ?? 'Unknown Product')}
                     </Text>
                     {(c.productType ?? c.product_type) ? (
                       <View style={s.candidateTypePill}>
@@ -434,7 +469,7 @@ export function TwoStepScanScreen() {
                       </View>
                     ) : null}
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
                 </View>
               </Pressable>
             ))}
@@ -458,6 +493,22 @@ export function TwoStepScanScreen() {
             </Pressable>
           </View>
         </View>
+      ) : step === 'manualIngredients' && pet ? (
+        <View style={{ flex: 1, minHeight: 0 }}>
+          <ManualIngredientsFlow
+            mode="scan"
+            hideNavBar
+            entryExplainer={manualIngredientsExplainer(packageShapeRef.current)}
+            pet={pet}
+            productHint={{
+              brand: frontMeta.brand,
+              productName: frontMeta.productName,
+              productType: frontMeta.productType,
+            }}
+            onSuccess={(r) => finishWithResult(r, true)}
+            onCancel={() => setStep(manualReturnStepRef.current)}
+          />
+        </View>
       ) : (
       <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
         {!pet && (
@@ -469,8 +520,7 @@ export function TwoStepScanScreen() {
             <View style={s.spacer} />
             <FrontIllustration variant="front" />
             <View style={s.textBlock}>
-              <Text style={s.stepTitle}>Identify Product</Text>
-              <Text style={s.stepDesc}>Brand & product name</Text>
+              <Text style={s.stepTitle}>Identify</Text>
             </View>
             <View style={s.spacer} />
             <View style={s.buttonGroup}>
@@ -501,11 +551,11 @@ export function TwoStepScanScreen() {
                 <View style={s.capturedChipTextCol}>
                   {frontMeta.brand ? (
                     <Text style={s.capturedChipBrand} numberOfLines={1}>
-                      {frontMeta.brand.toUpperCase()}
+                      {formatProductTitleText(frontMeta.brand)}
                     </Text>
                   ) : null}
                   <Text style={s.capturedChipName} numberOfLines={2}>
-                    {frontMeta.productName ?? 'Product'}
+                    {formatProductTitleText(frontMeta.productName ?? 'Product')}
                   </Text>
                 </View>
               </View>
@@ -537,9 +587,9 @@ export function TwoStepScanScreen() {
             {(frontMeta.brand || frontMeta.productName) && (
               <View style={s.analyzingCard}>
                 {frontMeta.brand ? (
-                  <Text style={s.analyzingBrand}>{frontMeta.brand.toUpperCase()}</Text>
+                  <Text style={s.analyzingBrand}>{formatProductTitleText(frontMeta.brand)}</Text>
                 ) : null}
-                <Text style={s.analyzingName}>{frontMeta.productName ?? 'Product'}</Text>
+                <Text style={s.analyzingName}>{formatProductTitleText(frontMeta.productName ?? 'Product')}</Text>
               </View>
             )}
             <View style={{ height: 32 }} />
@@ -807,12 +857,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
     textAlign: 'center',
-  },
-  stepDesc: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
   },
   buttonGroup: {
     gap: spacing.md,
