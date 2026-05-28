@@ -279,27 +279,24 @@ export default function HistoryScreen() {
     setRefreshing(false);
   }, [loadHistory]);
 
-  // Navigate INSTANTLY — Result screen has its own preload mode that
-  // shows the score ring + skeleton placeholders while it fetches the
-  // full analysis in the background. Awaiting analyzeProduct here
-  // produced 5–15s of blank "Loading analysis…" overlay (Tier 3 AI
-  // fallback + image fetch in the worst case).
   const onCardPress = (item: ScanHistoryItem) => {
-    if (!item.product_id) return;
-
     navigation.navigate('Result', {
-      productId: item.product_id,
-      product: {
-        id: item.product_id,
-        name: item.product_name ?? 'Product',
-        ...(item.product_brand ? { brand: item.product_brand } : {}),
-        ...(item.product_image ? { image_url: item.product_image } : {}),
-      },
+      scanId: item.id,
       preloadedScore: {
         score: item.final_score,
         ...(item.grade ? { grade: item.grade } : {}),
         ...(item.recommendation ? { recommendation: item.recommendation } : {}),
       },
+      ...(item.product_id
+        ? {
+            product: {
+              id: item.product_id,
+              name: item.product_name ?? 'Product',
+              ...(item.product_brand ? { brand: item.product_brand } : {}),
+              ...(item.product_image ? { image_url: item.product_image } : {}),
+            },
+          }
+        : {}),
       ...(item.product_image ? { historyImageUrl: item.product_image } : {}),
     });
   };

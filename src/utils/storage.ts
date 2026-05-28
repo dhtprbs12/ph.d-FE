@@ -40,7 +40,7 @@ export async function setDisclaimerAccepted(): Promise<void> {
 
 export async function clearAllData(): Promise<void> {
   await Promise.all(
-    [PETS_KEY, SELECTED_PET_ID_KEY, DISCLAIMER_KEY, 'authToken', 'deviceId'].map(key =>
+    [PETS_KEY, SELECTED_PET_ID_KEY, DISCLAIMER_KEY, 'authToken', 'deviceId', 'pendingAnalysisScan'].map(key =>
       AsyncStorage.removeItem(key)
     )
   );

@@ -16,6 +16,7 @@ export type ManualIngredientsParams = {
 export type ResultParams =
   | {
       scanResult: ScanResult;
+      scanId?: undefined;
       productId?: undefined;
       product?: undefined;
       preloadedScore?: undefined;
@@ -26,7 +27,18 @@ export type ResultParams =
   | {
       scanResult?: undefined;
       productId: string;
+      scanId?: undefined;
       product: Product;
+      preloadedScore: PreloadedScore;
+      historyImageUrl?: string;
+      suppressProductImage?: boolean;
+    }
+  | {
+      scanResult?: undefined;
+      productId?: undefined;
+      scanId: string;
+      /** Optional display hint while snapshot loads (from history list row). */
+      product?: Product;
       preloadedScore: PreloadedScore;
       historyImageUrl?: string;
       suppressProductImage?: boolean;

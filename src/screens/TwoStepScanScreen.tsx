@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -23,13 +23,18 @@ import { colors, radius, shadows, spacing, typography } from '../theme';
 import type {
   Pet,
   PackageShape,
-  PollScanResultResponse,
   ProductCandidate,
   ScanFrontResponse,
   ScanResult,
 } from '../types';
 import { ManualIngredientsFlow } from './ManualIngredientsScreen';
 import { buildImageUrl, formatProductTitleText } from '../utils/helpers';
+import { pollUntilComplete } from '../utils/analysisPoll';
+import {
+  clearPendingAnalysisScan,
+  loadPendingAnalysisScan,
+  savePendingAnalysisScan,
+} from '../utils/pendingAnalysisScan';
 
 type ScanStep =
   | 'front'
@@ -53,46 +58,6 @@ function extractScanId(data: unknown): string {
     if (typeof d.scan_id === 'string') return d.scan_id;
   }
   throw new Error('Missing scan id from server');
-}
-
-async function pollUntilComplete(
-  scanId: string,
-  onTick: (stepIndex: number, message?: string) => void
-): Promise<ScanResult> {
-  const deadline = Date.now() + 60_000;
-  let tick = 0;
-  while (Date.now() < deadline) {
-    const res: PollScanResultResponse = await scanService.pollResult(scanId);
-    const status = String(res.status).toLowerCase();
-    const hasResult = !!(res.result || res.analysis);
-    if (status === 'complete') {
-      if (res.result) return res.result;
-      if (res.analysis) return res as unknown as ScanResult;
-    }
-    if (status === 'error') {
-      throw new Error('Analysis failed');
-    }
-    const prog = res.progress;
-    if (typeof prog === 'string') {
-      onTick(tick % 4, prog);
-    } else if (prog && typeof prog === 'object') {
-      const cur = (prog as { current?: number; message?: string }).current;
-      const msg = (prog as { message?: string }).message;
-      if (typeof cur === 'number') tick = cur;
-      onTick(tick % 4, msg);
-    } else {
-      onTick(tick % 4);
-    }
-    tick += 1;
-    // Adaptive polling: catch fast cache-hit responses quickly, back off for
-    // slow first-time AI assessments so we don't spam the server.
-    //   ticks 1–3   → 700ms  (cached products usually finish here)
-    //   ticks 4–8   → 1500ms (typical merged Gemini call window)
-    //   ticks 9+    → 2500ms (long tail; many uncached ingredients)
-    const wait = tick <= 3 ? 700 : tick <= 8 ? 1500 : 2500;
-    await new Promise<void>(r => setTimeout(() => r(), wait));
-  }
-  throw new Error('Analysis timed out. Please try again.');
 }
 
 function petToQuickAnalyzeBody(pet: Pet, productId: string, deviceId: string) {
@@ -198,29 +163,29 @@ export function TwoStepScanScreen() {
   const runPoll = useCallback(
     async (scanId: string) => {
       setAnalyzeStepsDone([false, false, false, false]);
+      await savePendingAnalysisScan({
+        scanId,
+        startedAt: Date.now(),
+        frontMeta: {
+          productName: frontMeta.productName,
+          brand: frontMeta.brand,
+          productType: frontMeta.productType,
+        },
+      });
       const result = await pollUntilComplete(scanId, idx => {
         setAnalyzeStepsDone(prev => {
           const next = [...prev];
-          // Cap at index 2: the last step ("Generating report") is only
-          // checked off once the result actually arrives. Otherwise the
-          // poll's artificial tick%4 progress can fill all 4 checkmarks
-          // long before the backend is done, leaving the user staring
-          // at a "done" screen for several seconds with nothing happening.
           const capped = Math.min(idx, 2);
           for (let i = 0; i <= capped; i += 1) next[i] = true;
           return next;
         });
       });
-      // Fill the final checkmark before navigating so the user sees a
-      // satisfying complete state instead of jumping mid-spinner.
+      await clearPendingAnalysisScan();
       setAnalyzeStepsDone([true, true, true, true]);
-      // Tiny pause so the final ✓ has time to render — without it, the
-      // navigation often beats React to the screen and the user never
-      // sees the "all done" frame.
       await new Promise<void>(r => setTimeout(r, 250));
       return result;
     },
-    []
+    [frontMeta]
   );
 
   const finishWithResult = useCallback(
@@ -232,6 +197,34 @@ export function TwoStepScanScreen() {
     },
     [navigation]
   );
+
+  const resumeChecked = useRef(false);
+  useEffect(() => {
+    if (resumeChecked.current) return;
+    resumeChecked.current = true;
+    let cancelled = false;
+    (async () => {
+      const pending = await loadPendingAnalysisScan();
+      if (!pending || cancelled) return;
+      setFrontMeta(pending.frontMeta ?? {});
+      setAnalyzeLabels([
+        'Reading ingredients',
+        'Checking database',
+        'Scoring',
+        'Generating report',
+      ]);
+      setStep('analyzing');
+      try {
+        const result = await runPoll(pending.scanId);
+        if (!cancelled) finishWithResult(result);
+      } catch (e) {
+        console.warn('[SCAN] resume pending analysis failed:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runPoll, finishWithResult]);
 
   /** Shared front-scan tail: metadata + candidate list or straight to back step. */
   const applyFrontResult = useCallback((res: ScanFrontResponse) => {
@@ -621,6 +614,9 @@ export function TwoStepScanScreen() {
             </View>
             <View style={s.spacer} />
             <View style={s.analyzeFooter}>
+              <Text style={s.analyzeFooterLight}>
+                You can switch apps — we'll pick up when you return
+              </Text>
               <Text style={s.analyzeFooterLight}>
                 First-time scans take longer while we build the analysis
               </Text>

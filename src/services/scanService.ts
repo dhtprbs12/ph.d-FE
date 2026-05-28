@@ -11,6 +11,7 @@ import type {
   ScanResult,
   UserStats,
 } from '../types';
+import type { ScanHistoryDetailRow } from '../utils/scanHistorySnapshot';
 
 export interface ScanBackPetFields {
   petName: string;
@@ -115,6 +116,13 @@ export async function getHistory(params: ScanHistoryParams): Promise<ScanHistory
   });
   if (Array.isArray(data)) return data;
   return (data as { history: ScanHistoryItem[] }).history ?? [];
+}
+
+export async function getScanById(scanId: string, deviceId: string): Promise<ScanHistoryDetailRow> {
+  const { data } = await api.get<{ scan: ScanHistoryDetailRow }>(`/scan/${scanId}`, {
+    params: { deviceId },
+  });
+  return data.scan;
 }
 
 export async function getCommunityStats(): Promise<CommunityStats> {

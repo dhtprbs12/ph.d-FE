@@ -17,7 +17,7 @@ import {
   UIManager,
   View,
 } from 'react-native';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { CommonActions, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
@@ -29,6 +29,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HistoryStackParamList, HomeStackParamList } from '../navigation/types';
 import * as productService from '../services/productService';
 import * as scanService from '../services/scanService';
+import { getDeviceId } from '../services/authService';
+import { scanRowToScanResult } from '../utils/scanHistorySnapshot';
 import { useApp } from '../context/AppContext';
 import {
   colors,
@@ -54,7 +56,10 @@ const RING_STROKE = 12;
 const R = (RING_SIZE - RING_STROKE) / 2;
 const CIRC = 2 * Math.PI * R;
 
-type ResultNav = NativeStackNavigationProp<HomeStackParamList, 'Result'>;
+type ResultNav = NativeStackNavigationProp<
+  HomeStackParamList | HistoryStackParamList,
+  'Result'
+>;
 
 const APP_BRAND = 'Pet Health Director';
 /** R2 public URL — same `https` path as product images so view-shot captures the logo reliably. */
@@ -1191,6 +1196,20 @@ function ShareResultButton({ onPress }: { onPress: () => void }) {
   );
 }
 
+/* ---------- Scan another (Home stack — resets stack → TwoStepScan) ---------- */
+function ScanAnotherButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Scan another product"
+      style={({ pressed }) => [st.scanAnotherCard, pressed && { opacity: 0.92 }]}
+    >
+      <Text style={st.scanAnotherTitle}>Scan another product</Text>
+    </Pressable>
+  );
+}
+
 /* ---------- Dev-only Delete Button (testing) ----------
  * Removed before public launch. While we are still tuning OCR, this lets us
  * purge a product whose ingredients were extracted incorrectly so the bad
@@ -1354,6 +1373,7 @@ export function ResultScreen() {
 
   const paramScanResult = route.params?.scanResult;
   const paramProductId = route.params && 'productId' in route.params ? route.params.productId : undefined;
+  const paramScanId = route.params && 'scanId' in route.params ? route.params.scanId : undefined;
   const paramProduct = route.params && 'product' in route.params ? route.params.product : undefined;
   const paramPreloaded = route.params && 'preloadedScore' in route.params ? route.params.preloadedScore : undefined;
   const historyImageParam =
@@ -1367,10 +1387,11 @@ export function ResultScreen() {
     route.params.suppressProductImage
   );
 
-  const isPreloadMode = !paramScanResult && !!paramProductId;
+  const isHistorySnapshotMode = !paramScanResult && !!paramScanId;
+  const isPreloadMode = !paramScanResult && !!paramProductId && !paramScanId;
 
   const [scanResult, setScanResult] = useState<ScanResult | null>(paramScanResult ?? null);
-  const [analysisLoading, setAnalysisLoading] = useState(isPreloadMode);
+  const [analysisLoading, setAnalysisLoading] = useState(isPreloadMode || isHistorySnapshotMode);
   const [analysisError, setAnalysisError] = useState(false);
   const pulseOpacity = usePulse();
 
@@ -1432,6 +1453,26 @@ export function ResultScreen() {
     })();
     return () => { cancelled = true; };
   }, [isPreloadMode, paramProductId, petParams]);
+
+  useEffect(() => {
+    if (!isHistorySnapshotMode || !paramScanId) return;
+    let cancelled = false;
+    (async () => {
+      setAnalysisLoading(true);
+      setAnalysisError(false);
+      try {
+        const deviceId = await getDeviceId();
+        const scan = await scanService.getScanById(paramScanId, deviceId);
+        const result = scanRowToScanResult(scan, historyImageParam);
+        if (!cancelled) setScanResult(result);
+      } catch {
+        if (!cancelled) setAnalysisError(true);
+      } finally {
+        if (!cancelled) setAnalysisLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isHistorySnapshotMode, paramScanId, historyImageParam]);
 
   const finalScore = displayScore;
   const productId = scanResult?.product?.id ?? paramProductId;
@@ -1583,9 +1624,21 @@ export function ResultScreen() {
     }
   }, [preloadedScanResult]);
 
+  const canScanAnother =
+    !paramScanId && navigation.getState().routeNames.includes('TwoStepScan');
+
+  const onScanAnother = useCallback(() => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 1,
+        routes: [{ name: 'Home' }, { name: 'TwoStepScan' }],
+      }),
+    );
+  }, [navigation]);
+
   const ingredients = scanResult?.analysis.ingredients ?? [];
 
-  if (!paramScanResult && !paramProductId) {
+  if (!paramScanResult && !paramProductId && !paramScanId) {
     return (
       <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
         <View style={st.centerFallback}>
@@ -1662,9 +1715,25 @@ export function ResultScreen() {
               onPress={() => {
                 setAnalysisError(false);
                 setAnalysisLoading(true);
-                productService.analyzeProduct(paramProductId!, petParams)
-                  .then(res => { setScanResult(res); setAnalysisLoading(false); })
-                  .catch(() => { setAnalysisError(true); setAnalysisLoading(false); });
+                if (isHistorySnapshotMode && paramScanId) {
+                  getDeviceId()
+                    .then((deviceId) => scanService.getScanById(paramScanId, deviceId))
+                    .then((scan) => {
+                      setScanResult(scanRowToScanResult(scan, historyImageParam));
+                      setAnalysisLoading(false);
+                    })
+                    .catch(() => {
+                      setAnalysisError(true);
+                      setAnalysisLoading(false);
+                    });
+                } else if (paramProductId) {
+                  productService.analyzeProduct(paramProductId, petParams)
+                    .then(res => { setScanResult(res); setAnalysisLoading(false); })
+                    .catch(() => { setAnalysisError(true); setAnalysisLoading(false); });
+                } else {
+                  setAnalysisError(true);
+                  setAnalysisLoading(false);
+                }
               }}
               style={{ paddingVertical: spacing.xs, paddingHorizontal: spacing.md }}
             >
@@ -1686,8 +1755,9 @@ export function ResultScreen() {
         <AlternativesSection alternatives={alternatives} isLoading={altLoading} onTap={onAlternativeTap} />
 
         {!analysisLoading && !analysisError && (
-          <View style={{ paddingHorizontal: spacing.md }}>
+          <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
             <ShareResultButton onPress={onShare} />
+            {canScanAnother && <ScanAnotherButton onPress={onScanAnother} />}
           </View>
         )}
 
@@ -1868,6 +1938,23 @@ const st = StyleSheet.create({
   },
   shareTitle: { ...typography.bodyMedium, fontWeight: '600', color: colors.white },
   shareSub: { ...typography.labelSmall, color: 'rgba(255,255,255,0.8)' },
+  scanAnotherCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.large,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    ...shadows.card,
+  },
+  scanAnotherTitle: {
+    ...typography.bodyMedium,
+    fontWeight: '600',
+    color: colors.primary,
+  },
   imageZoomBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
