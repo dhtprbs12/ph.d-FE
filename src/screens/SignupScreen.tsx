@@ -1,9 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  StyleSheet, Alert, ActivityIndicator, Image, ActionSheetIOS, Platform, Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import * as authService from '../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
@@ -25,10 +28,12 @@ export default function SignupScreen({ navigation }: Props) {
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<'dog' | 'cat'>('dog');
   const [breed, setBreed] = useState('');
-  const [ageMonths, setAgeMonths] = useState('');
-  const [weightKg, setWeightKg] = useState('');
+  const [ageYears, setAgeYears] = useState('');
+  const [ageMonthsVal, setAgeMonthsVal] = useState('');
+  const [weightLbs, setWeightLbs] = useState('');
   const [sex, setSex] = useState<'male' | 'female' | 'unknown'>('unknown');
   const [activityLevel, setActivityLevel] = useState<'low' | 'moderate' | 'high'>('moderate');
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -76,12 +81,16 @@ export default function SignupScreen({ navigation }: Props) {
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('userId', user.id);
 
+      const totalAgeMonths = (parseInt(ageYears || '0') * 12) + parseInt(ageMonthsVal || '0');
+      const lbs = parseFloat(weightLbs);
+      const weightKg = isNaN(lbs) ? null : +(lbs * 0.453592).toFixed(2);
+
       await api.post('/pets', {
         name: petName.trim(),
         pet_type: petType,
         breed: breed.trim() || null,
-        age_months: ageMonths ? parseInt(ageMonths) : null,
-        weight_kg: weightKg ? parseFloat(weightKg) : null,
+        age_months: totalAgeMonths > 0 ? totalAgeMonths : null,
+        weight_kg: weightKg,
         sex,
         activity_level: activityLevel,
       });
@@ -95,31 +104,73 @@ export default function SignupScreen({ navigation }: Props) {
     }
   };
 
+  const launchCamera = useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Needed', 'Camera access is required to take a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.5 });
+    if (!result.canceled) setPhotoUri(result.assets[0].uri);
+  }, []);
+
+  const launchLibrary = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.5 });
+    if (!result.canceled) setPhotoUri(result.assets[0].uri);
+  }, []);
+
+  const pickPhoto = useCallback(() => {
+    const options = ['Cancel', 'Take Photo', 'Choose from Library', ...(photoUri ? ['Remove Photo'] : [])];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex: 0, destructiveButtonIndex: photoUri ? 3 : undefined },
+        async (idx) => {
+          if (idx === 1) await launchCamera();
+          else if (idx === 2) await launchLibrary();
+          else if (idx === 3) setPhotoUri(null);
+        },
+      );
+    } else {
+      Alert.alert('Add Photo', 'Choose an option', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take Photo', onPress: launchCamera },
+        { text: 'Choose from Library', onPress: launchLibrary },
+        ...(photoUri ? [{ text: 'Remove Photo', style: 'destructive' as const, onPress: () => setPhotoUri(null) }] : []),
+      ]);
+    }
+  }, [photoUri, launchCamera, launchLibrary]);
+
+  const insets = useSafeAreaInsets();
+
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {step === 0 ? (
-          <View style={styles.form}>
+          <View key="step-auth" style={styles.form}>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Choose a nickname and PIN to get started</Text>
 
             <Text style={styles.label}>Nickname</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={[styles.input, styles.inputFlex]}
-                value={nickname}
-                onChangeText={setNickname}
-                placeholder="e.g. puppy_lover_42"
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={30}
-              />
-              {nicknameChecking && <ActivityIndicator size="small" style={styles.inputIcon} color={colors.primary} />}
-              {!nicknameChecking && nicknameAvailable === true && <Text style={styles.checkOk}>✓</Text>}
-              {!nicknameChecking && nicknameAvailable === false && <Text style={styles.checkFail}>✗</Text>}
-            </View>
-            {nicknameReason ? <Text style={styles.hint}>{nicknameReason}</Text> : null}
+            <TextInput
+              style={styles.input}
+              value={nickname}
+              onChangeText={setNickname}
+              placeholder="e.g. puppy_lover_42"
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={30}
+            />
+            {nicknameChecking && <ActivityIndicator size="small" style={styles.helperLoader} color={colors.primary} />}
+            {!nicknameChecking && nicknameAvailable === true && (
+              <Text style={styles.helperSuccess}>This nickname is available</Text>
+            )}
+            {!nicknameChecking && nicknameAvailable === false && (
+              <Text style={styles.helperError}>{nicknameReason || 'This nickname is already taken'}</Text>
+            )}
 
             <Text style={styles.label}>PIN (4-6 digits)</Text>
             <TextInput
@@ -159,55 +210,89 @@ export default function SignupScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.form}>
+          <View key="step-pet" style={styles.form}>
             <Text style={styles.title}>Your Pet</Text>
             <Text style={styles.subtitle}>Tell us about your first pet</Text>
+
+            <Pressable onPress={pickPhoto} style={styles.photoWrapper}>
+              <View style={[styles.photoCircle, { backgroundColor: petType === 'dog' ? colors.accent + '33' : colors.primary + '33' }]}>
+                {photoUri ? (
+                  <Image source={{ uri: photoUri }} style={styles.photoImage} />
+                ) : (
+                  <Text style={{ fontSize: 44 }}>{petType === 'dog' ? '🐕' : '🐱'}</Text>
+                )}
+              </View>
+              <View style={styles.cameraBadge}>
+                <Ionicons name="camera" size={14} color={colors.white} />
+              </View>
+              <Text style={styles.photoHint}>Add Photo (Optional)</Text>
+            </Pressable>
 
             <Text style={styles.label}>Pet Name *</Text>
             <TextInput
               style={styles.input}
               value={petName}
               onChangeText={setPetName}
-              placeholder="e.g. Buddy"
+              placeholder="What's your pet's name?"
               placeholderTextColor={colors.textSecondary}
+              autoCapitalize="words"
             />
 
             <Text style={styles.label}>Type</Text>
             <View style={styles.row}>
-              <TouchableOpacity style={[styles.chip, petType === 'dog' && styles.chipActive]} onPress={() => setPetType('dog')}>
+              <TouchableOpacity style={[styles.petTypeBtn, petType === 'dog' && styles.petTypeBtnActive]} onPress={() => setPetType('dog')}>
+                <Text style={{ fontSize: 28 }}>🐕</Text>
                 <Text style={[styles.chipText, petType === 'dog' && styles.chipTextActive]}>Dog</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.chip, petType === 'cat' && styles.chipActive]} onPress={() => setPetType('cat')}>
+              <TouchableOpacity style={[styles.petTypeBtn, petType === 'cat' && styles.petTypeBtnActive]} onPress={() => setPetType('cat')}>
+                <Text style={{ fontSize: 28 }}>🐱</Text>
                 <Text style={[styles.chipText, petType === 'cat' && styles.chipTextActive]}>Cat</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Breed</Text>
+            <Text style={styles.label}>Breed (Optional)</Text>
             <TextInput
               style={styles.input}
               value={breed}
               onChangeText={setBreed}
-              placeholder="Optional"
+              placeholder={petType === 'dog' ? 'e.g. Labrador, Mixed' : 'e.g. Persian, Tabby'}
               placeholderTextColor={colors.textSecondary}
+              autoCapitalize="words"
             />
 
-            <Text style={styles.label}>Age (months)</Text>
-            <TextInput
-              style={styles.input}
-              value={ageMonths}
-              onChangeText={setAgeMonths}
-              keyboardType="number-pad"
-              placeholder="e.g. 24"
-              placeholderTextColor={colors.textSecondary}
-            />
+            <Text style={styles.label}>Age</Text>
+            <View style={styles.row}>
+              <View style={styles.flex1}>
+                <TextInput
+                  style={styles.input}
+                  value={ageYears}
+                  onChangeText={setAgeYears}
+                  placeholder="0"
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.textSecondary}
+                />
+                <Text style={styles.fieldUnit}>Years</Text>
+              </View>
+              <View style={styles.flex1}>
+                <TextInput
+                  style={styles.input}
+                  value={ageMonthsVal}
+                  onChangeText={setAgeMonthsVal}
+                  placeholder="0"
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.textSecondary}
+                />
+                <Text style={styles.fieldUnit}>Months</Text>
+              </View>
+            </View>
 
-            <Text style={styles.label}>Weight (kg)</Text>
+            <Text style={styles.label}>Weight (lbs)</Text>
             <TextInput
               style={styles.input}
-              value={weightKg}
-              onChangeText={setWeightKg}
+              value={weightLbs}
+              onChangeText={setWeightLbs}
               keyboardType="decimal-pad"
-              placeholder="e.g. 12.5"
+              placeholder={petType === 'dog' ? 'e.g. 55' : 'e.g. 10'}
               placeholderTextColor={colors.textSecondary}
             />
 
@@ -223,17 +308,17 @@ export default function SignupScreen({ navigation }: Props) {
             </View>
 
             <Text style={styles.label}>Activity Level</Text>
-            <View style={styles.row}>
+            <View style={styles.segmentedRow}>
               {(['low', 'moderate', 'high'] as const).map((a) => (
-                <TouchableOpacity key={a} style={[styles.chip, activityLevel === a && styles.chipActive]} onPress={() => setActivityLevel(a)}>
-                  <Text style={[styles.chipText, activityLevel === a && styles.chipTextActive]}>
+                <TouchableOpacity key={a} style={[styles.segment, activityLevel === a && styles.segmentActive]} onPress={() => setActivityLevel(a)}>
+                  <Text style={[styles.segmentText, activityLevel === a && styles.segmentTextActive]}>
                     {a.charAt(0).toUpperCase() + a.slice(1)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <View style={styles.row}>
+            <View style={[styles.row, { marginTop: spacing.lg }]}>
               <TouchableOpacity style={styles.backBtn} onPress={() => setStep(0)}>
                 <Text style={styles.backBtnText}>Back</Text>
               </TouchableOpacity>
@@ -248,13 +333,13 @@ export default function SignupScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
+  scroll: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
   form: { width: '100%' },
   title: { ...typography.displayLarge, color: colors.textPrimary, marginBottom: spacing.xxs },
   subtitle: { ...typography.bodyMedium, color: colors.textSecondary, marginBottom: spacing.lg },
@@ -268,11 +353,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     color: colors.textPrimary,
   },
-  inputRow: { flexDirection: 'row', alignItems: 'center' },
-  inputFlex: { flex: 1 },
-  inputIcon: { marginLeft: spacing.xs },
-  checkOk: { marginLeft: spacing.xs, fontSize: 18, color: colors.safe },
-  checkFail: { marginLeft: spacing.xs, fontSize: 18, color: colors.danger },
+  helperLoader: { marginTop: spacing.xxs, alignSelf: 'flex-start' },
+  helperSuccess: { ...typography.labelSmall, color: colors.safe, marginTop: spacing.xxs },
+  helperError: { ...typography.labelSmall, color: colors.danger, marginTop: spacing.xxs },
   hint: { ...typography.labelSmall, color: colors.danger, marginTop: spacing.xxs },
   button: {
     backgroundColor: colors.primary,
@@ -285,7 +368,35 @@ const styles = StyleSheet.create({
   buttonText: { color: colors.white, ...typography.titleMedium },
   linkBtn: { marginTop: spacing.md, alignItems: 'center' },
   linkText: { color: colors.primary, ...typography.bodySmall },
-  row: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
+  row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  fieldUnit: { ...typography.labelSmall, color: colors.textSecondary, textAlign: 'center', marginTop: 4 },
+  petTypeBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: radius.large,
+    gap: spacing.xs,
+    borderWidth: 2,
+    borderColor: colors.divider,
+    backgroundColor: colors.card,
+  },
+  petTypeBtnActive: { backgroundColor: colors.primary + '1A', borderColor: colors.primary },
+  segmentedRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: radius.medium,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    alignItems: 'center',
+  },
+  segmentActive: { backgroundColor: colors.primary },
+  segmentText: { ...typography.labelMedium, color: colors.textPrimary },
+  segmentTextActive: { color: colors.white },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
@@ -297,6 +408,11 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { ...typography.bodySmall, color: colors.textPrimary },
   chipTextActive: { color: colors.white },
+  photoWrapper: { alignSelf: 'center', alignItems: 'center', marginBottom: spacing.md },
+  photoCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  photoImage: { width: 100, height: 100, borderRadius: 50 },
+  cameraBadge: { position: 'absolute', right: -2, bottom: 24, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  photoHint: { ...typography.labelSmall, color: colors.textSecondary, marginTop: spacing.xs },
   backBtn: { paddingHorizontal: 20, paddingVertical: spacing.md, marginTop: spacing.lg },
   backBtnText: { color: colors.primary, ...typography.titleMedium },
   flex1: { flex: 1 },
