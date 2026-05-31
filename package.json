@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@botjaeger/expo-dnd": "^0.4.0",
     "@expo/ngrok": "^4.1.0",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",

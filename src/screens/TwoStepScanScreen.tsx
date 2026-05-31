@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +16,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SortableList, DragHandle } from '@botjaeger/expo-dnd';
 import type { HomeStackParamList } from '../navigation/types';
 import * as scanService from '../services/scanService';
 import { useApp } from '../context/AppContext';
@@ -1348,17 +1350,37 @@ const s = StyleSheet.create({
     borderRadius: radius.medium,
     marginBottom: 6,
   },
+  editorDragHandle: {
+    padding: 6,
+  },
   editorRowNum: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
     color: colors.textSecondary,
-    width: 22,
+    width: 20,
     textAlign: 'center',
   },
   editorRowText: {
     flex: 1,
     fontSize: 15,
     color: colors.textPrimary,
+  },
+  editorEditRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editorEditInput: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.textPrimary,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary,
+    paddingVertical: 4,
+  },
+  editorEditBtn: {
+    padding: 4,
   },
   editorDeleteBtn: {
     padding: 4,
@@ -1400,6 +1422,11 @@ const s = StyleSheet.create({
 
 // ─── Ingredient Editor Step ───────────────────────────────────────────
 
+interface EditorItem {
+  id: string;
+  text: string;
+}
+
 function IngredientEditorStep({
   ingredients: initialIngredients,
   productName,
@@ -1413,10 +1440,39 @@ function IngredientEditorStep({
   onConfirm: (ingredients: string[]) => void;
   onCancel: () => void;
 }) {
-  const [items, setItems] = useState<string[]>(initialIngredients);
+  const [items, setItems] = useState<EditorItem[]>(() =>
+    initialIngredients.map((text, i) => ({ id: `ing-${i}`, text }))
+  );
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
-  const removeItem = useCallback((index: number) => {
-    setItems(prev => prev.filter((_, i) => i !== index));
+  const removeItem = useCallback((id: string) => {
+    setItems(prev => prev.filter(it => it.id !== id));
+    if (editingId === id) setEditingId(null);
+  }, [editingId]);
+
+  const startEdit = useCallback((id: string, text: string) => {
+    setEditingId(id);
+    setEditText(text);
+  }, []);
+
+  const confirmEdit = useCallback(() => {
+    if (editingId === null) return;
+    const trimmed = editText.trim();
+    if (trimmed) {
+      setItems(prev => prev.map(it => it.id === editingId ? { ...it, text: trimmed } : it));
+    }
+    setEditingId(null);
+    setEditText('');
+  }, [editingId, editText]);
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditText('');
+  }, []);
+
+  const handleReorder = useCallback((reordered: EditorItem[]) => {
+    setItems(reordered);
   }, []);
 
   return (
@@ -1426,27 +1482,68 @@ function IngredientEditorStep({
         <Text style={s.editorProductName}>
           {formatProductTitleText(productName ?? 'Product')}
         </Text>
-        <Text style={s.editorCount}>{items.length} ingredients detected</Text>
+        <Text style={s.editorCount}>{items.length} ingredients — hold grip to reorder</Text>
       </View>
 
-      <ScrollView style={s.editorList} contentContainerStyle={s.editorListContent}>
-        {items.map((item, idx) => (
-          <View key={`${idx}-${item}`} style={s.editorRow}>
-            <Text style={s.editorRowNum}>{idx + 1}</Text>
-            <Text style={s.editorRowText} numberOfLines={2}>{item}</Text>
-            <Pressable onPress={() => removeItem(idx)} hitSlop={8} style={s.editorDeleteBtn}>
-              <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-        ))}
-      </ScrollView>
+      <View style={s.editorList}>
+        <SortableList<EditorItem>
+          data={items}
+          keyExtractor={(item) => item.id}
+          onReorder={handleReorder}
+          handle
+          longPressDuration={150}
+          activeDragStyle={{ opacity: 0.5 }}
+          renderItem={({ item, index: idx }) => (
+            <View style={s.editorRow}>
+              <DragHandle>
+                <View style={s.editorDragHandle}>
+                  <Ionicons name="reorder-three" size={22} color={colors.textSecondary} />
+                </View>
+              </DragHandle>
+
+              <Text style={s.editorRowNum}>{idx + 1}</Text>
+
+              {editingId === item.id ? (
+                <View style={s.editorEditRow}>
+                  <TextInput
+                    style={s.editorEditInput}
+                    value={editText}
+                    onChangeText={setEditText}
+                    autoFocus
+                    onSubmitEditing={confirmEdit}
+                    returnKeyType="done"
+                  />
+                  <Pressable onPress={confirmEdit} hitSlop={6}>
+                    <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+                  </Pressable>
+                  <Pressable onPress={cancelEdit} hitSlop={6}>
+                    <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
+                  </Pressable>
+                </View>
+              ) : (
+                <Text style={s.editorRowText} numberOfLines={2}>{item.text}</Text>
+              )}
+
+              {editingId !== item.id && (
+                <Pressable onPress={() => startEdit(item.id, item.text)} hitSlop={6} style={s.editorEditBtn}>
+                  <Ionicons name="pencil" size={16} color={colors.primary} />
+                </Pressable>
+              )}
+
+              <Pressable onPress={() => removeItem(item.id)} hitSlop={8} style={s.editorDeleteBtn}>
+                <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              </Pressable>
+            </View>
+          )}
+        />
+      </View>
 
       <View style={s.editorFooter}>
         <Pressable onPress={onCancel} style={s.editorCancelBtn}>
           <Text style={s.editorCancelText}>Re-scan</Text>
         </Pressable>
         <Pressable
-          onPress={() => onConfirm(items)}
+          onPress={() => onConfirm(items.map(it => it.text))}
           style={[s.editorConfirmBtn, items.length === 0 && { opacity: 0.4 }]}
           disabled={items.length === 0}
         >

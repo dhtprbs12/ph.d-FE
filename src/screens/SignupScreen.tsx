@@ -11,12 +11,14 @@ import * as authService from '../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { uploadImage } from '../services/api';
 import { savePetsLocally } from '../utils/storage';
+import { useApp } from '../context/AppContext';
 import { colors, spacing, radius, typography } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Signup'>;
 
 export default function SignupScreen({ navigation }: Props) {
+  const { authenticateAndSync } = useApp();
   const [step, setStep] = useState(0);
 
   const [nickname, setNickname] = useState('');
@@ -108,6 +110,7 @@ export default function SignupScreen({ navigation }: Props) {
       }
 
       await savePetsLocally([{ ...createdPet, photoData: photoUri ?? undefined }]);
+      await authenticateAndSync();
 
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (e: any) {
