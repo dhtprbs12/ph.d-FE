@@ -9,7 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as authService from '../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import api from '../services/api';
+import api, { uploadImage } from '../services/api';
+import { savePetsLocally } from '../utils/storage';
 import { colors, spacing, radius, typography } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -85,15 +86,28 @@ export default function SignupScreen({ navigation }: Props) {
       const lbs = parseFloat(weightLbs);
       const weightKg = isNaN(lbs) ? null : +(lbs * 0.453592).toFixed(2);
 
-      await api.post('/pets', {
+      const { data: petData } = await api.post('/pets', {
         name: petName.trim(),
-        pet_type: petType,
+        petType,
         breed: breed.trim() || null,
-        age_months: totalAgeMonths > 0 ? totalAgeMonths : null,
-        weight_kg: weightKg,
+        ageMonths: totalAgeMonths > 0 ? totalAgeMonths : null,
+        weightKg,
         sex,
-        activity_level: activityLevel,
+        activityLevel,
       });
+
+      const createdPet = petData.pet;
+
+      if (photoUri && createdPet?.id) {
+        try {
+          const photoRes = await uploadImage<{ photo_url: string }>(`/pets/${createdPet.id}/photo`, photoUri, undefined, 'photo');
+          createdPet.photo_url = photoRes.photo_url;
+        } catch (e) {
+          console.warn('Pet photo upload failed:', e);
+        }
+      }
+
+      await savePetsLocally([{ ...createdPet, photoData: photoUri ?? undefined }]);
 
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (e: any) {
