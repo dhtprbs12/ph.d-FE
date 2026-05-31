@@ -26,6 +26,8 @@ import SettingsScreen from '../screens/SettingsScreen';
 import { TwoStepScanScreen } from '../screens/TwoStepScanScreen';
 import { ManualIngredientsScreen } from '../screens/ManualIngredientsScreen';
 import { FoodCheckScreen } from '../screens/FoodCheckScreen';
+import SignupScreen from '../screens/SignupScreen';
+import LoginScreen from '../screens/LoginScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -160,6 +162,8 @@ function RootStackNavigator() {
     <RootStack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Launch">
       <RootStack.Screen name="Launch" component={LaunchScreen} />
       <RootStack.Screen name="Disclaimer" component={DisclaimerScreen} />
+      <RootStack.Screen name="Signup" component={SignupScreen} />
+      <RootStack.Screen name="Login" component={LoginScreen} />
       <RootStack.Screen name="MainTabs" component={MainTabsNavigator} />
     </RootStack.Navigator>
   );

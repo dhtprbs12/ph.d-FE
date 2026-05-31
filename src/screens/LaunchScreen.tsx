@@ -24,11 +24,11 @@ export function LaunchScreen() {
   const ranRef = useRef(false);
 
   const goNext = useCallback(async () => {
-    const accepted = await AsyncStorage.getItem('hasAcceptedDisclaimer');
-    if (accepted === 'true') {
+    const token = await AsyncStorage.getItem('authToken');
+    if (token) {
       navigation.replace('MainTabs');
     } else {
-      navigation.replace('Disclaimer');
+      navigation.replace('Signup');
     }
   }, [navigation]);
 

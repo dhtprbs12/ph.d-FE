@@ -132,6 +132,7 @@ export default function AddPetScreen() {
         healthConditions,
         photoData: photoUri ?? undefined,
       });
+
       navigation.goBack();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to add pet');

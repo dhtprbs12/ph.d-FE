@@ -15,7 +15,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HomeStackParamList } from '../navigation/types';
-import { getDeviceId } from '../services/authService';
 import * as scanService from '../services/scanService';
 import { useApp } from '../context/AppContext';
 import { colors, radius, shadows, spacing, typography } from '../theme';
@@ -120,7 +119,6 @@ export function FoodCheckScreen() {
       setPhase('analyzing');
       setErrorMessage(null);
       try {
-        const deviceId = await getDeviceId();
         const healthJson =
           selectedPet?.healthConditions?.length
             ? JSON.stringify(
@@ -134,7 +132,6 @@ export function FoodCheckScreen() {
         const data = await scanService.foodCheck(uri, petType, {
           petName: selectedPet?.name,
           petHealthConditions: healthJson,
-          deviceId,
         });
         setResult(data);
         setPhase('result');

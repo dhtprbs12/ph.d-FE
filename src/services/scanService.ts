@@ -21,7 +21,6 @@ export interface ScanBackPetFields {
   petWeightKg?: string;
   petAllergies: string;
   petHealthConditions: string;
-  deviceId: string;
 }
 
 export async function scanFrontLabel(imageUri: string): Promise<ScanFrontResponse> {
@@ -38,7 +37,6 @@ export async function scanBackLabel(
     petType: petFields.petType,
     petAllergies: petFields.petAllergies,
     petHealthConditions: petFields.petHealthConditions,
-    deviceId: petFields.deviceId,
   };
   if (petFields.petBreed !== undefined) fields.petBreed = petFields.petBreed;
   if (petFields.petAgeMonths !== undefined) fields.petAgeMonths = petFields.petAgeMonths;
@@ -73,7 +71,6 @@ export interface ScanManualRequest {
   petType: string;
   petAllergies?: string[];
   petHealthConditions?: Pick<HealthCondition, 'condition_type' | 'severity' | 'notes'>[];
-  deviceId: string;
 }
 
 export async function scanManual(body: ScanManualRequest): Promise<ScanResult> {
@@ -81,10 +78,28 @@ export async function scanManual(body: ScanManualRequest): Promise<ScanResult> {
   return data;
 }
 
+export interface ConfirmIngredientsRequest {
+  pendingScanId?: string;
+  ingredients: string[];
+  petName: string;
+  petType: string;
+  petBreed?: string;
+  petAgeMonths?: number;
+  petWeightKg?: number;
+  petHealthConditions?: string;
+  productName?: string;
+  brand?: string;
+  productType?: string;
+}
+
+export async function confirmIngredients(body: ConfirmIngredientsRequest): Promise<unknown> {
+  const { data } = await api.post<unknown>('/scan/confirm-ingredients', body);
+  return data;
+}
+
 export interface FoodCheckOptions {
   petName?: string;
   petHealthConditions?: string;
-  deviceId?: string;
 }
 
 export async function foodCheck(
@@ -97,13 +112,11 @@ export async function foodCheck(
   if (options?.petHealthConditions !== undefined) {
     fields.petHealthConditions = options.petHealthConditions;
   }
-  if (options?.deviceId !== undefined) fields.deviceId = options.deviceId;
 
   return uploadImage<FoodCheckResult>('/scan/food-check', imageUri, fields);
 }
 
 export interface ScanHistoryParams {
-  deviceId: string;
   petName?: string;
   petType?: string;
   limit: number;
@@ -118,10 +131,8 @@ export async function getHistory(params: ScanHistoryParams): Promise<ScanHistory
   return (data as { history: ScanHistoryItem[] }).history ?? [];
 }
 
-export async function getScanById(scanId: string, deviceId: string): Promise<ScanHistoryDetailRow> {
-  const { data } = await api.get<{ scan: ScanHistoryDetailRow }>(`/scan/${scanId}`, {
-    params: { deviceId },
-  });
+export async function getScanById(scanId: string): Promise<ScanHistoryDetailRow> {
+  const { data } = await api.get<{ scan: ScanHistoryDetailRow }>(`/scan/${scanId}`);
   return data.scan;
 }
 
@@ -130,9 +141,7 @@ export async function getCommunityStats(): Promise<CommunityStats> {
   return data;
 }
 
-export async function getUserStats(deviceId: string): Promise<UserStats> {
-  const { data } = await api.get<UserStats>('/scan/user-stats', {
-    headers: { 'x-device-id': deviceId },
-  });
+export async function getUserStats(): Promise<UserStats> {
+  const { data } = await api.get<UserStats>('/scan/user-stats');
   return data;
 }

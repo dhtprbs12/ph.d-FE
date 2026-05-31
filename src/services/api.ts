@@ -4,7 +4,6 @@ import * as ImageManipulator from 'expo-image-manipulator';
 
 const BASE_URL = 'https://phd-be-production.up.railway.app/api';
 const AUTH_TOKEN_KEY = 'authToken';
-const DEVICE_ID_KEY = 'deviceId';
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -27,15 +26,9 @@ function logApiError(error: unknown, context?: string): void {
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     try {
-      const [token, deviceId] = await Promise.all([
-        AsyncStorage.getItem(AUTH_TOKEN_KEY),
-        AsyncStorage.getItem(DEVICE_ID_KEY),
-      ]);
+      const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-      }
-      if (deviceId) {
-        config.headers['x-device-id'] = deviceId;
       }
     } catch (e) {
       logApiError(e, 'request interceptor (AsyncStorage)');
@@ -76,7 +69,8 @@ const UPLOAD_MAX_DIMENSION = 2000;
 export async function uploadImage<T>(
   endpoint: string,
   imageUri: string,
-  additionalFields?: Record<string, string>
+  additionalFields?: Record<string, string>,
+  fieldName: string = 'image'
 ): Promise<T> {
   let probedWidth: number | undefined;
   let probedHeight: number | undefined;
@@ -109,10 +103,10 @@ export async function uploadImage<T>(
   const jpegUri = manipulated.uri;
 
   const formData = new FormData();
-  formData.append('image', {
+  formData.append(fieldName, {
     uri: jpegUri,
     type: 'image/jpeg',
-    name: 'image.jpg',
+    name: `${fieldName}.jpg`,
   } as unknown as Blob);
 
   if (additionalFields) {

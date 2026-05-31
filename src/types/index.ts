@@ -66,8 +66,17 @@ export type PackageShape = 'flat' | 'round' | 'pouch';
 /** Front label scan API response. */
 export interface ScanFrontResponse {
   success: boolean;
-  pendingScanId: string;
-  captured: {
+  pendingScanId?: string;
+  matchType?: 'exact' | 'fuzzy' | null;
+  product?: {
+    id: string;
+    name?: string;
+    brand?: string;
+    imageUrl?: string;
+    productType?: string;
+    targetPetType?: string;
+  };
+  captured?: {
     productName?: string;
     brand?: string;
     targetPet?: string;
@@ -75,8 +84,8 @@ export interface ScanFrontResponse {
     /** Hint for the back-label capture UI; null when Gemini wasn't sure. */
     packageShape?: PackageShape | null;
   };
-  candidates: ProductCandidate[];
-  nextStep: string;
+  candidates?: ProductCandidate[];
+  nextStep?: string;
 }
 
 /** Poll scan result API response. */
@@ -97,7 +106,6 @@ export interface QuickAnalyzeData {
   petWeightKg?: number;
   petAllergies?: string[];
   petHealthConditions?: PetHealthConditionInput[] | HealthCondition[];
-  deviceId: string;
 }
 
 /** Product filter query params (aligned with backend). */

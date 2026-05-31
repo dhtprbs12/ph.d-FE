@@ -29,7 +29,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HistoryStackParamList, HomeStackParamList } from '../navigation/types';
 import * as productService from '../services/productService';
 import * as scanService from '../services/scanService';
-import { getDeviceId } from '../services/authService';
 import { scanRowToScanResult } from '../utils/scanHistorySnapshot';
 import { useApp } from '../context/AppContext';
 import {
@@ -1461,8 +1460,7 @@ export function ResultScreen() {
       setAnalysisLoading(true);
       setAnalysisError(false);
       try {
-        const deviceId = await getDeviceId();
-        const scan = await scanService.getScanById(paramScanId, deviceId);
+        const scan = await scanService.getScanById(paramScanId);
         const result = scanRowToScanResult(scan, historyImageParam);
         if (!cancelled) setScanResult(result);
       } catch {
@@ -1716,8 +1714,7 @@ export function ResultScreen() {
                 setAnalysisError(false);
                 setAnalysisLoading(true);
                 if (isHistorySnapshotMode && paramScanId) {
-                  getDeviceId()
-                    .then((deviceId) => scanService.getScanById(paramScanId, deviceId))
+                  scanService.getScanById(paramScanId)
                     .then((scan) => {
                       setScanResult(scanRowToScanResult(scan, historyImageParam));
                       setAnalysisLoading(false);

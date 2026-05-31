@@ -1,6 +1,5 @@
 import { AppState, type AppStateStatus } from 'react-native';
 import * as scanService from '../services/scanService';
-import { getDeviceId } from '../services/authService';
 import type { PollScanResultResponse, ScanResult } from '../types';
 import { scanRowToScanResult } from './scanHistorySnapshot';
 
@@ -81,8 +80,7 @@ function extractCompleteResult(res: PollScanResultResponse): ScanResult | null {
 
 async function tryRecoverFromHistory(scanId: string): Promise<ScanResult | null> {
   try {
-    const deviceId = await getDeviceId();
-    const scan = await scanService.getScanById(scanId, deviceId);
+    const scan = await scanService.getScanById(scanId);
     const raw = scan.analysis ?? {};
     if (typeof raw !== 'object') return null;
     const hasAnalysisBody =

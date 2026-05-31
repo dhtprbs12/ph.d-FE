@@ -20,7 +20,6 @@ import type { CommunityStats, Pet, UserStats } from '../types';
 import { formatCommunityScans } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
-import { getDeviceId } from '../services/authService';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -755,11 +754,9 @@ export default function HomeScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const deviceId = await getDeviceId();
-
         const [comm, u] = await Promise.allSettled([
           scanService.getCommunityStats(),
-          scanService.getUserStats(deviceId),
+          scanService.getUserStats(),
         ]);
 
         if (cancelled) return;

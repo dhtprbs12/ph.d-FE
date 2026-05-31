@@ -19,7 +19,6 @@ import type { HomeStackParamList } from '../navigation/types';
 import type { Pet, ScanResult } from '../types';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 import * as scanService from '../services/scanService';
-import { getDeviceId } from '../services/authService';
 import { formatProductTitleText } from '../utils/helpers';
 import { useApp } from '../context/AppContext';
 
@@ -136,7 +135,6 @@ export function ManualIngredientsFlow({
     setSubmitting(true);
     const ingredientsText = effectiveLines.map((l) => l.trim()).filter(Boolean).join(', ');
     try {
-      const deviceId = await getDeviceId();
       const productName =
         productHint?.brand || productHint?.productName
           ? [productHint?.brand, productHint?.productName].filter(Boolean).join(' ').trim()
@@ -153,7 +151,6 @@ export function ManualIngredientsFlow({
           severity: c.severity,
           ...(c.notes ? { notes: c.notes } : {}),
         })),
-        deviceId,
       });
       setDraft('');
       onSuccess(result);

@@ -95,7 +95,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const authenticateAndSync = useCallback(async () => {
     try {
-      await authService.authenticate();
       dispatch({ type: 'SET_AUTHENTICATED', value: true });
 
       const serverPets = await petService.getPets();
@@ -115,39 +114,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           merged.find(p => p.is_primary) ??
           merged[0];
         dispatch({ type: 'SET_SELECTED_PET', pet: selected ?? null });
-      } else if (state.pets.length > 0) {
-        for (const pet of state.pets) {
-          try {
-            await petService.createPet({
-              name: pet.name,
-              petType: pet.pet_type,
-              breed: pet.breed,
-              ageMonths: pet.age_months,
-              weightKg: pet.weight_kg,
-              sex: pet.sex,
-              activityLevel: pet.activity_level,
-              healthConditions: (pet.healthConditions ?? []).map(c => ({
-                conditionType: c.condition_type,
-                severity: c.severity,
-                notes: c.notes,
-              })),
-            });
-          } catch (e) {
-            console.warn('Failed to push pet to server:', e);
-          }
-        }
       }
     } catch (e) {
-      console.warn('Auth/sync failed (offline mode):', e);
+      console.warn('Pet sync failed (offline mode):', e);
     }
-  }, [state.pets]);
+  }, []);
 
   const selectPet = useCallback((pet: Pet) => {
     dispatch({ type: 'SET_SELECTED_PET', pet });
     saveSelectedPetId(pet.id);
   }, []);
 
-  const addPet = useCallback(async (pet: Pet) => {
+  const addPet = useCallback(async (pet: Pet): Promise<void> => {
     const isFirst = state.pets.length === 0;
     const newPet = isFirst ? { ...pet, is_primary: true } : pet;
 
@@ -176,9 +154,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             notes: c.notes,
           })),
         });
-        const updatedPet = { ...newPet, id: serverPet.id };
-        dispatch({ type: 'UPDATE_PET', pet: updatedPet });
-        const updatedPets = allPets.map(p => (p.id === newPet.id ? updatedPet : p));
+        const finalPet = { ...newPet, id: serverPet.id };
+        dispatch({ type: 'UPDATE_PET', pet: finalPet });
+        const updatedPets = allPets.map(p => (p.id === newPet.id ? finalPet : p));
         await savePetsLocally(updatedPets);
       } catch (e) {
         console.warn('Server create failed:', e);

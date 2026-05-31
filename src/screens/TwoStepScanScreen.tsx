@@ -17,7 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HomeStackParamList } from '../navigation/types';
 import * as scanService from '../services/scanService';
-import { getDeviceId } from '../services/authService';
 import { useApp } from '../context/AppContext';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 import type {
@@ -41,6 +40,7 @@ type ScanStep =
   | 'selectCandidate'
   | 'back'
   | 'manualIngredients'
+  | 'editor'
   | 'analyzing';
 
 /** Shown above manual ingredient entry when embedded in label scan (round pack only). */
@@ -60,7 +60,7 @@ function extractScanId(data: unknown): string {
   throw new Error('Missing scan id from server');
 }
 
-function petToQuickAnalyzeBody(pet: Pet, productId: string, deviceId: string) {
+function petToQuickAnalyzeBody(pet: Pet, productId: string) {
   return {
     productId,
     petName: pet.name,
@@ -74,11 +74,10 @@ function petToQuickAnalyzeBody(pet: Pet, productId: string, deviceId: string) {
       severity: c.severity,
       notes: c.notes,
     })),
-    deviceId,
   };
 }
 
-function petToBackFields(pet: Pet, deviceId: string): scanService.ScanBackPetFields {
+function petToBackFields(pet: Pet): scanService.ScanBackPetFields {
   return {
     petName: pet.name,
     petType: pet.pet_type,
@@ -93,7 +92,6 @@ function petToBackFields(pet: Pet, deviceId: string): scanService.ScanBackPetFie
         notes: c.notes,
       }))
     ),
-    deviceId,
   };
 }
 
@@ -121,8 +119,9 @@ export function TwoStepScanScreen() {
     'Scoring',
     'Generating report',
   ]);
+  const [ingredientsForEditor, setIngredientsForEditor] = useState<string[]>([]);
 
-  const showLoadingOverlay = processing && step !== 'analyzing' && step !== 'manualIngredients';
+  const showLoadingOverlay = processing && step !== 'analyzing' && step !== 'manualIngredients' && step !== 'editor';
 
   // Loading overlay copy. Each step picks the most specific message
   // available so the user always knows which phase is in flight (and
@@ -227,14 +226,47 @@ export function TwoStepScanScreen() {
   }, [runPoll, finishWithResult]);
 
   /** Shared front-scan tail: metadata + candidate list or straight to back step. */
-  const applyFrontResult = useCallback((res: ScanFrontResponse) => {
-    setPendingScanId(res.pendingScanId);
+  const applyFrontResult = useCallback(async (res: ScanFrontResponse) => {
+    setPendingScanId(res.pendingScanId ?? null);
     packageShapeRef.current = res.captured?.packageShape ?? null;
     setFrontMeta({
       productName: res.captured?.productName,
       brand: res.captured?.brand,
       productType: res.captured?.productType,
     });
+
+    // DB match found — go directly to analysis
+    if (
+      (res.matchType === 'exact' || res.matchType === 'fuzzy') &&
+      res.product?.id &&
+      pet
+    ) {
+      setFrontMeta({
+        productName: res.product.name ?? res.captured?.productName,
+        brand: res.product.brand ?? res.captured?.brand,
+        productType: res.product.productType ?? res.captured?.productType,
+      });
+      setAnalyzeLabels([
+        'Loading ingredients',
+        'Checking database',
+        'Scoring',
+        'Generating report',
+      ]);
+      setStep('analyzing');
+      setProcessing(false);
+      try {
+        const body = petToQuickAnalyzeBody(pet, res.product.id);
+        const raw = await scanService.quickAnalyze(body);
+        const scanId = extractScanId(raw);
+        const result = await runPoll(scanId);
+        finishWithResult(result);
+      } catch (e) {
+        console.warn('[SCAN] DB match quick-analyze failed:', e);
+        setStep('back');
+      }
+      return;
+    }
+
     const list = res.candidates ?? [];
     if (list.length > 0) {
       setCandidates(list);
@@ -248,7 +280,7 @@ export function TwoStepScanScreen() {
         setStep('back');
       }
     }
-  }, []);
+  }, [pet, runPoll, finishWithResult]);
 
   const onFrontCapture = useCallback(async () => {
     if (!pet) return;
@@ -292,8 +324,7 @@ export function TwoStepScanScreen() {
         'Generating report',
       ]);
       try {
-        const deviceId = await getDeviceId();
-        const body = petToQuickAnalyzeBody(pet, c.id, deviceId);
+        const body = petToQuickAnalyzeBody(pet, c.id);
         const raw = await scanService.quickAnalyze(body);
         const scanId = extractScanId(raw);
         setStep('analyzing');
@@ -318,61 +349,95 @@ export function TwoStepScanScreen() {
     }
   }, []);
 
+  const handleBackImage = useCallback(async (uri: string) => {
+    if (!pet || !pendingScanId) return;
+    setProcessing(true);
+    try {
+      const fields = petToBackFields(pet);
+      const raw = await scanService.scanBackLabel(uri, pendingScanId, fields) as Record<string, unknown>;
+      const editorList = raw.ingredientsForEditor as string[] | undefined;
+      if (editorList && editorList.length > 0) {
+        setIngredientsForEditor(editorList);
+        setStep('editor');
+      } else {
+        const scanId = extractScanId(raw);
+        setAnalyzeLabels([
+          'Reading ingredients',
+          'Checking database',
+          'Scoring',
+          'Generating report',
+        ]);
+        setStep('analyzing');
+        setProcessing(false);
+        const result = await runPoll(scanId);
+        finishWithResult(result);
+        return;
+      }
+    } catch (e) {
+      console.warn(e);
+    } finally {
+      setProcessing(false);
+    }
+  }, [pet, pendingScanId, runPoll, finishWithResult]);
+
   const onBackCapture = useCallback(async () => {
     if (!pet || !pendingScanId) return;
     const uri = await pickImage(true);
     if (!uri) return;
-    setProcessing(true);
-    setAnalyzeLabels([
-      'Reading ingredients',
-      'Checking database',
-      'Scoring',
-      'Generating report',
-    ]);
-    try {
-      const deviceId = await getDeviceId();
-      const fields = petToBackFields(pet, deviceId);
-      const raw = await scanService.scanBackLabel(uri, pendingScanId, fields);
-      const scanId = extractScanId(raw);
-      setStep('analyzing');
-      setProcessing(false);
-      const result = await runPoll(scanId);
-      finishWithResult(result);
-    } catch (e) {
-      console.warn(e);
-      setProcessing(false);
-    }
-  }, [pet, pendingScanId, pickImage, runPoll, finishWithResult]);
+    await handleBackImage(uri);
+  }, [pet, pendingScanId, pickImage, handleBackImage]);
 
   const onBackLibrary = useCallback(async () => {
     if (!pet || !pendingScanId) return;
     const uri = await pickImage(false);
     if (!uri) return;
+    await handleBackImage(uri);
+  }, [pet, pendingScanId, pickImage, handleBackImage]);
+
+  const onEditorConfirm = useCallback(async (confirmedIngredients: string[]) => {
+    if (!pet) return;
     setProcessing(true);
     setAnalyzeLabels([
-      'Reading ingredients',
+      'Analyzing ingredients',
       'Checking database',
       'Scoring',
       'Generating report',
     ]);
+    setStep('analyzing');
     try {
-      const deviceId = await getDeviceId();
-      const fields = petToBackFields(pet, deviceId);
-      const raw = await scanService.scanBackLabel(uri, pendingScanId, fields);
+      const raw = await scanService.confirmIngredients({
+        pendingScanId: pendingScanId ?? undefined,
+        ingredients: confirmedIngredients,
+        petName: pet.name,
+        petType: pet.pet_type,
+        petBreed: pet.breed,
+        petAgeMonths: pet.age_months,
+        petWeightKg: pet.weight_kg,
+        petHealthConditions: JSON.stringify(
+          (pet.healthConditions ?? []).map(c => ({
+            conditionType: c.condition_type,
+            severity: c.severity,
+            notes: c.notes,
+          }))
+        ),
+        productName: frontMeta.productName,
+        brand: frontMeta.brand,
+        productType: frontMeta.productType,
+      });
       const scanId = extractScanId(raw);
-      setStep('analyzing');
       setProcessing(false);
       const result = await runPoll(scanId);
       finishWithResult(result);
     } catch (e) {
-      console.warn(e);
+      console.warn('[SCAN] confirm-ingredients error:', e);
       setProcessing(false);
+      setStep('editor');
     }
-  }, [pet, pendingScanId, pickImage, runPoll, finishWithResult]);
+  }, [pet, pendingScanId, frontMeta, runPoll, finishWithResult]);
 
   const step1Active = step === 'front';
   const step1Complete = step !== 'front';
-  const step2Active = step === 'back' || step === 'manualIngredients';
+  const step2Active = step === 'back' || step === 'manualIngredients' || step === 'editor';
   /** Back label is only "done" after the user has submitted it and analysis is running. */
   const step2Complete = step === 'analyzing';
   const barActive = step !== 'front';
@@ -502,6 +567,14 @@ export function TwoStepScanScreen() {
             onCancel={() => setStep(manualReturnStepRef.current)}
           />
         </View>
+      ) : step === 'editor' && pet ? (
+        <IngredientEditorStep
+          ingredients={ingredientsForEditor}
+          productName={frontMeta.productName}
+          brand={frontMeta.brand}
+          onConfirm={onEditorConfirm}
+          onCancel={() => setStep('back')}
+        />
       ) : (
       <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
         {!pet && (
@@ -1232,4 +1305,155 @@ const s = StyleSheet.create({
     ...typography.labelLarge,
     color: colors.white,
   },
+  // Editor styles
+  editorContainer: {
+    flex: 1,
+  },
+  editorHeader: {
+    backgroundColor: colors.card,
+    paddingVertical: 16,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    gap: 6,
+  },
+  editorBrand: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 1.5,
+  },
+  editorProductName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  editorCount: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  editorList: {
+    flex: 1,
+  },
+  editorListContent: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  editorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: colors.card,
+    borderRadius: radius.medium,
+    marginBottom: 6,
+  },
+  editorRowNum: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    width: 22,
+    textAlign: 'center',
+  },
+  editorRowText: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  editorDeleteBtn: {
+    padding: 4,
+  },
+  editorFooter: {
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  editorCancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  editorCancelText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+  },
+  editorConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+  },
+  editorConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.white,
+  },
 });
+
+// ─── Ingredient Editor Step ───────────────────────────────────────────
+
+function IngredientEditorStep({
+  ingredients: initialIngredients,
+  productName,
+  brand,
+  onConfirm,
+  onCancel,
+}: {
+  ingredients: string[];
+  productName?: string;
+  brand?: string;
+  onConfirm: (ingredients: string[]) => void;
+  onCancel: () => void;
+}) {
+  const [items, setItems] = useState<string[]>(initialIngredients);
+
+  const removeItem = useCallback((index: number) => {
+    setItems(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  return (
+    <View style={s.editorContainer}>
+      <View style={s.editorHeader}>
+        {brand ? <Text style={s.editorBrand}>{formatProductTitleText(brand)}</Text> : null}
+        <Text style={s.editorProductName}>
+          {formatProductTitleText(productName ?? 'Product')}
+        </Text>
+        <Text style={s.editorCount}>{items.length} ingredients detected</Text>
+      </View>
+
+      <ScrollView style={s.editorList} contentContainerStyle={s.editorListContent}>
+        {items.map((item, idx) => (
+          <View key={`${idx}-${item}`} style={s.editorRow}>
+            <Text style={s.editorRowNum}>{idx + 1}</Text>
+            <Text style={s.editorRowText} numberOfLines={2}>{item}</Text>
+            <Pressable onPress={() => removeItem(idx)} hitSlop={8} style={s.editorDeleteBtn}>
+              <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        ))}
+      </ScrollView>
+
+      <View style={s.editorFooter}>
+        <Pressable onPress={onCancel} style={s.editorCancelBtn}>
+          <Text style={s.editorCancelText}>Re-scan</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => onConfirm(items)}
+          style={[s.editorConfirmBtn, items.length === 0 && { opacity: 0.4 }]}
+          disabled={items.length === 0}
+        >
+          <Text style={s.editorConfirmText}>Confirm & Analyze</Text>
+          <Ionicons name="arrow-forward" size={14} color={colors.white} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}

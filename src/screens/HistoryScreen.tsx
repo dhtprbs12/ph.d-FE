@@ -21,7 +21,6 @@ import { getGradeColor, getPetTypeIcon } from '../theme';
 import type { ScanHistoryItem } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
-import { getDeviceId } from '../services/authService';
 import { buildImageUrl, formatDate, formatProductTitleText } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<HistoryStackParamList>;
@@ -252,9 +251,7 @@ export default function HistoryScreen() {
 
   const loadHistory = useCallback(async () => {
     try {
-      const deviceId = await getDeviceId();
       const items = await scanService.getHistory({
-        deviceId,
         petName: filterPet?.name,
         petType: filterPet?.pet_type,
         limit: 50,
