@@ -1,7 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -16,7 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SortableList, DragHandle } from '@botjaeger/expo-dnd';
+import ReorderableList, { ReorderableListReorderEvent, reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
 import type { HomeStackParamList } from '../navigation/types';
 import * as scanService from '../services/scanService';
 import { useApp } from '../context/AppContext';
@@ -1365,25 +1368,69 @@ const s = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
   },
-  editorEditRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  editorRowActive: {
+    backgroundColor: colors.primary,
   },
-  editorEditInput: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.textPrimary,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.primary,
-    paddingVertical: 4,
+  editorRowTextActive: {
+    color: colors.white,
   },
   editorEditBtn: {
     padding: 4,
   },
   editorDeleteBtn: {
     padding: 4,
+  },
+  editorBottomPanel: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: colors.card,
+  },
+  editorSuggestWrap: {
+    maxHeight: 160,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  },
+  editorSuggestLoading: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  editorSuggestList: {
+    maxHeight: 160,
+  },
+  editorSuggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  },
+  editorSuggestText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  editorInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
+  editorBottomInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.textPrimary,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.medium,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.background,
+  },
+  editorInputBtn: {
+    padding: 2,
   },
   editorFooter: {
     backgroundColor: colors.card,
@@ -1403,6 +1450,36 @@ const s = StyleSheet.create({
   editorCancelText: {
     fontSize: 15,
     color: colors.textSecondary,
+  },
+  editorInsertBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    marginVertical: 2,
+  },
+  editorInsertBtnActive: {
+    paddingVertical: 6,
+  },
+  editorInsertLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.divider,
+  },
+  editorInsertCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    marginHorizontal: 6,
+  },
+  editorInsertCircleActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   editorConfirmBtn: {
     flexDirection: 'row',
@@ -1427,6 +1504,46 @@ interface EditorItem {
   text: string;
 }
 
+interface EditorRowProps {
+  item: EditorItem;
+  index: number;
+  editingId: string | null;
+  startEdit: (id: string, text: string) => void;
+  removeItem: (id: string) => void;
+}
+
+const EditorRowItem = memo(function EditorRowItem({
+  item,
+  index: idx,
+  editingId,
+  startEdit,
+  removeItem,
+}: EditorRowProps) {
+  const drag = useReorderableDrag();
+  const isEditing = editingId === item.id;
+
+  return (
+    <View style={[s.editorRow, isEditing && s.editorRowActive]}>
+      <Pressable onLongPress={drag} style={s.editorDragHandle}>
+        <Ionicons name="reorder-three" size={22} color={colors.textSecondary} />
+      </Pressable>
+
+      <Text style={s.editorRowNum}>{idx + 1}</Text>
+      <Text style={[s.editorRowText, isEditing && s.editorRowTextActive]} numberOfLines={2}>
+        {item.text}
+      </Text>
+
+      <Pressable onPress={() => startEdit(item.id, item.text)} hitSlop={6} style={s.editorEditBtn}>
+        <Ionicons name="pencil" size={16} color={isEditing ? colors.white : colors.primary} />
+      </Pressable>
+
+      <Pressable onPress={() => removeItem(item.id)} hitSlop={8} style={s.editorDeleteBtn}>
+        <Ionicons name="trash-outline" size={18} color={isEditing ? colors.white : colors.danger} />
+      </Pressable>
+    </View>
+  );
+});
+
 function IngredientEditorStep({
   ingredients: initialIngredients,
   productName,
@@ -1445,112 +1562,252 @@ function IngredientEditorStep({
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editInputRef = useRef<TextInput>(null);
+  const nextIdRef = useRef(initialIngredients.length);
+
+  const isAdding = editingId === '__new__';
+  const panelActive = editingId !== null;
+
+  useEffect(() => {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (!editingId) {
+      setSuggestions([]);
+      return;
+    }
+    const q = editText.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    suggestTimer.current = setTimeout(async () => {
+      setSuggestLoading(true);
+      try {
+        const list = await scanService.suggestIngredients(q, 8);
+        setSuggestions(list);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSuggestLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    };
+  }, [editText, editingId]);
 
   const removeItem = useCallback((id: string) => {
     setItems(prev => prev.filter(it => it.id !== id));
-    if (editingId === id) setEditingId(null);
+    if (editingId === id) { setEditingId(null); setEditText(''); setSuggestions([]); }
   }, [editingId]);
 
   const startEdit = useCallback((id: string, text: string) => {
     setEditingId(id);
     setEditText(text);
+    setTimeout(() => editInputRef.current?.focus(), 100);
+  }, []);
+
+  const [insertIndex, setInsertIndex] = useState<number | null>(null);
+
+  const startAdd = useCallback((afterIndex: number) => {
+    setInsertIndex(afterIndex);
+    setEditingId('__new__');
+    setEditText('');
+    setTimeout(() => editInputRef.current?.focus(), 100);
   }, []);
 
   const confirmEdit = useCallback(() => {
     if (editingId === null) return;
     const trimmed = editText.trim();
-    if (trimmed) {
+    if (!trimmed) {
+      setEditingId(null);
+      setEditText('');
+      setSuggestions([]);
+      setInsertIndex(null);
+      Keyboard.dismiss();
+      return;
+    }
+    if (isAdding) {
+      const newId = `ing-${nextIdRef.current++}`;
+      const pos = insertIndex ?? items.length;
+      setItems(prev => [...prev.slice(0, pos), { id: newId, text: trimmed }, ...prev.slice(pos)]);
+    } else {
       setItems(prev => prev.map(it => it.id === editingId ? { ...it, text: trimmed } : it));
     }
     setEditingId(null);
     setEditText('');
-  }, [editingId, editText]);
+    setSuggestions([]);
+    setInsertIndex(null);
+    Keyboard.dismiss();
+  }, [editingId, editText, isAdding, insertIndex, items.length]);
 
   const cancelEdit = useCallback(() => {
     setEditingId(null);
     setEditText('');
+    setSuggestions([]);
+    setInsertIndex(null);
+    Keyboard.dismiss();
   }, []);
 
-  const handleReorder = useCallback((reordered: EditorItem[]) => {
-    setItems(reordered);
+  const applySuggestion = useCallback((text: string) => {
+    if (editingId === null) return;
+    if (isAdding) {
+      const newId = `ing-${nextIdRef.current++}`;
+      const pos = insertIndex ?? items.length;
+      setItems(prev => [...prev.slice(0, pos), { id: newId, text }, ...prev.slice(pos)]);
+    } else {
+      setItems(prev => prev.map(it => it.id === editingId ? { ...it, text } : it));
+    }
+    setEditingId(null);
+    setEditText('');
+    setSuggestions([]);
+    setInsertIndex(null);
+    Keyboard.dismiss();
+  }, [editingId, isAdding, insertIndex, items.length]);
+
+  const handleReorder = useCallback(({ from, to }: ReorderableListReorderEvent) => {
+    setItems(prev => reorderItems(prev, from, to));
   }, []);
+
+  const renderItem = useCallback(({ item, index }: { item: EditorItem; index: number }) => (
+    <View>
+      <EditorRowItem
+        item={item}
+        index={index}
+        editingId={editingId}
+        startEdit={startEdit}
+        removeItem={removeItem}
+      />
+      <Pressable
+        style={[
+          s.editorInsertBtn,
+          insertIndex === index + 1 && isAdding && s.editorInsertBtnActive,
+        ]}
+        onPress={() => startAdd(index + 1)}
+        hitSlop={{ top: 6, bottom: 6 }}
+      >
+        <View style={s.editorInsertLine} />
+        <View style={[
+          s.editorInsertCircle,
+          insertIndex === index + 1 && isAdding && s.editorInsertCircleActive,
+        ]}>
+          <Ionicons name="add" size={12} color={insertIndex === index + 1 && isAdding ? colors.white : colors.textSecondary} />
+        </View>
+        <View style={s.editorInsertLine} />
+      </Pressable>
+    </View>
+  ), [editingId, startEdit, removeItem, startAdd, insertIndex, isAdding]);
 
   return (
-    <View style={s.editorContainer}>
+    <KeyboardAvoidingView
+      style={s.editorContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
       <View style={s.editorHeader}>
         {brand ? <Text style={s.editorBrand}>{formatProductTitleText(brand)}</Text> : null}
         <Text style={s.editorProductName}>
           {formatProductTitleText(productName ?? 'Product')}
         </Text>
-        <Text style={s.editorCount}>{items.length} ingredients — hold grip to reorder</Text>
+        <Text style={s.editorCount}>{items.length} ingredients — hold to reorder</Text>
       </View>
 
-      <View style={s.editorList}>
-        <SortableList<EditorItem>
-          data={items}
-          keyExtractor={(item) => item.id}
-          onReorder={handleReorder}
-          handle
-          longPressDuration={150}
-          activeDragStyle={{ opacity: 0.5 }}
-          renderItem={({ item, index: idx }) => (
-            <View style={s.editorRow}>
-              <DragHandle>
-                <View style={s.editorDragHandle}>
-                  <Ionicons name="reorder-three" size={22} color={colors.textSecondary} />
-                </View>
-              </DragHandle>
+      <ReorderableList
+        data={items}
+        onReorder={handleReorder}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        style={s.editorList}
+        contentContainerStyle={s.editorListContent}
+        ListHeaderComponent={
+          <Pressable
+            style={[
+              s.editorInsertBtn,
+              insertIndex === 0 && isAdding && s.editorInsertBtnActive,
+            ]}
+            onPress={() => startAdd(0)}
+            hitSlop={{ top: 6, bottom: 6 }}
+          >
+            <View style={s.editorInsertLine} />
+            <View style={[
+              s.editorInsertCircle,
+              insertIndex === 0 && isAdding && s.editorInsertCircleActive,
+            ]}>
+              <Ionicons name="add" size={12} color={insertIndex === 0 && isAdding ? colors.white : colors.textSecondary} />
+            </View>
+            <View style={s.editorInsertLine} />
+          </Pressable>
+        }
+      />
 
-              <Text style={s.editorRowNum}>{idx + 1}</Text>
-
-              {editingId === item.id ? (
-                <View style={s.editorEditRow}>
-                  <TextInput
-                    style={s.editorEditInput}
-                    value={editText}
-                    onChangeText={setEditText}
-                    autoFocus
-                    onSubmitEditing={confirmEdit}
-                    returnKeyType="done"
-                  />
-                  <Pressable onPress={confirmEdit} hitSlop={6}>
-                    <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
-                  </Pressable>
-                  <Pressable onPress={cancelEdit} hitSlop={6}>
-                    <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
-                  </Pressable>
+      {panelActive && (
+        <View style={s.editorBottomPanel}>
+          {(suggestLoading || suggestions.length > 0) && (
+            <View style={s.editorSuggestWrap}>
+              {suggestLoading ? (
+                <View style={s.editorSuggestLoading}>
+                  <ActivityIndicator size="small" color={colors.primary} />
                 </View>
               ) : (
-                <Text style={s.editorRowText} numberOfLines={2}>{item.text}</Text>
+                <FlatList
+                  data={suggestions}
+                  keyExtractor={(item, i) => `${i}-${item}`}
+                  keyboardShouldPersistTaps="handled"
+                  scrollEnabled={suggestions.length > 4}
+                  style={s.editorSuggestList}
+                  renderItem={({ item }) => (
+                    <Pressable
+                      style={({ pressed }) => [s.editorSuggestRow, pressed && { opacity: 0.7 }]}
+                      onPress={() => applySuggestion(item)}
+                    >
+                      <Ionicons name="arrow-forward-circle-outline" size={16} color={colors.textSecondary} />
+                      <Text style={s.editorSuggestText}>{item}</Text>
+                    </Pressable>
+                  )}
+                />
               )}
-
-              {editingId !== item.id && (
-                <Pressable onPress={() => startEdit(item.id, item.text)} hitSlop={6} style={s.editorEditBtn}>
-                  <Ionicons name="pencil" size={16} color={colors.primary} />
-                </Pressable>
-              )}
-
-              <Pressable onPress={() => removeItem(item.id)} hitSlop={8} style={s.editorDeleteBtn}>
-                <Ionicons name="trash-outline" size={18} color={colors.danger} />
-              </Pressable>
             </View>
           )}
-        />
-      </View>
+          <View style={s.editorInputRow}>
+            <TextInput
+              ref={editInputRef}
+              style={s.editorBottomInput}
+              value={editText}
+              onChangeText={setEditText}
+              placeholder={isAdding ? 'Add new ingredient...' : 'Edit ingredient...'}
+              placeholderTextColor={colors.textSecondary}
+              autoFocus
+              onSubmitEditing={confirmEdit}
+              returnKeyType="done"
+              autoCapitalize="words"
+            />
+            <Pressable onPress={confirmEdit} hitSlop={8} style={s.editorInputBtn}>
+              <Ionicons name={isAdding ? 'add-circle' : 'checkmark-circle'} size={28} color={colors.primary} />
+            </Pressable>
+            <Pressable onPress={cancelEdit} hitSlop={8} style={s.editorInputBtn}>
+              <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        </View>
+      )}
 
-      <View style={s.editorFooter}>
-        <Pressable onPress={onCancel} style={s.editorCancelBtn}>
-          <Text style={s.editorCancelText}>Re-scan</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => onConfirm(items.map(it => it.text))}
-          style={[s.editorConfirmBtn, items.length === 0 && { opacity: 0.4 }]}
-          disabled={items.length === 0}
-        >
-          <Text style={s.editorConfirmText}>Confirm & Analyze</Text>
-          <Ionicons name="arrow-forward" size={14} color={colors.white} />
-        </Pressable>
-      </View>
-    </View>
+      {!panelActive && (
+        <View style={s.editorFooter}>
+          <Pressable onPress={onCancel} style={s.editorCancelBtn}>
+            <Text style={s.editorCancelText}>Re-scan</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => onConfirm(items.map(it => it.text))}
+            style={[s.editorConfirmBtn, items.length === 0 && { opacity: 0.4 }]}
+            disabled={items.length === 0}
+          >
+            <Text style={s.editorConfirmText}>Confirm & Analyze</Text>
+            <Ionicons name="arrow-forward" size={14} color={colors.white} />
+          </Pressable>
+        </View>
+      )}
+    </KeyboardAvoidingView>
   );
 }
