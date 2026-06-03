@@ -59,6 +59,11 @@ export type HistoryStackParamList = {
   Result: ResultParams;
 };
 
+export type CommunityStackParamList = {
+  Community: undefined;
+  Result: ResultParams;
+};
+
 export type PetsStackParamList = {
   Pets: undefined;
   AddPet: undefined;
@@ -72,6 +77,7 @@ export type SettingsStackParamList = {
 export type MainTabParamList = {
   HomeTab: NavigatorScreenParams<HomeStackParamList>;
   HistoryTab: NavigatorScreenParams<HistoryStackParamList>;
+  CommunityTab: NavigatorScreenParams<CommunityStackParamList>;
   PetsTab: NavigatorScreenParams<PetsStackParamList>;
   SettingsTab: NavigatorScreenParams<SettingsStackParamList>;
 };

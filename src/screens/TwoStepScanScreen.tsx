@@ -484,7 +484,7 @@ export function TwoStepScanScreen() {
               <Text style={s.candidateTitle}>Is this your product?</Text>
             </View>
             {(frontMeta.brand || frontMeta.productName) && (
-              <Text style={s.candidateSubtitle} numberOfLines={1}>
+              <Text style={s.candidateSubtitle}>
                 Matches for "
                 {[frontMeta.brand, frontMeta.productName]
                   .filter(Boolean)

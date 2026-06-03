@@ -11,7 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -750,27 +750,29 @@ export default function HomeScreen() {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [petModalVisible, setPetModalVisible] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [comm, u] = await Promise.allSettled([
-          scanService.getCommunityStats(),
-          scanService.getUserStats(),
-        ]);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const [comm, u] = await Promise.allSettled([
+            scanService.getCommunityStats(),
+            scanService.getUserStats(),
+          ]);
 
-        if (cancelled) return;
-        if (comm.status === 'fulfilled') setCommunityStats(comm.value);
+          if (cancelled) return;
+          if (comm.status === 'fulfilled') setCommunityStats(comm.value);
 
-        if (u.status === 'fulfilled') {
-          setUserStats(u.value);
+          if (u.status === 'fulfilled') {
+            setUserStats(u.value);
+          }
+        } catch (e) {
+          console.warn('[Home] loadStats error:', e);
         }
-      } catch (e) {
-        console.warn('[Home] loadStats error:', e);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+      })();
+      return () => { cancelled = true; };
+    }, [])
+  );
 
   const openPetPicker = useCallback(() => setPetModalVisible(true), []);
   const closePetPicker = useCallback(() => setPetModalVisible(false), []);

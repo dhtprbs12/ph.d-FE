@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { colors } from '../theme';
 import type {
+  CommunityStackParamList,
   HistoryStackParamList,
   HomeStackParamList,
   MainTabParamList,
@@ -28,11 +29,13 @@ import { ManualIngredientsScreen } from '../screens/ManualIngredientsScreen';
 import { FoodCheckScreen } from '../screens/FoodCheckScreen';
 import SignupScreen from '../screens/SignupScreen';
 import LoginScreen from '../screens/LoginScreen';
+import CommunityScreen from '../screens/CommunityScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 const HistoryStack = createNativeStackNavigator<HistoryStackParamList>();
+const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
 const PetsStack = createNativeStackNavigator<PetsStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
@@ -72,6 +75,15 @@ function HistoryStackNavigator() {
       <HistoryStack.Screen name="History" component={HistoryScreen} />
       <HistoryStack.Screen name="Result" component={ResultScreen} />
     </HistoryStack.Navigator>
+  );
+}
+
+function CommunityStackNavigator() {
+  return (
+    <CommunityStack.Navigator screenOptions={{ headerShown: false }}>
+      <CommunityStack.Screen name="Community" component={CommunityScreen} />
+      <CommunityStack.Screen name="Result" component={ResultScreen} />
+    </CommunityStack.Navigator>
   );
 }
 
@@ -128,6 +140,16 @@ function MainTabsNavigator() {
           title: 'History',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'time' : 'time-outline'} color={color} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="CommunityTab"
+        component={CommunityStackNavigator}
+        options={{
+          title: 'Community',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'people' : 'people-outline'} color={color} size={size} />
           ),
         }}
       />

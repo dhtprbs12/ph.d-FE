@@ -21,6 +21,7 @@ import { getGradeColor, getPetTypeIcon } from '../theme';
 import type { ScanHistoryItem } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
+import * as communityService from '../services/communityService';
 import { buildImageUrl, formatDate, formatProductTitleText } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<HistoryStackParamList>;
@@ -158,7 +159,12 @@ function StaggeredView({ index, children }: { index: number; children: React.Rea
   );
 }
 
-function HistoryCard({ item, onPress }: { item: ScanHistoryItem; onPress: () => void }) {
+function HistoryCard({ item, onPress, isSaved, onToggleSave }: {
+  item: ScanHistoryItem;
+  onPress: () => void;
+  isSaved: boolean;
+  onToggleSave: () => void;
+}) {
   const isListFocused = useIsFocused();
   const gradeColor = getGradeColor(item.grade);
   const productImageUrl = buildImageUrl(item.product_image);
@@ -227,7 +233,21 @@ function HistoryCard({ item, onPress }: { item: ScanHistoryItem; onPress: () => 
               {formatTimeOnly(item.created_at)}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {item.product_id && (
+              <Pressable
+                onPress={(e) => { e.stopPropagation(); onToggleSave(); }}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                  size={16}
+                  color={isSaved ? colors.primary : colors.textSecondary}
+                />
+              </Pressable>
+            )}
+            <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
+          </View>
         </View>
       </View>
     </Pressable>
@@ -244,6 +264,7 @@ export default function HistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filterPetId, setFilterPetId] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const filterPet = filterPetId ? pets.find(p => p.id === filterPetId) : null;
 
@@ -275,6 +296,40 @@ export default function HistoryScreen() {
     await loadHistory();
     setRefreshing(false);
   }, [loadHistory]);
+
+  useEffect(() => {
+    if (history.length === 0) return;
+    const productIds = [...new Set(history.filter(h => h.product_id).map(h => h.product_id!))];
+    const loadSaved = async () => {
+      try {
+        const saved = await communityService.getMySaved();
+        const ids = new Set(saved.map(s => s.product_id));
+        setSavedIds(ids);
+      } catch {}
+    };
+    loadSaved();
+  }, [history]);
+
+  const toggleSave = useCallback(async (productId: string) => {
+    const wasSaved = savedIds.has(productId);
+    setSavedIds(prev => {
+      const next = new Set(prev);
+      if (wasSaved) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+    try {
+      if (wasSaved) await communityService.unsaveProduct(productId);
+      else await communityService.saveProduct(productId);
+    } catch {
+      setSavedIds(prev => {
+        const next = new Set(prev);
+        if (wasSaved) next.add(productId);
+        else next.delete(productId);
+        return next;
+      });
+    }
+  }, [savedIds]);
 
   const onCardPress = (item: ScanHistoryItem) => {
     navigation.navigate('Result', {
@@ -343,7 +398,12 @@ export default function HistoryScreen() {
               </Text>
               {section.items.map((item, i) => (
                 <StaggeredView key={item.id} index={sIdx * 20 + i}>
-                  <HistoryCard item={item} onPress={() => onCardPress(item)} />
+                  <HistoryCard
+                    item={item}
+                    onPress={() => onCardPress(item)}
+                    isSaved={item.product_id ? savedIds.has(item.product_id) : false}
+                    onToggleSave={() => item.product_id && toggleSave(item.product_id)}
+                  />
                 </StaggeredView>
               ))}
             </View>

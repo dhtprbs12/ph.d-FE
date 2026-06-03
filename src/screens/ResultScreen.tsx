@@ -29,6 +29,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { HistoryStackParamList, HomeStackParamList } from '../navigation/types';
 import * as productService from '../services/productService';
 import * as scanService from '../services/scanService';
+import * as communityService from '../services/communityService';
 import { scanRowToScanResult } from '../utils/scanHistorySnapshot';
 import { useApp } from '../context/AppContext';
 import {
@@ -1398,6 +1399,8 @@ export function ResultScreen() {
   const [alternatives, setAlternatives] = useState<AlternativeProduct[]>([]);
   const [altLoading, setAltLoading] = useState(true);
   const [community, setCommunity] = useState<{ totalScans: number; totalProducts: number } | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
   const shareCardRef = useRef<View>(null);
 
   const displayScore = scanResult?.analysis.finalScore ?? paramPreloaded?.score ?? 0;
@@ -1492,6 +1495,30 @@ export function ResultScreen() {
     }
     return () => timers.forEach(clearTimeout);
   }, [finalScore]);
+
+  useEffect(() => {
+    if (!productId) return;
+    let cancelled = false;
+    communityService.checkSaved(productId).then(saved => {
+      if (!cancelled) setIsSaved(saved);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [productId]);
+
+  const toggleSave = useCallback(async () => {
+    if (!productId || saveLoading) return;
+    setSaveLoading(true);
+    try {
+      if (isSaved) {
+        await communityService.unsaveProduct(productId);
+        setIsSaved(false);
+      } else {
+        await communityService.saveProduct(productId);
+        setIsSaved(true);
+      }
+    } catch {}
+    setSaveLoading(false);
+  }, [productId, isSaved, saveLoading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1753,6 +1780,38 @@ export function ResultScreen() {
 
         {!analysisLoading && !analysisError && (
           <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
+            {productId && (
+              <Pressable
+                onPress={toggleSave}
+                style={({ pressed }) => [
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    backgroundColor: isSaved ? colors.primary : colors.card,
+                    borderWidth: isSaved ? 0 : 1,
+                    borderColor: colors.primary,
+                    borderRadius: radius.large,
+                    paddingVertical: 14,
+                  },
+                  pressed && { opacity: 0.8 },
+                ]}
+                disabled={saveLoading}
+              >
+                <Ionicons
+                  name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                  size={18}
+                  color={isSaved ? colors.white : colors.primary}
+                />
+                <Text style={{
+                  ...typography.titleMedium,
+                  color: isSaved ? colors.white : colors.primary,
+                }}>
+                  {isSaved ? 'Saved to Community' : 'Save to Community'}
+                </Text>
+              </Pressable>
+            )}
             <ShareResultButton onPress={onShare} />
             {canScanAnother && <ScanAnotherButton onPress={onScanAnother} />}
           </View>
