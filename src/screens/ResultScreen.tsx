@@ -1445,10 +1445,17 @@ export function ResultScreen() {
       setAnalysisLoading(true);
       setAnalysisError(false);
       try {
-        const result = await productService.analyzeProduct(paramProductId, petParams);
+        // Use lightweight cached review (no AI re-analysis)
+        const result = await productService.getCachedReview(paramProductId, petParams);
         if (!cancelled) setScanResult(result);
       } catch {
-        if (!cancelled) setAnalysisError(true);
+        // Fallback to full analyze if cache miss (first-time product)
+        try {
+          const result = await productService.analyzeProduct(paramProductId, petParams);
+          if (!cancelled) setScanResult(result);
+        } catch {
+          if (!cancelled) setAnalysisError(true);
+        }
       } finally {
         if (!cancelled) setAnalysisLoading(false);
       }

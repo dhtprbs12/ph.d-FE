@@ -85,6 +85,16 @@ export async function analyzeProduct(
   return data;
 }
 
+export async function getCachedReview(
+  productId: string,
+  params?: AnalyzeProductParams
+): Promise<ScanResult> {
+  const { data } = await api.get<ScanResult>(`/products/${productId}/cached-review`, {
+    params: serializeAnalyzeParams(params),
+  });
+  return data;
+}
+
 export async function getAlternatives(
   productId: string,
   data: AlternativesRequest
