@@ -1476,7 +1476,7 @@ export function ResultScreen() {
   }, [isHistorySnapshotMode, paramScanId, historyImageParam]);
 
   const finalScore = displayScore;
-  const productId = scanResult?.product?.id ?? paramProductId;
+  const productId = scanResult?.product?.id ?? paramProductId ?? paramProduct?.id;
 
   useEffect(() => {
     setAnimatedScore(0);
@@ -1507,16 +1507,19 @@ export function ResultScreen() {
 
   const toggleSave = useCallback(async () => {
     if (!productId || saveLoading) return;
+    const wasSaved = isSaved;
+    setIsSaved(!wasSaved);
     setSaveLoading(true);
     try {
-      if (isSaved) {
+      if (wasSaved) {
         await communityService.unsaveProduct(productId);
-        setIsSaved(false);
       } else {
         await communityService.saveProduct(productId);
-        setIsSaved(true);
       }
-    } catch {}
+    } catch (e) {
+      setIsSaved(wasSaved);
+      console.warn('[Save] failed:', e);
+    }
     setSaveLoading(false);
   }, [productId, isSaved, saveLoading]);
 
@@ -1799,16 +1802,20 @@ export function ResultScreen() {
                 ]}
                 disabled={saveLoading}
               >
-                <Ionicons
-                  name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                  size={18}
-                  color={isSaved ? colors.white : colors.primary}
-                />
+                {saveLoading ? (
+                  <ActivityIndicator size="small" color={isSaved ? colors.white : colors.primary} />
+                ) : (
+                  <Ionicons
+                    name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                    size={18}
+                    color={isSaved ? colors.white : colors.primary}
+                  />
+                )}
                 <Text style={{
                   ...typography.titleMedium,
                   color: isSaved ? colors.white : colors.primary,
                 }}>
-                  {isSaved ? 'Saved to Community' : 'Save to Community'}
+                  {isSaved ? 'Saved' : 'Add to My List'}
                 </Text>
               </Pressable>
             )}
