@@ -41,10 +41,27 @@ api.interceptors.request.use(
   }
 );
 
+let isLoggingOut = false;
+
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     logApiError(error, 'response');
+
+    if (error.response?.status === 401 && !isLoggingOut) {
+      isLoggingOut = true;
+      try {
+        const { clearAuthData } = await import('../utils/tokenUtils');
+        const { resetToLogin } = await import('../navigation/navigationRef');
+        await clearAuthData();
+        resetToLogin();
+      } catch (e) {
+        console.warn('[API] Failed to handle 401 logout:', e);
+      } finally {
+        setTimeout(() => { isLoggingOut = false; }, 2000);
+      }
+    }
+
     return Promise.reject(error);
   }
 );

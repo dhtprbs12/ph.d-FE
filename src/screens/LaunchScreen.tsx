@@ -7,10 +7,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
+import { checkTokenStatus, clearAuthData } from '../utils/tokenUtils';
 import { colors } from '../theme';
 
 const LAUNCH_MS = 1800;
@@ -24,9 +24,12 @@ export function LaunchScreen() {
   const ranRef = useRef(false);
 
   const goNext = useCallback(async () => {
-    const token = await AsyncStorage.getItem('authToken');
-    if (token) {
+    const status = await checkTokenStatus();
+    if (status === 'valid') {
       navigation.replace('MainTabs');
+    } else if (status === 'expired') {
+      await clearAuthData();
+      navigation.replace('Login');
     } else {
       navigation.replace('Signup');
     }
