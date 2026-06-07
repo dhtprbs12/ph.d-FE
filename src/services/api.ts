@@ -1,5 +1,6 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 const BASE_URL = 'https://phd-be-production.up.railway.app/api';
@@ -54,11 +55,15 @@ api.interceptors.response.use(
         const { clearAuthData } = await import('../utils/tokenUtils');
         const { resetToLogin } = await import('../navigation/navigationRef');
         await clearAuthData();
-        resetToLogin();
+        Alert.alert(
+          'Session Expired',
+          'Please log in again to continue.',
+          [{ text: 'OK', onPress: () => resetToLogin() }],
+        );
       } catch (e) {
         console.warn('[API] Failed to handle 401 logout:', e);
       } finally {
-        setTimeout(() => { isLoggingOut = false; }, 2000);
+        setTimeout(() => { isLoggingOut = false; }, 3000);
       }
     }
 

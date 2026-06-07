@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -16,6 +16,12 @@ export default function LoginScreen({ navigation }: Props) {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    AsyncStorage.getItem('userNickname').then((saved) => {
+      if (saved) setNickname(saved);
+    });
+  }, []);
+
   const canLogin = nickname.trim().length >= 2 && pin.length >= 4;
 
   const handleLogin = async () => {
@@ -25,13 +31,14 @@ export default function LoginScreen({ navigation }: Props) {
       const { token, user } = await authService.loginWithNickname(nickname.trim(), pin);
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('userId', user.id);
+      await AsyncStorage.setItem('userNickname', nickname.trim());
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (e: any) {
       const data = e?.response?.data;
       if (data?.error === 'too_many_attempts') {
         Alert.alert('Locked Out', data.message);
       } else {
-        Alert.alert('Login Failed', data?.message || 'Invalid nickname or PIN');
+        Alert.alert('Login Failed', data?.message || 'Invalid ID or PIN');
       }
     } finally {
       setLoading(false);
@@ -42,14 +49,14 @@ export default function LoginScreen({ navigation }: Props) {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.inner}>
         <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Log in with your nickname and PIN</Text>
+        <Text style={styles.subtitle}>Log in with your ID and PIN</Text>
 
-        <Text style={styles.label}>Nickname</Text>
+        <Text style={styles.label}>ID</Text>
         <TextInput
           style={styles.input}
           value={nickname}
           onChangeText={setNickname}
-          placeholder="Your nickname"
+          placeholder="Your ID"
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="none"
           autoCorrect={false}

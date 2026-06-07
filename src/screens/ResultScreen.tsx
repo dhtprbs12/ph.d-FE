@@ -45,7 +45,7 @@ import {
 } from '../theme';
 import type { AlternativeProduct, ConditionWarning, IngredientAnalysis, ScanResult } from '../types';
 import { formatCommunityScans } from '../types';
-import { buildImageUrl, formatProductTitleText, productTypeLabel } from '../utils/helpers';
+import { buildImageUrl, formatProductTitleText, productTypeLabel, toIngredientTitleCase } from '../utils/helpers';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -1088,7 +1088,7 @@ function IngredientDetailRow({ ing }: { ing: IngredientAnalysis }) {
         <Text style={st.posBadgeText}>#{ing.position}</Text>
       </View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={st.ingDetailName}>{ing.name}</Text>
+        <Text style={st.ingDetailName}>{toIngredientTitleCase(ing.name)}</Text>
         <Text style={st.ingDetailExpl}>{ingredientDisplayText(ing)}</Text>
       </View>
       <View style={[st.riskBadge, { backgroundColor: riskColor + '1A' }]}>
@@ -1108,7 +1108,7 @@ function AlternativesSection({
     <View style={st.altSection}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
         <Ionicons name="refresh" size={16} color={colors.primary} />
-        <Text style={{ ...typography.labelLarge, color: colors.textSecondary }}>Safer Alternatives</Text>
+        <Text style={{ ...typography.labelLarge, color: colors.textSecondary }}>Similar Products</Text>
       </View>
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />

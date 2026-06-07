@@ -76,3 +76,17 @@ export function formatProductTitleText(value: string | null | undefined): string
     )
     .join(' ');
 }
+
+/** Ingredient display: Title Case each word (e.g. "chicken meal" → "Chicken Meal"). */
+export function toIngredientTitleCase(value: string): string {
+  if (!value) return value;
+  return value
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .split(/([-/])/)
+        .map((part) => (part === '-' || part === '/' ? part : titleCaseLatinChunk(part)))
+        .join('')
+    )
+    .join(' ');
+}

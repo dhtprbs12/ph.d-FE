@@ -32,7 +32,7 @@ import type {
   ScanResult,
 } from '../types';
 import { ManualIngredientsFlow } from './ManualIngredientsScreen';
-import { buildImageUrl, formatProductTitleText } from '../utils/helpers';
+import { buildImageUrl, formatProductTitleText, toIngredientTitleCase } from '../utils/helpers';
 import { pollUntilComplete } from '../utils/analysisPoll';
 import {
   clearPendingAnalysisScan,
@@ -637,6 +637,15 @@ export function TwoStepScanScreen() {
             <View style={s.textBlock}>
               <Text style={s.stepTitle}>Scan Ingredients</Text>
             </View>
+
+            <View style={s.cameraTipBox}>
+              <Ionicons name="scan-outline" size={20} color={colors.primary} />
+              <View style={s.cameraTipTextCol}>
+                <Text style={s.cameraTipMain}>Get close to the ingredient list</Text>
+                <Text style={s.cameraTipSub}>Fill the frame with just the ingredients section so all text is readable</Text>
+              </View>
+            </View>
+
             <View style={s.spacer} />
 
             <View style={s.buttonGroup}>
@@ -931,6 +940,32 @@ const s = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
     textAlign: 'center',
+  },
+  cameraTipBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: spacing.lg,
+    marginHorizontal: spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: colors.primary + '0D',
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    borderColor: colors.primary + '25',
+  },
+  cameraTipTextCol: {
+    flex: 1,
+    gap: 3,
+  },
+  cameraTipMain: {
+    ...typography.labelLarge,
+    color: colors.textPrimary,
+  },
+  cameraTipSub: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
   buttonGroup: {
     gap: spacing.md,
@@ -1530,7 +1565,7 @@ const EditorRowItem = memo(function EditorRowItem({
 
       <Text style={s.editorRowNum}>{idx + 1}</Text>
       <Text style={[s.editorRowText, isEditing && s.editorRowTextActive]} numberOfLines={2}>
-        {item.text}
+        {toIngredientTitleCase(item.text)}
       </Text>
 
       <Pressable onPress={() => startEdit(item.id, item.text)} hitSlop={6} style={s.editorEditBtn}>
@@ -1566,6 +1601,7 @@ function IngredientEditorStep({
   const [suggestLoading, setSuggestLoading] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editInputRef = useRef<TextInput>(null);
+  const listRef = useRef<any>(null);
   const nextIdRef = useRef(initialIngredients.length);
 
   const isAdding = editingId === '__new__';
@@ -1611,12 +1647,19 @@ function IngredientEditorStep({
 
   const [insertIndex, setInsertIndex] = useState<number | null>(null);
 
+  const scrollToEnd = useCallback(() => {
+    setTimeout(() => {
+      listRef.current?.scrollToEnd?.({ animated: true });
+    }, 150);
+  }, []);
+
   const startAdd = useCallback((afterIndex: number) => {
     setInsertIndex(afterIndex);
     setEditingId('__new__');
     setEditText('');
     setTimeout(() => editInputRef.current?.focus(), 100);
-  }, []);
+    scrollToEnd();
+  }, [scrollToEnd]);
 
   const confirmEdit = useCallback(() => {
     if (editingId === null) return;
@@ -1633,6 +1676,7 @@ function IngredientEditorStep({
       const newId = `ing-${nextIdRef.current++}`;
       const pos = insertIndex ?? items.length;
       setItems(prev => [...prev.slice(0, pos), { id: newId, text: trimmed }, ...prev.slice(pos)]);
+      scrollToEnd();
     } else {
       setItems(prev => prev.map(it => it.id === editingId ? { ...it, text: trimmed } : it));
     }
@@ -1641,7 +1685,7 @@ function IngredientEditorStep({
     setSuggestions([]);
     setInsertIndex(null);
     Keyboard.dismiss();
-  }, [editingId, editText, isAdding, insertIndex, items.length]);
+  }, [editingId, editText, isAdding, insertIndex, items.length, scrollToEnd]);
 
   const cancelEdit = useCallback(() => {
     setEditingId(null);
@@ -1657,6 +1701,7 @@ function IngredientEditorStep({
       const newId = `ing-${nextIdRef.current++}`;
       const pos = insertIndex ?? items.length;
       setItems(prev => [...prev.slice(0, pos), { id: newId, text }, ...prev.slice(pos)]);
+      scrollToEnd();
     } else {
       setItems(prev => prev.map(it => it.id === editingId ? { ...it, text } : it));
     }
@@ -1665,7 +1710,7 @@ function IngredientEditorStep({
     setSuggestions([]);
     setInsertIndex(null);
     Keyboard.dismiss();
-  }, [editingId, isAdding, insertIndex, items.length]);
+  }, [editingId, isAdding, insertIndex, items.length, scrollToEnd]);
 
   const handleReorder = useCallback(({ from, to }: ReorderableListReorderEvent) => {
     setItems(prev => reorderItems(prev, from, to));
@@ -1715,12 +1760,14 @@ function IngredientEditorStep({
       </View>
 
       <ReorderableList
+        ref={listRef}
         data={items}
         onReorder={handleReorder}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         style={s.editorList}
         contentContainerStyle={s.editorListContent}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <Pressable
             style={[
@@ -1763,7 +1810,7 @@ function IngredientEditorStep({
                       onPress={() => applySuggestion(item)}
                     >
                       <Ionicons name="arrow-forward-circle-outline" size={16} color={colors.textSecondary} />
-                      <Text style={s.editorSuggestText}>{item}</Text>
+                      <Text style={s.editorSuggestText}>{toIngredientTitleCase(item)}</Text>
                     </Pressable>
                   )}
                 />

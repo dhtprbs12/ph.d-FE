@@ -83,6 +83,7 @@ export default function SignupScreen({ navigation }: Props) {
       const { token, user } = await authService.registerWithNickname(nickname, pin);
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('userId', user.id);
+      await AsyncStorage.setItem('userNickname', nickname.trim());
 
       const totalAgeMonths = (parseInt(ageYears || '0') * 12) + parseInt(ageMonthsVal || '0');
       const lbs = parseFloat(weightLbs);
@@ -168,9 +169,9 @@ export default function SignupScreen({ navigation }: Props) {
         {step === 0 ? (
           <View key="step-auth" style={styles.form}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Choose a nickname and PIN to get started</Text>
+            <Text style={styles.subtitle}>Choose your ID and PIN to get started</Text>
 
-            <Text style={styles.label}>Nickname</Text>
+            <Text style={styles.label}>ID</Text>
             <TextInput
               style={styles.input}
               value={nickname}
@@ -183,10 +184,10 @@ export default function SignupScreen({ navigation }: Props) {
             />
             {nicknameChecking && <ActivityIndicator size="small" style={styles.helperLoader} color={colors.primary} />}
             {!nicknameChecking && nicknameAvailable === true && (
-              <Text style={styles.helperSuccess}>This nickname is available</Text>
+              <Text style={styles.helperSuccess}>This ID is available</Text>
             )}
             {!nicknameChecking && nicknameAvailable === false && (
-              <Text style={styles.helperError}>{nicknameReason || 'This nickname is already taken'}</Text>
+              <Text style={styles.helperError}>{nicknameReason || 'This ID is already taken'}</Text>
             )}
 
             <Text style={styles.label}>PIN (4-6 digits)</Text>
