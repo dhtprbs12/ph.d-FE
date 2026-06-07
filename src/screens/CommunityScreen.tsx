@@ -4,6 +4,7 @@ import {
   FlatList,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -102,6 +103,7 @@ export default function CommunityScreen() {
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedOffset, setFeedOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const petType = (selectedPet?.pet_type as 'dog' | 'cat') ?? undefined;
 
@@ -149,6 +151,12 @@ export default function CommunityScreen() {
     loadTrending(type);
   };
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([loadTrending(trendType), loadFeed(true)]);
+    setRefreshing(false);
+  }, [trendType, loadTrending, loadFeed]);
+
   const navigateToProduct = (productId: string, name: string, brand?: string, score?: number | null, imageUrl?: string | null) => {
     navigation.navigate('Result', {
       productId,
@@ -166,6 +174,9 @@ export default function CommunityScreen() {
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
       >
         {/* Trending section */}
         <View style={s.section}>
