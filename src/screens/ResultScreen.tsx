@@ -1320,7 +1320,7 @@ function TrustDisclaimerFooter({
           <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary }}>DISCLAIMER</Text>
         </View>
         <Text style={st.methodText}>
-          Analysis based on AAFCO guidelines. For informational purposes only — not veterinary advice. Always consult your veterinarian before making dietary changes.
+          AI-generated analysis for reference only. Results may not be fully accurate. Consult your veterinarian before making dietary changes.
         </Text>
       </View>
     </View>
