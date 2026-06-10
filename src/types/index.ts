@@ -285,6 +285,7 @@ export interface ScanHistoryItem {
   product_name?: string;
   product_brand?: string;
   product_image?: string;
+  product_life_stage?: string | null;
   pet_name?: string;
   pet_type?: string;
   created_at: string;

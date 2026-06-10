@@ -430,7 +430,7 @@ export function TwoStepScanScreen() {
       {/* Progress header */}
       <View style={s.progressHeader}>
         <View style={s.progressRow}>
-          <StepIndicator number={1} title="Identify" subtitle="" isActive={step1Active} isComplete={step1Complete} />
+          <StepIndicator number={1} title="Product" subtitle="" isActive={step1Active} isComplete={step1Complete} />
           <View style={[s.progressBar, barActive && s.progressBarActive]} />
           <StepIndicator number={2} title="Ingredients" subtitle="" isActive={step2Active} isComplete={step2Complete} />
         </View>
@@ -580,7 +580,7 @@ export function TwoStepScanScreen() {
             <View style={s.spacer} />
             <FrontIllustration variant="front" />
             <View style={s.textBlock}>
-              <Text style={s.stepTitle}>Identify</Text>
+              <Text style={s.stepTitle}>Scan the Front Label</Text>
             </View>
             <View style={s.spacer} />
             <View style={s.buttonGroup}>

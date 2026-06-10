@@ -190,12 +190,11 @@ function HistoryCard({ item, onPress, isSaved, onToggleSave }: {
               <View style={styles.titleBlock}>
                 <Text
                   style={[typography.bodyLarge, { fontWeight: '500', color: colors.textPrimary }]}
-                  numberOfLines={2}
                 >
                   {formatProductTitleText(item.product_name ?? 'Unknown Product')}
                 </Text>
                 {item.product_brand ? (
-                  <Text style={[typography.labelSmall, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+                  <Text style={[typography.labelSmall, { color: colors.textSecondary, marginTop: 2 }]}>
                     {formatProductTitleText(item.product_brand)}
                   </Text>
                 ) : null}
@@ -207,16 +206,18 @@ function HistoryCard({ item, onPress, isSaved, onToggleSave }: {
             </View>
 
             <View style={styles.badgesRow}>
-              <View style={styles.badge}>
-                <Ionicons name={scanTypeIcon(item.scan_type) as any} size={10} color={colors.textSecondary} />
-                <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>
-                  {scanTypeLabel(item.scan_type)}
-                </Text>
-              </View>
               {item.pet_name && item.pet_type && (
                 <View style={styles.badge}>
                   <Text style={{ fontSize: 10 }}>{getPetTypeIcon(item.pet_type)}</Text>
                   <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>{item.pet_name}</Text>
+                </View>
+              )}
+              {item.product_life_stage && item.product_life_stage !== 'all' && (
+                <View style={styles.badge}>
+                  <Ionicons name="pricetag-outline" size={10} color={colors.textSecondary} />
+                  <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>
+                    {item.product_life_stage.replace(/\b\w/g, l => l.toUpperCase())}
+                  </Text>
                 </View>
               )}
             </View>
