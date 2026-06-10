@@ -1434,7 +1434,7 @@ const s = StyleSheet.create({
   },
   editorSuggestRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: spacing.md,
@@ -1564,7 +1564,7 @@ const EditorRowItem = memo(function EditorRowItem({
       </Pressable>
 
       <Text style={s.editorRowNum}>{idx + 1}</Text>
-      <Text style={[s.editorRowText, isEditing && s.editorRowTextActive]} numberOfLines={2}>
+      <Text style={[s.editorRowText, isEditing && s.editorRowTextActive]}>
         {toIngredientTitleCase(item.text)}
       </Text>
 
@@ -1809,7 +1809,7 @@ function IngredientEditorStep({
                       style={({ pressed }) => [s.editorSuggestRow, pressed && { opacity: 0.7 }]}
                       onPress={() => applySuggestion(item)}
                     >
-                      <Ionicons name="arrow-forward-circle-outline" size={16} color={colors.textSecondary} />
+                      <Ionicons name="arrow-forward-circle-outline" size={16} color={colors.textSecondary} style={{ marginTop: 2 }} />
                       <Text style={s.editorSuggestText}>{toIngredientTitleCase(item)}</Text>
                     </Pressable>
                   )}

@@ -843,7 +843,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
             ? `${petIcon} Preparing analysis…`
             : scoreStatus === 'error'
               ? `${petIcon} Analysis unavailable`
-              : `${petIcon} Scored for a healthy ${scanResult.pet?.petType ?? 'pet'}`}
+              : `${petIcon} Based on a healthy ${scanResult.pet?.petType ?? 'pet'}`}
         </Text>
       </View>
 
