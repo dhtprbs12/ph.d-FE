@@ -3,7 +3,7 @@ import {
   View,
   Text,
   Image,
-  ScrollView,
+  SectionList,
   StyleSheet,
   Pressable,
   ActivityIndicator,
@@ -269,6 +269,10 @@ export default function HistoryScreen() {
   const filterPet = filterPetId ? pets.find(p => p.id === filterPetId) : null;
 
   const historyByDay = useMemo(() => groupHistoryByDay(history), [history]);
+  const sections = useMemo(
+    () => historyByDay.map(s => ({ title: s.label, key: s.ymd, data: s.items })),
+    [historyByDay],
+  );
 
   const loadHistory = useCallback(async () => {
     try {
@@ -384,31 +388,33 @@ export default function HistoryScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
           showsVerticalScrollIndicator={false}
+          alwaysBounceVertical
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
-        >
-          {historyByDay.map((section, sIdx) => (
-            <View key={section.ymd} style={[styles.daySection, sIdx > 0 && styles.daySectionSpaced]}>
-              <Text style={styles.daySectionLabel} allowFontScaling={false}>
-                {section.label}
-              </Text>
-              {section.items.map((item, i) => (
-                <StaggeredView key={item.id} index={sIdx * 20 + i}>
-                  <HistoryCard
-                    item={item}
-                    onPress={() => onCardPress(item)}
-                    isSaved={item.product_id ? savedIds.has(item.product_id) : false}
-                    onToggleSave={() => item.product_id && toggleSave(item.product_id)}
-                  />
-                </StaggeredView>
-              ))}
-            </View>
-          ))}
-        </ScrollView>
+          renderSectionHeader={({ section }) => (
+            <Text style={styles.daySectionLabel} allowFontScaling={false}>
+              {section.title}
+            </Text>
+          )}
+          renderItem={({ item, index, section }) => (
+            <StaggeredView key={item.id} index={sections.indexOf(section) * 20 + index}>
+              <HistoryCard
+                item={item}
+                onPress={() => onCardPress(item)}
+                isSaved={item.product_id ? savedIds.has(item.product_id) : false}
+                onToggleSave={() => item.product_id && toggleSave(item.product_id)}
+              />
+            </StaggeredView>
+          )}
+          SectionSeparatorComponent={() => <View style={{ height: spacing.lg }} />}
+          stickySectionHeadersEnabled={false}
+        />
       )}
 
       {/* Filter Modal */}
