@@ -111,6 +111,7 @@ export function TwoStepScanScreen() {
   const [step, setStep] = useState<ScanStep>('front');
   const [pendingScanId, setPendingScanId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<ProductCandidate[]>([]);
+  const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [frontMeta, setFrontMeta] = useState<{
     productName?: string;
     brand?: string;
@@ -239,38 +240,6 @@ export function TwoStepScanScreen() {
       brand: res.captured?.brand,
       productType: res.captured?.productType,
     });
-
-    // DB match found — go directly to analysis
-    if (
-      (res.matchType === 'exact' || res.matchType === 'fuzzy') &&
-      res.product?.id &&
-      pet
-    ) {
-      setFrontMeta({
-        productName: res.product.name ?? res.captured?.productName,
-        brand: res.product.brand ?? res.captured?.brand,
-        productType: res.product.productType ?? res.captured?.productType,
-      });
-      setAnalyzeLabels([
-        'Loading ingredients',
-        'Checking database',
-        'Scoring',
-        'Generating report',
-      ]);
-      setStep('analyzing');
-      setProcessing(false);
-      try {
-        const body = petToQuickAnalyzeBody(pet, res.product.id);
-        const raw = await scanService.quickAnalyze(body);
-        const scanId = extractScanId(raw);
-        const result = await runPoll(scanId);
-        finishWithResult(result);
-      } catch (e) {
-        console.warn('[SCAN] DB match quick-analyze failed:', e);
-        setStep('back');
-      }
-      return;
-    }
 
     const list = res.candidates ?? [];
     if (list.length > 0) {
@@ -499,43 +468,63 @@ export function TwoStepScanScreen() {
             contentContainerStyle={s.candidateListContent}
             showsVerticalScrollIndicator
           >
-            {candidates.map(c => (
-              <Pressable
-                key={c.id}
-                style={({ pressed }) => [s.candidateCard, pressed && { opacity: 0.9 }]}
-                onPress={() => onSelectCandidate(c)}
-              >
-                {buildImageUrl(c.imageUrl ?? c.image_url) ? (
-                  <Image
-                    source={{ uri: buildImageUrl(c.imageUrl ?? c.image_url)! }}
-                    style={s.candidateImg}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[s.candidateImg, s.candidateImgPh]}>
-                    <Ionicons name="paw" size={28} color={colors.primary} />
-                  </View>
-                )}
-                <View style={s.candidateInfo}>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    {c.brand ? (
-                      <Text style={s.candidateCardBrand} numberOfLines={1}>{formatProductTitleText(c.brand)}</Text>
-                    ) : null}
-                    <Text style={s.candidateCardName} numberOfLines={3}>
-                      {formatProductTitleText(c.name ?? 'Unknown Product')}
-                    </Text>
-                    {(c.productType ?? c.product_type) ? (
-                      <View style={s.candidateTypePill}>
-                        <Text style={s.candidateTypeText}>
-                          {(c.productType ?? c.product_type ?? '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </Text>
+            {candidates.map(c => {
+              const imgUri = buildImageUrl(c.imageUrl ?? c.image_url);
+              const petType = c.targetPetType ?? c.target_pet_type;
+              const lifeStage = c.lifeStage;
+              const prodType = c.productType ?? c.product_type;
+              return (
+                <Pressable
+                  key={c.id}
+                  style={({ pressed }) => [s.candidateCard, pressed && { opacity: 0.9 }]}
+                  onPress={() => onSelectCandidate(c)}
+                >
+                  <Pressable onPress={() => imgUri && setZoomImageUri(imgUri)}>
+                    {imgUri ? (
+                      <Image source={{ uri: imgUri }} style={s.candidateImg} resizeMode="cover" />
+                    ) : (
+                      <View style={[s.candidateImg, s.candidateImgPh]}>
+                        <Ionicons name="paw" size={28} color={colors.primary} />
                       </View>
-                    ) : null}
+                    )}
+                  </Pressable>
+                  <View style={s.candidateInfo}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      {c.brand ? (
+                        <Text style={s.candidateCardBrand} numberOfLines={1}>{formatProductTitleText(c.brand)}</Text>
+                      ) : null}
+                      <Text style={s.candidateCardName} numberOfLines={3}>
+                        {formatProductTitleText(c.name ?? 'Unknown Product')}
+                      </Text>
+                      <View style={s.candidatePillRow}>
+                        {prodType ? (
+                          <View style={s.candidateTypePill}>
+                            <Text style={s.candidateTypeText}>
+                              {prodType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {petType && petType !== 'both' ? (
+                          <View style={[s.candidateTypePill, { backgroundColor: colors.primary + '14' }]}>
+                            <Text style={[s.candidateTypeText, { color: colors.primary }]}>
+                              {petType === 'dog' ? 'Dog' : petType === 'cat' ? 'Cat' : petType}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {lifeStage && lifeStage !== 'all' ? (
+                          <View style={[s.candidateTypePill, { backgroundColor: colors.accent + '14' }]}>
+                            <Text style={[s.candidateTypeText, { color: colors.accent }]}>
+                              {lifeStage.replace(/\b\w/g, l => l.toUpperCase())}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                </View>
-              </Pressable>
-            ))}
+                </Pressable>
+              );
+            })}
           </ScrollView>
           <View style={s.candidateFooter}>
             <View style={s.candidateOrRow}>
@@ -727,6 +716,29 @@ export function TwoStepScanScreen() {
             <Text style={s.overlayText}>{overlayText}</Text>
           </View>
         </View>
+      </Modal>
+
+      {/* Candidate image zoom */}
+      <Modal
+        visible={!!zoomImageUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setZoomImageUri(null)}
+      >
+        <Pressable style={s.zoomBackdrop} onPress={() => setZoomImageUri(null)}>
+          <View style={s.zoomContainer}>
+            <View style={s.zoomBanner}>
+              <Ionicons name="information-circle-outline" size={14} color={colors.white} />
+              <Text style={s.zoomBannerText}>Package design may differ from yours</Text>
+            </View>
+            {zoomImageUri && (
+              <Image source={{ uri: zoomImageUri }} style={s.zoomImage} resizeMode="contain" />
+            )}
+            <Pressable onPress={() => setZoomImageUri(null)} style={s.zoomCloseBtn}>
+              <Ionicons name="close-circle" size={32} color={colors.white} />
+            </Pressable>
+          </View>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
@@ -1077,17 +1089,21 @@ const s = StyleSheet.create({
     lineHeight: 18,
   },
   candidateTypePill: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 5,
     backgroundColor: 'rgba(45,106,79,0.08)',
-    marginTop: 3,
   },
   candidateTypeText: {
     fontSize: 10,
     fontWeight: '600',
     color: colors.primary,
+  },
+  candidatePillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 3,
   },
   candidateFooter: {
     paddingTop: spacing.md,
@@ -1344,6 +1360,40 @@ const s = StyleSheet.create({
   overlayText: {
     ...typography.labelLarge,
     color: colors.white,
+  },
+  // Zoom modal
+  zoomBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomContainer: {
+    width: '85%',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  zoomBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.medium,
+  },
+  zoomBannerText: {
+    fontSize: 12,
+    color: colors.white,
+    fontWeight: '500',
+  },
+  zoomImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: radius.large,
+  },
+  zoomCloseBtn: {
+    marginTop: spacing.sm,
   },
   // Editor styles
   editorContainer: {

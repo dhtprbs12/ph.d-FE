@@ -258,6 +258,7 @@ export interface ProductCandidate {
   product_type?: string;
   targetPetType?: string;
   target_pet_type?: string;
+  lifeStage?: string | null;
 }
 
 export interface CachedScore {
