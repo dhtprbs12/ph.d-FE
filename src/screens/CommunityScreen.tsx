@@ -176,7 +176,7 @@ export default function CommunityScreen() {
         showsVerticalScrollIndicator={false}
         alwaysBounceVertical
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
         {/* Trending section */}
@@ -285,7 +285,7 @@ const s = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 80 },
   section: { marginBottom: spacing.lg },
   sectionHeader: {
     flexDirection: 'row',

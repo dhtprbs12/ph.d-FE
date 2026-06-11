@@ -396,7 +396,7 @@ export default function HistoryScreen() {
           showsVerticalScrollIndicator={false}
           alwaysBounceVertical
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
           renderSectionHeader={({ section }) => (
             <Text style={styles.daySectionLabel} allowFontScaling={false}>

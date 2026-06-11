@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   FlatList,
   Image,
@@ -150,7 +151,15 @@ export function TwoStepScanScreen() {
     const perm = fromCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return null;
+    if (!perm.granted) {
+      Alert.alert(
+        'Permission Needed',
+        fromCamera
+          ? 'Camera access is required to scan labels.'
+          : 'Photo library access is required to select an image.',
+      );
+      return null;
+    }
 
     const result = fromCamera
       ? await ImagePicker.launchCameraAsync({
@@ -1816,7 +1825,7 @@ function IngredientEditorStep({
   return (
     <KeyboardAvoidingView
       style={s.editorContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <View style={s.editorHeader}>
