@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Image,
   Keyboard,
@@ -107,6 +108,8 @@ export function TwoStepScanScreen() {
 
   const packageShapeRef = useRef<PackageShape | null>(null);
   const manualReturnStepRef = useRef<'front' | 'selectCandidate'>('front');
+  const pendingFrontImageRef = useRef<string | null>(null);
+  const frontScanInFlightRef = useRef(false);
 
   const [step, setStep] = useState<ScanStep>('front');
   const [pendingScanId, setPendingScanId] = useState<string | null>(null);
@@ -256,35 +259,50 @@ export function TwoStepScanScreen() {
     }
   }, [pet, runPoll, finishWithResult]);
 
+  const doFrontScan = useCallback(async (uri: string) => {
+    pendingFrontImageRef.current = uri;
+    frontScanInFlightRef.current = true;
+    setProcessing(true);
+    try {
+      const res = await scanService.scanFrontLabel(uri);
+      pendingFrontImageRef.current = null;
+      frontScanInFlightRef.current = false;
+      applyFrontResult(res);
+    } catch (e) {
+      console.warn('[FRONT] scan failed:', e);
+      frontScanInFlightRef.current = false;
+    } finally {
+      setProcessing(false);
+    }
+  }, [applyFrontResult]);
+
   const onFrontCapture = useCallback(async () => {
     if (!pet) return;
     const uri = await pickImage(true);
     if (!uri) return;
-    setProcessing(true);
-    try {
-      const res = await scanService.scanFrontLabel(uri);
-      applyFrontResult(res);
-    } catch (e) {
-      console.warn(e);
-    } finally {
-      setProcessing(false);
-    }
-  }, [pet, pickImage, applyFrontResult]);
+    doFrontScan(uri);
+  }, [pet, pickImage, doFrontScan]);
 
   const onFrontLibrary = useCallback(async () => {
     if (!pet) return;
     const uri = await pickImage(false);
     if (!uri) return;
-    setProcessing(true);
-    try {
-      const res = await scanService.scanFrontLabel(uri);
-      applyFrontResult(res);
-    } catch (e) {
-      console.warn(e);
-    } finally {
-      setProcessing(false);
-    }
-  }, [pet, pickImage, applyFrontResult]);
+    doFrontScan(uri);
+  }, [pet, pickImage, doFrontScan]);
+
+  // Auto-retry front scan when returning from background
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (
+        nextState === 'active' &&
+        pendingFrontImageRef.current &&
+        !frontScanInFlightRef.current
+      ) {
+        doFrontScan(pendingFrontImageRef.current);
+      }
+    });
+    return () => sub.remove();
+  }, [doFrontScan]);
 
   const onSelectCandidate = useCallback(
     async (c: ProductCandidate) => {
