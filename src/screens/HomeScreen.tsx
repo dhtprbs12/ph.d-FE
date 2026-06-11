@@ -20,6 +20,8 @@ import type { CommunityStats, Pet, UserStats } from '../types';
 import { formatCommunityScans } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
+import * as communityService from '../services/communityService';
+import type { RecentActivity } from '../services/communityService';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -332,23 +334,55 @@ function NoPetCard({ onAddPet }: { onAddPet: () => void }) {
 
 function CommunityTrustBanner({
   stats,
+  activity,
 }: {
   stats: CommunityStats | null;
+  activity: RecentActivity[];
 }) {
-  if (stats == null || stats.totalScans < 100) {
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const [currentIdx, setCurrentIdx] = useState(0);
+
+  useEffect(() => {
+    if (activity.length === 0) return;
+    const interval = setInterval(() => {
+      Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+        setCurrentIdx(prev => (prev + 1) % activity.length);
+        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+      });
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activity.length, fadeAnim]);
+
+  if (stats == null || stats.totalScans < 10) {
     return null;
   }
+
+  const current = activity[currentIdx];
+  const petIcon = current?.petType === 'cat' ? '🐱' : '🐕';
+
   return (
     <View style={styles.communityBanner}>
       <View style={styles.communityScansRow}>
         <View style={styles.communityIconPlate}>
-          <Ionicons name="people" size={17} color={colors.textSecondary} />
+          <Ionicons name="people" size={14} color={colors.primary} />
         </View>
         <Text style={[styles.communityBannerText, { flex: 1, minWidth: 0 }]}>
           <Text style={styles.communityCount}>{formatCommunityScans(stats.totalScans)}</Text>
-          {' labels checked by pet parents'}
+          {' scans by pet parents'}
         </Text>
       </View>
+      {current && (
+        <Animated.View style={[styles.liveFeedRow, { opacity: fadeAnim }]}>
+          <Text style={styles.liveFeedText} numberOfLines={1}>
+            {petIcon} A pet parent analyzed{' '}
+            <Text style={styles.liveFeedProduct}>
+              {current.brand ? `${current.brand} ` : ''}{current.productName}
+            </Text>
+            {current.score ? ` · ${current.score}` : ''}
+          </Text>
+          <Text style={styles.liveFeedTime}>{current.timeAgo}</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -748,6 +782,7 @@ export default function HomeScreen() {
   const [communityStats, setCommunityStats] =
     useState<CommunityStats | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [petModalVisible, setPetModalVisible] = useState(false);
 
   useFocusEffect(
@@ -755,17 +790,16 @@ export default function HomeScreen() {
       let cancelled = false;
       (async () => {
         try {
-          const [comm, u] = await Promise.allSettled([
+          const [comm, u, act] = await Promise.allSettled([
             scanService.getCommunityStats(),
             scanService.getUserStats(),
+            communityService.getRecentActivity(),
           ]);
 
           if (cancelled) return;
           if (comm.status === 'fulfilled') setCommunityStats(comm.value);
-
-          if (u.status === 'fulfilled') {
-            setUserStats(u.value);
-          }
+          if (u.status === 'fulfilled') setUserStats(u.value);
+          if (act.status === 'fulfilled') setRecentActivity(act.value);
         } catch (e) {
           console.warn('[Home] loadStats error:', e);
         }
@@ -821,7 +855,7 @@ export default function HomeScreen() {
 
           {/* Community Trust Banner */}
           <StaggeredView index={2}>
-            <CommunityTrustBanner stats={communityStats} />
+            <CommunityTrustBanner stats={communityStats} activity={recentActivity} />
           </StaggeredView>
 
           {/* Action Cards */}
@@ -933,39 +967,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   communityBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     backgroundColor: colors.card,
     borderRadius: radius.medium,
     borderWidth: 1,
     borderColor: colors.divider,
-    gap: spacing.sm,
+    gap: 6,
   },
   communityScansRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    flex: 1,
   },
   communityIconPlate: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.lightGray,
+    backgroundColor: colors.primary + '14',
   },
   communityBannerText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.textPrimary,
-    lineHeight: 18,
+    color: colors.textSecondary,
+    lineHeight: 16,
   },
   communityCount: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '800',
     color: colors.textPrimary,
   },
@@ -973,6 +1003,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: colors.textPrimary,
+  },
+  liveFeedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 34,
+    gap: spacing.xs,
+  },
+  liveFeedText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  liveFeedProduct: {
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  liveFeedTime: {
+    fontSize: 10,
+    color: colors.textSecondary + '99',
   },
   aafcoCallout: {
     paddingHorizontal: spacing.md,

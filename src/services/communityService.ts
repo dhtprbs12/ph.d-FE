@@ -79,3 +79,17 @@ export async function getMySaved(): Promise<SavedProduct[]> {
   const { data } = await api.get<{ saved: SavedProduct[] }>('/community/my-saved');
   return data.saved ?? [];
 }
+
+export interface RecentActivity {
+  productName: string;
+  brand: string;
+  grade: string;
+  score: number;
+  petType: string;
+  timeAgo: string;
+}
+
+export async function getRecentActivity(): Promise<RecentActivity[]> {
+  const { data } = await api.get<{ activity: RecentActivity[] }>('/community/recent-activity');
+  return data.activity ?? [];
+}
