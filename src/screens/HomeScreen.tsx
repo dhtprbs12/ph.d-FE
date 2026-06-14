@@ -353,7 +353,7 @@ function CommunityTrustBanner({
     return () => clearInterval(interval);
   }, [activity.length, fadeAnim]);
 
-  if (stats == null || stats.totalScans < 10) {
+  if (stats == null) {
     return null;
   }
 
