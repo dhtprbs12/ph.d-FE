@@ -17,7 +17,7 @@ type Action =
   | { type: 'SET_AUTHENTICATED'; value: boolean }
   | { type: 'SET_LOADING'; value: boolean }
   | { type: 'ADD_PET'; pet: Pet }
-  | { type: 'UPDATE_PET'; pet: Pet }
+  | { type: 'UPDATE_PET'; pet: Pet; oldId?: string }
   | { type: 'REMOVE_PET'; petId: string }
   | { type: 'RESET' };
 
@@ -33,12 +33,14 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, isLoading: action.value };
     case 'ADD_PET':
       return { ...state, pets: [...state.pets, action.pet] };
-    case 'UPDATE_PET':
+    case 'UPDATE_PET': {
+      const matchId = action.oldId ?? action.pet.id;
       return {
         ...state,
-        pets: state.pets.map(p => (p.id === action.pet.id ? action.pet : p)),
-        selectedPet: state.selectedPet?.id === action.pet.id ? action.pet : state.selectedPet,
+        pets: state.pets.map(p => (p.id === matchId ? action.pet : p)),
+        selectedPet: state.selectedPet?.id === matchId ? action.pet : state.selectedPet,
       };
+    }
     case 'REMOVE_PET': {
       const newPets = state.pets.filter(p => p.id !== action.petId);
       const newSelected = state.selectedPet?.id === action.petId ? (newPets[0] ?? null) : state.selectedPet;
@@ -156,7 +158,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           })),
         });
         const finalPet = { ...newPet, id: serverPet.id };
-        dispatch({ type: 'UPDATE_PET', pet: finalPet });
+        dispatch({ type: 'UPDATE_PET', pet: finalPet, oldId: newPet.id });
         dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
         await saveSelectedPetId(finalPet.id);
         const updatedPets = allPets.map(p => (p.id === newPet.id ? finalPet : p));
