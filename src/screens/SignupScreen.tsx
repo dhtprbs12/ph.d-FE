@@ -14,7 +14,8 @@ import api, { uploadImage } from '../services/api';
 import { savePetsLocally } from '../utils/storage';
 import { useApp } from '../context/AppContext';
 import { colors, spacing, radius, typography } from '../theme';
-import { CONDITION_TYPES } from '../types';
+import { CONDITION_TYPES, PET_SEX_OPTIONS } from '../types';
+import type { PetSex } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
@@ -38,7 +39,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [ageYears, setAgeYears] = useState('');
   const [ageMonthsVal, setAgeMonthsVal] = useState('');
   const [weightLbs, setWeightLbs] = useState('');
-  const [sex, setSex] = useState<'male' | 'female' | 'unknown'>('unknown');
+  const [sex, setSex] = useState<PetSex>('male');
   const [activityLevel, setActivityLevel] = useState<'low' | 'moderate' | 'high'>('moderate');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
@@ -343,10 +344,10 @@ export default function SignupScreen({ navigation }: Props) {
 
             <Text style={styles.label}>Sex</Text>
             <View style={styles.row}>
-              {(['male', 'female', 'unknown'] as const).map((s) => (
-                <TouchableOpacity key={s} style={[styles.chip, sex === s && styles.chipActive]} onPress={() => setSex(s)}>
-                  <Text style={[styles.chipText, sex === s && styles.chipTextActive]}>
-                    {s === 'unknown' ? 'Unknown' : s.charAt(0).toUpperCase() + s.slice(1)}
+              {PET_SEX_OPTIONS.map((opt) => (
+                <TouchableOpacity key={opt.value} style={[styles.chip, sex === opt.value && styles.chipActive]} onPress={() => setSex(opt.value)}>
+                  <Text style={[styles.chipText, sex === opt.value && styles.chipTextActive]}>
+                    {opt.label}
                   </Text>
                 </TouchableOpacity>
               ))}
