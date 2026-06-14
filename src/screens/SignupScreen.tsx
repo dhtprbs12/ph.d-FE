@@ -116,7 +116,7 @@ export default function SignupScreen({ navigation }: Props) {
       await savePetsLocally([{ ...createdPet, photoData: photoUri ?? undefined }]);
       await authenticateAndSync();
 
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+      navigation.reset({ index: 0, routes: [{ name: 'Disclaimer' }] });
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.response?.data?.error || 'Registration failed';
       Alert.alert('Error', msg);
