@@ -156,6 +156,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         const finalPet = { ...newPet, id: serverPet.id };
         dispatch({ type: 'UPDATE_PET', pet: finalPet });
+        if (state.selectedPet?.id === newPet.id) {
+          dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
+          await saveSelectedPetId(finalPet.id);
+        }
         const updatedPets = allPets.map(p => (p.id === newPet.id ? finalPet : p));
         await savePetsLocally(updatedPets);
       } catch (e) {
