@@ -14,7 +14,10 @@ import api, { uploadImage } from '../services/api';
 import { savePetsLocally } from '../utils/storage';
 import { useApp } from '../context/AppContext';
 import { colors, spacing, radius, typography } from '../theme';
+import { CONDITION_TYPES } from '../types';
 import type { RootStackParamList } from '../navigation/types';
+
+const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Signup'>;
 
@@ -38,6 +41,16 @@ export default function SignupScreen({ navigation }: Props) {
   const [sex, setSex] = useState<'male' | 'female' | 'unknown'>('unknown');
   const [activityLevel, setActivityLevel] = useState<'low' | 'moderate' | 'high'>('moderate');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
+
+  const toggleCondition = useCallback((value: string) => {
+    setSelectedConditions(prev => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -92,6 +105,11 @@ export default function SignupScreen({ navigation }: Props) {
       const lbs = parseFloat(weightLbs);
       const weightKg = isNaN(lbs) ? null : +(lbs * 0.453592).toFixed(2);
 
+      const healthConditions = Array.from(selectedConditions).map(ct => ({
+        type: ct,
+        severity: 'moderate',
+      }));
+
       const { data: petData } = await api.post('/pets', {
         name: petName.trim(),
         petType,
@@ -100,6 +118,7 @@ export default function SignupScreen({ navigation }: Props) {
         weightKg,
         sex,
         activityLevel,
+        healthConditions: healthConditions.length > 0 ? healthConditions : undefined,
       });
 
       const createdPet = petData.pet;
@@ -344,6 +363,43 @@ export default function SignupScreen({ navigation }: Props) {
               ))}
             </View>
 
+            <View style={styles.conditionSection}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={styles.label}>Health Conditions (Optional)</Text>
+                {selectedConditions.size > 0 && (
+                  <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600' }}>
+                    {selectedConditions.size} selected
+                  </Text>
+                )}
+              </View>
+              {CATEGORIES_ORDER.map(category => {
+                const conditions = CONDITION_TYPES.filter(c => c.category === category);
+                if (conditions.length === 0) return null;
+                return (
+                  <View key={category} style={{ gap: 6, marginTop: spacing.sm }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>{category}</Text>
+                    <View style={styles.chipsWrap}>
+                      {conditions.map(c => {
+                        const isSelected = selectedConditions.has(c.value);
+                        return (
+                          <Pressable
+                            key={c.value}
+                            onPress={() => toggleCondition(c.value)}
+                            style={[styles.conditionChip, { backgroundColor: isSelected ? colors.primary : colors.lightGray }]}
+                          >
+                            {isSelected && <Ionicons name="checkmark" size={10} color={colors.white} />}
+                            <Text style={{ fontSize: 12, color: isSelected ? colors.white : colors.textPrimary }}>
+                              {c.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
             <View style={[styles.row, { marginTop: spacing.lg }]}>
               <TouchableOpacity style={styles.backBtn} onPress={() => setStep(0)}>
                 <Text style={styles.backBtnText}>Back</Text>
@@ -442,4 +498,14 @@ const styles = StyleSheet.create({
   backBtn: { paddingHorizontal: 20, paddingVertical: spacing.md, marginTop: spacing.lg },
   backBtnText: { color: colors.primary, ...typography.titleMedium },
   flex1: { flex: 1 },
+  conditionSection: { marginTop: spacing.md },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  conditionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
 });
