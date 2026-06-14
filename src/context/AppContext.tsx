@@ -128,9 +128,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addPet = useCallback(async (pet: Pet): Promise<void> => {
     const isFirst = state.pets.length === 0;
     const newPet = isFirst ? { ...pet, is_primary: true } : pet;
+    const willBeSelected = isFirst || !state.selectedPet;
 
     dispatch({ type: 'ADD_PET', pet: newPet });
-    if (isFirst || !state.selectedPet) {
+    if (willBeSelected) {
       dispatch({ type: 'SET_SELECTED_PET', pet: newPet });
       await saveSelectedPetId(newPet.id);
     }
@@ -156,10 +157,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         const finalPet = { ...newPet, id: serverPet.id };
         dispatch({ type: 'UPDATE_PET', pet: finalPet });
-        if (state.selectedPet?.id === newPet.id) {
-          dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
-          await saveSelectedPetId(finalPet.id);
-        }
+        dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
+        await saveSelectedPetId(finalPet.id);
         const updatedPets = allPets.map(p => (p.id === newPet.id ? finalPet : p));
         await savePetsLocally(updatedPets);
       } catch (e) {
