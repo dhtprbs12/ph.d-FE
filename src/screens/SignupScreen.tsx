@@ -48,11 +48,13 @@ export default function SignupScreen({ navigation }: Props) {
     if (!nickname || nickname.length < 2) {
       setNicknameAvailable(null);
       setNicknameReason('');
+      setNicknameChecking(false);
       return;
     }
     if (!/^[a-zA-Z0-9_]+$/.test(nickname)) {
       setNicknameAvailable(false);
       setNicknameReason('Only letters, numbers, and underscores');
+      setNicknameChecking(false);
       return;
     }
 
