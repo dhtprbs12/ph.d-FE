@@ -269,6 +269,7 @@ export function TwoStepScanScreen() {
   }, [pet, runPoll, finishWithResult]);
 
   const doFrontScan = useCallback(async (uri: string) => {
+    if (frontScanInFlightRef.current) return;
     pendingFrontImageRef.current = uri;
     frontScanInFlightRef.current = true;
     setProcessing(true);
@@ -280,6 +281,7 @@ export function TwoStepScanScreen() {
     } catch (e) {
       console.warn('[FRONT] scan failed:', e);
       frontScanInFlightRef.current = false;
+      Alert.alert('Scan Failed', 'Could not read the label. Please try again.');
     } finally {
       setProcessing(false);
     }

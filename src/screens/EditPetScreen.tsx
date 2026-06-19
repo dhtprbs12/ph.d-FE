@@ -64,12 +64,20 @@ export default function EditPetScreen() {
       Alert.alert('Permission Needed', 'Camera access is required to take a photo.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.5 });
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      ...(Platform.OS === 'ios' ? { aspect: [1, 1] as [number, number] } : {}),
+      quality: 0.5,
+    });
     if (!result.canceled) setPhotoUri(result.assets[0].uri);
   }, []);
 
   const launchLibrary = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.5 });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      ...(Platform.OS === 'ios' ? { aspect: [1, 1] as [number, number] } : {}),
+      quality: 0.5,
+    });
     if (!result.canceled) setPhotoUri(result.assets[0].uri);
   }, []);
 
