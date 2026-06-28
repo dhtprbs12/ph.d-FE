@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, ActivityIndicator, Image, ActionSheetIOS, Platform, Pressable,
+  StyleSheet, Alert, ActivityIndicator, Image, Platform, Pressable,
   KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import * as authService from '../services/authService';
+import { usePetPhotoPicker } from '../hooks/usePetPhotoPicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { uploadImage } from '../services/api';
 import { savePetsLocally } from '../utils/storage';
@@ -93,6 +93,12 @@ export default function SignupScreen({ navigation }: Props) {
   const step1Ready = nicknameAvailable === true && pinValid && pinMatch;
   const step2Ready = petName.trim().length > 0;
 
+  const { pickPhoto } = usePetPhotoPicker({
+    currentPhotoUri: photoUri,
+    onPhotoSelected: setPhotoUri,
+    title: 'Add Pet Photo',
+  });
+
   const handleRegister = async () => {
     if (!step2Ready) return;
     setLoading(true);
@@ -144,55 +150,6 @@ export default function SignupScreen({ navigation }: Props) {
       setLoading(false);
     }
   };
-
-  const launchCamera = useCallback(async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Camera access is required to take a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      ...(Platform.OS === 'ios' ? { aspect: [1, 1] as [number, number] } : {}),
-      quality: 0.5,
-    });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
-  }, []);
-
-  const launchLibrary = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Photo library access is required to choose a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      ...(Platform.OS === 'ios' ? { aspect: [1, 1] as [number, number] } : {}),
-      quality: 0.5,
-    });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
-  }, []);
-
-  const pickPhoto = useCallback(() => {
-    const options = ['Cancel', 'Take Photo', 'Choose from Library', ...(photoUri ? ['Remove Photo'] : [])];
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options, cancelButtonIndex: 0, destructiveButtonIndex: photoUri ? 3 : undefined },
-        async (idx) => {
-          if (idx === 1) await launchCamera();
-          else if (idx === 2) await launchLibrary();
-          else if (idx === 3) setPhotoUri(null);
-        },
-      );
-    } else {
-      Alert.alert('Add Photo', 'Choose an option', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photo', onPress: launchCamera },
-        { text: 'Choose from Library', onPress: launchLibrary },
-        ...(photoUri ? [{ text: 'Remove Photo', style: 'destructive' as const, onPress: () => setPhotoUri(null) }] : []),
-      ]);
-    }
-  }, [photoUri, launchCamera, launchLibrary]);
 
   const insets = useSafeAreaInsets();
 

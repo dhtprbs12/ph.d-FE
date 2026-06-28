@@ -9,14 +9,13 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  ActionSheetIOS,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import { usePetPhotoPicker } from '../hooks/usePetPhotoPicker';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import { CONDITION_TYPES, ACTIVITY_LEVELS, PET_SEX_OPTIONS } from '../types';
 import type { PetType, ActivityLevel, PetSex } from '../types';
@@ -56,53 +55,11 @@ export default function AddPetScreen() {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
-  const launchCamera = useCallback(async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Camera access is required to take a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      ...(Platform.OS === 'ios' ? { aspect: [1, 1] as [number, number] } : {}),
-      quality: 0.5,
-    });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
-  }, []);
-
-  const launchLibrary = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      ...(Platform.OS === 'ios' ? { aspect: [1, 1] as [number, number] } : {}),
-      quality: 0.5,
-    });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
-  }, []);
-
-  const pickPhoto = useCallback(async () => {
-    const options = ['Cancel', 'Take Photo', 'Choose from Library', ...(photoUri ? ['Remove Photo'] : [])];
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: 0,
-          destructiveButtonIndex: photoUri ? 3 : undefined,
-        },
-        async (idx) => {
-          if (idx === 1) await launchCamera();
-          else if (idx === 2) await launchLibrary();
-          else if (idx === 3) setPhotoUri(null);
-        },
-      );
-    } else {
-      Alert.alert('Add Photo', 'Choose an option', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photo', onPress: launchCamera },
-        { text: 'Choose from Library', onPress: launchLibrary },
-        ...(photoUri ? [{ text: 'Remove Photo', style: 'destructive' as const, onPress: () => setPhotoUri(null) }] : []),
-      ]);
-    }
-  }, [photoUri, launchCamera, launchLibrary]);
+  const { pickPhoto } = usePetPhotoPicker({
+    currentPhotoUri: photoUri,
+    onPhotoSelected: setPhotoUri,
+    title: 'Add Pet Photo',
+  });
 
   const toggleCondition = (value: string) => {
     setSelectedConditions(prev => {

@@ -1,5 +1,4 @@
-import api from './api';
-import { uploadImage } from './api';
+import api, { uploadImage } from './api';
 import type {
   CommunityStats,
   FoodCheckResult,
@@ -26,6 +25,8 @@ export interface ScanBackPetFields {
 export async function scanFrontLabel(imageUri: string): Promise<ScanFrontResponse> {
   return uploadImage<ScanFrontResponse>('/scan/front', imageUri);
 }
+
+export { ApiUploadError } from './api';
 
 export async function scanBackLabel(
   imageUri: string,

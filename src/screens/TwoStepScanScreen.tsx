@@ -1,12 +1,13 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   AppState,
+  Dimensions,
   FlatList,
   Image,
+  InteractionManager,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -20,10 +21,11 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReorderableList, { ReorderableListReorderEvent, reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
 import type { HomeStackParamList } from '../navigation/types';
 import * as scanService from '../services/scanService';
+import { ApiUploadError } from '../services/api';
 import { useApp } from '../context/AppContext';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 import type {
@@ -163,12 +165,12 @@ export function TwoStepScanScreen() {
 
     const result = fromCamera
       ? await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: ['images'],
           quality: 0.8,
           base64: false,
         })
       : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: ['images'],
           quality: 0.8,
           base64: false,
         });
@@ -281,6 +283,30 @@ export function TwoStepScanScreen() {
     } catch (e) {
       console.warn('[FRONT] scan failed:', e);
       frontScanInFlightRef.current = false;
+      if (e instanceof ApiUploadError && e.code === 'back_label_detected') {
+        Alert.alert(
+          'Ingredients label detected',
+          e.suggestion ? `${e.message}\n\n${e.suggestion}` : e.message,
+          [
+            { text: 'Try again', style: 'cancel' },
+            {
+              text: 'Enter manually',
+              onPress: () => {
+                manualReturnStepRef.current = 'front';
+                setStep('manualIngredients');
+              },
+            },
+          ],
+        );
+        return;
+      }
+      if (e instanceof ApiUploadError) {
+        Alert.alert(
+          'Scan Failed',
+          e.suggestion ? `${e.message}\n\n${e.suggestion}` : e.message,
+        );
+        return;
+      }
       Alert.alert('Scan Failed', 'Could not read the label. Please try again.');
     } finally {
       setProcessing(false);
@@ -564,6 +590,7 @@ export function TwoStepScanScreen() {
             <Pressable
               onPress={onNotHereScanBack}
               style={({ pressed }) => [s.notHereCard, pressed && s.notHereCardPressed]}
+              android_ripple={{ color: colors.primary + '18' }}
               accessibilityRole="button"
               accessibilityLabel="None of these products match. Continue to scan the back label."
             >
@@ -591,13 +618,15 @@ export function TwoStepScanScreen() {
           />
         </View>
       ) : step === 'editor' && pet ? (
-        <IngredientEditorStep
-          ingredients={ingredientsForEditor}
-          productName={frontMeta.productName}
-          brand={frontMeta.brand}
-          onConfirm={onEditorConfirm}
-          onCancel={() => setStep('back')}
-        />
+        <View style={{ flex: 1, minHeight: 0 }}>
+          <IngredientEditorStep
+            ingredients={ingredientsForEditor}
+            productName={frontMeta.productName}
+            brand={frontMeta.brand}
+            onConfirm={onEditorConfirm}
+            onCancel={() => setStep('back')}
+          />
+        </View>
       ) : (
       <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
         {!pet && (
@@ -1137,8 +1166,6 @@ const s = StyleSheet.create({
   candidateFooter: {
     paddingTop: spacing.md,
     gap: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
     backgroundColor: colors.background,
   },
   candidateOrRow: {
@@ -1161,14 +1188,14 @@ const s = StyleSheet.create({
   notHereCard: {
     borderRadius: radius.large,
     borderWidth: 1,
-    borderColor: 'rgba(45,106,79,0.22)',
-    backgroundColor: 'rgba(45,106,79,0.05)',
-    padding: spacing.md,
-    ...shadows.card,
+    borderColor: colors.primary + '33',
+    backgroundColor: colors.primary + '0D',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    overflow: 'hidden',
   },
   notHereCardPressed: {
-    opacity: 0.9,
-    backgroundColor: 'rgba(45,106,79,0.08)',
+    backgroundColor: colors.primary + '14',
   },
   notHereTextBlock: {
     gap: 4,
@@ -1494,31 +1521,76 @@ const s = StyleSheet.create({
   editorDeleteBtn: {
     padding: 4,
   },
+  editorInlinePanel: {
+    backgroundColor: colors.card,
+    flexDirection: 'column',
+  },
+  editorInputDock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+    zIndex: 3,
+    ...Platform.select({
+      android: { elevation: 8 },
+      default: {},
+    }),
+    ...shadows.card,
+  },
+  editorSuggestDock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+    overflow: 'hidden',
+    zIndex: 2,
+    ...Platform.select({
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  editorComposer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+    overflow: 'hidden',
+    ...shadows.card,
+  },
   editorBottomPanel: {
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.06)',
     backgroundColor: colors.card,
   },
   editorSuggestWrap: {
-    maxHeight: 160,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.divider,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+    flexShrink: 1,
   },
   editorSuggestLoading: {
-    paddingVertical: 12,
+    paddingVertical: 16,
     alignItems: 'center',
   },
-  editorSuggestList: {
-    maxHeight: 160,
+  editorSuggestScrollContent: {
+    flexGrow: 0,
   },
   editorSuggestRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.divider,
+    backgroundColor: colors.card,
   },
   editorSuggestText: {
     flex: 1,
@@ -1530,7 +1602,12 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
+    backgroundColor: colors.card,
+  },
+  editorInputRowKeyboard: {
+    paddingBottom: 0,
   },
   editorBottomInput: {
     flex: 1,
@@ -1626,6 +1703,103 @@ interface EditorRowProps {
   removeItem: (id: string) => void;
 }
 
+interface EditorInputRowProps {
+  inputRef: React.RefObject<TextInput | null>;
+  editText: string;
+  setEditText: (text: string) => void;
+  isAdding: boolean;
+  keyboardOpen: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+const EditorInputRow = memo(function EditorInputRow({
+  inputRef,
+  editText,
+  setEditText,
+  isAdding,
+  keyboardOpen,
+  onConfirm,
+  onCancel,
+}: EditorInputRowProps) {
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const task = InteractionManager.runAfterInteractions(() => {
+      const delay = Platform.OS === 'ios' ? 220 : 80;
+      timer = setTimeout(() => inputRef.current?.focus(), delay);
+    });
+    return () => {
+      task.cancel();
+      if (timer) clearTimeout(timer);
+    };
+  }, [inputRef]);
+
+  return (
+    <View style={[s.editorInputRow, keyboardOpen && s.editorInputRowKeyboard]}>
+      <TextInput
+        ref={inputRef}
+        style={s.editorBottomInput}
+        value={editText}
+        onChangeText={setEditText}
+        placeholder={isAdding ? 'Add new ingredient...' : 'Edit ingredient...'}
+        placeholderTextColor={colors.textSecondary}
+        onSubmitEditing={onConfirm}
+        returnKeyType="done"
+        autoCapitalize="words"
+      />
+      <Pressable onPress={onConfirm} hitSlop={8} style={s.editorInputBtn}>
+        <Ionicons name={isAdding ? 'add-circle' : 'checkmark-circle'} size={28} color={colors.primary} />
+      </Pressable>
+      <Pressable onPress={onCancel} hitSlop={8} style={s.editorInputBtn}>
+        <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
+      </Pressable>
+    </View>
+  );
+});
+
+interface EditorSuggestPanelProps {
+  suggestLoading: boolean;
+  suggestions: string[];
+  suggestMaxHeight: number;
+  onApplySuggestion: (text: string) => void;
+}
+
+const EditorSuggestPanel = memo(function EditorSuggestPanel({
+  suggestLoading,
+  suggestions,
+  suggestMaxHeight,
+  onApplySuggestion,
+}: EditorSuggestPanelProps) {
+  return (
+    <View style={[s.editorSuggestWrap, { maxHeight: suggestMaxHeight }]}>
+      {suggestLoading ? (
+        <View style={s.editorSuggestLoading}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : (
+        <ScrollView
+          style={{ maxHeight: suggestMaxHeight }}
+          contentContainerStyle={s.editorSuggestScrollContent}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={suggestions.length > 4}
+        >
+          {suggestions.map((item, i) => (
+            <Pressable
+              key={`${i}-${item}`}
+              style={({ pressed }) => [s.editorSuggestRow, pressed && { opacity: 0.7 }]}
+              onPress={() => onApplySuggestion(item)}
+            >
+              <Ionicons name="arrow-forward-circle-outline" size={16} color={colors.textSecondary} style={{ marginTop: 2 }} />
+              <Text style={s.editorSuggestText}>{toIngredientTitleCase(item)}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+});
+
 const EditorRowItem = memo(function EditorRowItem({
   item,
   index: idx,
@@ -1682,6 +1856,7 @@ function IngredientEditorStep({
   const editInputRef = useRef<TextInput>(null);
   const listRef = useRef<any>(null);
   const nextIdRef = useRef(initialIngredients.length);
+  const insets = useSafeAreaInsets();
 
   const isAdding = editingId === '__new__';
   const panelActive = editingId !== null;
@@ -1718,27 +1893,149 @@ function IngredientEditorStep({
     if (editingId === id) { setEditingId(null); setEditText(''); setSuggestions([]); }
   }, [editingId]);
 
+  const [insertIndex, setInsertIndex] = useState<number | null>(null);
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const [inputDockHeight, setInputDockHeight] = useState(0);
+  const [suggestDockHeight, setSuggestDockHeight] = useState(0);
+  const keyboardInsetRef = useRef(0);
+  const composerHeightRef = useRef(0);
+
+  const showSuggestions = suggestLoading || suggestions.length > 0;
+  const composerHeight = inputDockHeight + (showSuggestions ? suggestDockHeight : 0);
+
+  useEffect(() => {
+    composerHeightRef.current = composerHeight;
+  }, [composerHeight]);
+
+  const suggestMaxHeight = useMemo(() => {
+    const windowH = Dimensions.get('window').height;
+    const chrome = 190 + insets.top;
+    const inputRow = 68;
+    const available = windowH - keyboardInset - chrome - inputRow;
+    return Math.max(180, Math.min(360, available));
+  }, [keyboardInset, insets.top]);
+
+  const composerBottom = keyboardInset > 0
+    ? Math.max(0, keyboardInset - insets.bottom)
+    : insets.bottom;
+
+  const scrollEditorIntoView = useCallback((opts?: {
+    adding?: boolean;
+    atIndex?: number | null;
+    editId?: string | null;
+  }) => {
+    const adding = opts?.adding ?? isAdding;
+    const at = opts?.atIndex !== undefined ? opts.atIndex : insertIndex;
+    const editId = opts?.editId !== undefined ? opts.editId : editingId;
+    if (!adding && !editId) return;
+
+    setTimeout(() => {
+      const ref = listRef.current;
+      if (!ref) return;
+      const dock = composerHeightRef.current + 24;
+      if (adding && at === 0) {
+        ref.scrollToOffset?.({ offset: 0, animated: true });
+        return;
+      }
+      let targetIndex: number;
+      if (adding) {
+        const pos = at ?? items.length;
+        targetIndex = Math.max(0, pos - 1);
+      } else {
+        targetIndex = items.findIndex(it => it.id === editId);
+      }
+      if (targetIndex < 0) return;
+      try {
+        ref.scrollToIndex?.({
+          index: targetIndex,
+          animated: true,
+          viewPosition: 0,
+          viewOffset: dock,
+        });
+      } catch {
+        ref.scrollToOffset?.({
+          offset: Math.max(0, targetIndex * 88 - dock),
+          animated: true,
+        });
+      }
+    }, Platform.OS === 'ios' ? 280 : 120);
+  }, [editingId, isAdding, insertIndex, items]);
+
+  useEffect(() => {
+    if (!panelActive) {
+      setKeyboardInset(0);
+      return;
+    }
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const windowH = Dimensions.get('window').height;
+      const height = Platform.OS === 'android'
+        ? windowH - e.endCoordinates.screenY
+        : e.endCoordinates.height;
+      keyboardInsetRef.current = height;
+      setKeyboardInset(height);
+      scrollEditorIntoView();
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      keyboardInsetRef.current = 0;
+      setKeyboardInset(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [panelActive, scrollEditorIntoView]);
+
+  useEffect(() => {
+    if (!panelActive) return;
+    scrollEditorIntoView();
+  }, [composerHeight, suggestions.length, panelActive, scrollEditorIntoView]);
+
+  useEffect(() => {
+    if (!showSuggestions) setSuggestDockHeight(0);
+  }, [showSuggestions]);
+
   const startEdit = useCallback((id: string, text: string) => {
+    setInsertIndex(null);
     setEditingId(id);
     setEditText(text);
-    setTimeout(() => editInputRef.current?.focus(), 100);
+    setTimeout(() => {
+      scrollEditorIntoView({ adding: false, editId: id });
+    }, 100);
+  }, [scrollEditorIntoView]);
+
+  const scrollToInsertedItem = useCallback((index: number, itemCount: number) => {
+    if (itemCount <= 0) return;
+    const targetIndex = Math.min(Math.max(index, 0), itemCount - 1);
+    setTimeout(() => {
+      try {
+        listRef.current?.scrollToIndex?.({
+          index: targetIndex,
+          animated: true,
+          viewPosition: 0.45,
+        });
+      } catch {
+        // Layout not measured yet — skip rather than jumping to list end.
+      }
+    }, 200);
   }, []);
 
-  const [insertIndex, setInsertIndex] = useState<number | null>(null);
-
-  const scrollToEnd = useCallback(() => {
-    setTimeout(() => {
-      listRef.current?.scrollToEnd?.({ animated: true });
-    }, 150);
+  const onScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+    listRef.current?.scrollToOffset?.({
+      offset: Math.max(0, info.averageItemLength * info.index - 48),
+      animated: true,
+    });
   }, []);
 
   const startAdd = useCallback((afterIndex: number) => {
     setInsertIndex(afterIndex);
     setEditingId('__new__');
     setEditText('');
-    setTimeout(() => editInputRef.current?.focus(), 100);
-    scrollToEnd();
-  }, [scrollToEnd]);
+    setTimeout(() => {
+      scrollEditorIntoView({ adding: true, atIndex: afterIndex });
+    }, 100);
+  }, [scrollEditorIntoView]);
 
   const confirmEdit = useCallback(() => {
     if (editingId === null) return;
@@ -1755,7 +2052,7 @@ function IngredientEditorStep({
       const newId = `ing-${nextIdRef.current++}`;
       const pos = insertIndex ?? items.length;
       setItems(prev => [...prev.slice(0, pos), { id: newId, text: trimmed }, ...prev.slice(pos)]);
-      scrollToEnd();
+      scrollToInsertedItem(pos, items.length + 1);
     } else {
       setItems(prev => prev.map(it => it.id === editingId ? { ...it, text: trimmed } : it));
     }
@@ -1764,7 +2061,7 @@ function IngredientEditorStep({
     setSuggestions([]);
     setInsertIndex(null);
     Keyboard.dismiss();
-  }, [editingId, editText, isAdding, insertIndex, items.length, scrollToEnd]);
+  }, [editingId, editText, isAdding, insertIndex, items.length, scrollToInsertedItem]);
 
   const cancelEdit = useCallback(() => {
     setEditingId(null);
@@ -1780,7 +2077,7 @@ function IngredientEditorStep({
       const newId = `ing-${nextIdRef.current++}`;
       const pos = insertIndex ?? items.length;
       setItems(prev => [...prev.slice(0, pos), { id: newId, text }, ...prev.slice(pos)]);
-      scrollToEnd();
+      scrollToInsertedItem(pos, items.length + 1);
     } else {
       setItems(prev => prev.map(it => it.id === editingId ? { ...it, text } : it));
     }
@@ -1789,7 +2086,7 @@ function IngredientEditorStep({
     setSuggestions([]);
     setInsertIndex(null);
     Keyboard.dismiss();
-  }, [editingId, isAdding, insertIndex, items.length, scrollToEnd]);
+  }, [editingId, isAdding, insertIndex, items.length, scrollToInsertedItem]);
 
   const handleReorder = useCallback(({ from, to }: ReorderableListReorderEvent) => {
     setItems(prev => reorderItems(prev, from, to));
@@ -1825,11 +2122,7 @@ function IngredientEditorStep({
   ), [editingId, startEdit, removeItem, startAdd, insertIndex, isAdding]);
 
   return (
-    <KeyboardAvoidingView
-      style={s.editorContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
+    <View style={s.editorContainer}>
       <View style={s.editorHeader}>
         {brand ? <Text style={s.editorBrand}>{formatProductTitleText(brand)}</Text> : null}
         <Text style={s.editorProductName}>
@@ -1845,8 +2138,13 @@ function IngredientEditorStep({
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         style={s.editorList}
-        contentContainerStyle={s.editorListContent}
+        contentContainerStyle={[
+          s.editorListContent,
+          panelActive && composerHeight > 0 && { paddingBottom: composerHeight + spacing.md },
+        ]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onScrollToIndexFailed={onScrollToIndexFailed}
         ListHeaderComponent={
           <Pressable
             style={[
@@ -1869,54 +2167,41 @@ function IngredientEditorStep({
       />
 
       {panelActive && (
-        <View style={s.editorBottomPanel}>
-          {(suggestLoading || suggestions.length > 0) && (
-            <View style={s.editorSuggestWrap}>
-              {suggestLoading ? (
-                <View style={s.editorSuggestLoading}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                </View>
-              ) : (
-                <FlatList
-                  data={suggestions}
-                  keyExtractor={(item, i) => `${i}-${item}`}
-                  keyboardShouldPersistTaps="handled"
-                  scrollEnabled={suggestions.length > 4}
-                  style={s.editorSuggestList}
-                  renderItem={({ item }) => (
-                    <Pressable
-                      style={({ pressed }) => [s.editorSuggestRow, pressed && { opacity: 0.7 }]}
-                      onPress={() => applySuggestion(item)}
-                    >
-                      <Ionicons name="arrow-forward-circle-outline" size={16} color={colors.textSecondary} style={{ marginTop: 2 }} />
-                      <Text style={s.editorSuggestText}>{toIngredientTitleCase(item)}</Text>
-                    </Pressable>
-                  )}
-                />
-              )}
+        <>
+          {showSuggestions && (
+            <View
+              style={[
+                s.editorSuggestDock,
+                {
+                  bottom: composerBottom + Math.max(inputDockHeight, 68),
+                  maxHeight: suggestMaxHeight,
+                },
+              ]}
+              onLayout={(e) => setSuggestDockHeight(e.nativeEvent.layout.height)}
+            >
+              <EditorSuggestPanel
+                suggestLoading={suggestLoading}
+                suggestions={suggestions}
+                suggestMaxHeight={suggestMaxHeight}
+                onApplySuggestion={applySuggestion}
+              />
             </View>
           )}
-          <View style={s.editorInputRow}>
-            <TextInput
-              ref={editInputRef}
-              style={s.editorBottomInput}
-              value={editText}
-              onChangeText={setEditText}
-              placeholder={isAdding ? 'Add new ingredient...' : 'Edit ingredient...'}
-              placeholderTextColor={colors.textSecondary}
-              autoFocus
-              onSubmitEditing={confirmEdit}
-              returnKeyType="done"
-              autoCapitalize="words"
+          <View
+            style={[s.editorInputDock, { bottom: composerBottom }]}
+            onLayout={(e) => setInputDockHeight(e.nativeEvent.layout.height)}
+          >
+            <EditorInputRow
+              inputRef={editInputRef}
+              editText={editText}
+              setEditText={setEditText}
+              isAdding={isAdding}
+              keyboardOpen={keyboardInset > 0}
+              onConfirm={confirmEdit}
+              onCancel={cancelEdit}
             />
-            <Pressable onPress={confirmEdit} hitSlop={8} style={s.editorInputBtn}>
-              <Ionicons name={isAdding ? 'add-circle' : 'checkmark-circle'} size={28} color={colors.primary} />
-            </Pressable>
-            <Pressable onPress={cancelEdit} hitSlop={8} style={s.editorInputBtn}>
-              <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
-            </Pressable>
           </View>
-        </View>
+        </>
       )}
 
       {!panelActive && (
@@ -1934,6 +2219,6 @@ function IngredientEditorStep({
           </Pressable>
         </View>
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }

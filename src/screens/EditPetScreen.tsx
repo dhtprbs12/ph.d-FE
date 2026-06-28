@@ -9,7 +9,6 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  ActionSheetIOS,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -17,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import { usePetPhotoPicker } from '../hooks/usePetPhotoPicker';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import { ACTIVITY_LEVELS, PET_SEX_OPTIONS, CONDITION_TYPES } from '../types';
 import type { PetSex, ActivityLevel } from '../types';
@@ -50,6 +49,12 @@ export default function EditPetScreen() {
   );
   const [isLoading, setIsLoading] = useState(false);
 
+  const { pickPhoto } = usePetPhotoPicker({
+    currentPhotoUri: photoUri ?? null,
+    onPhotoSelected: setPhotoUri,
+    title: 'Edit Pet Photo',
+  });
+
   const toggleCondition = useCallback((val: string) => {
     setSelectedConditions(prev => {
       const next = new Set(prev);
@@ -57,54 +62,6 @@ export default function EditPetScreen() {
       return next;
     });
   }, []);
-
-  const launchCamera = useCallback(async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Camera access is required to take a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      ...(Platform.OS === 'ios' ? { aspect: [1, 1] as [number, number] } : {}),
-      quality: 0.5,
-    });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
-  }, []);
-
-  const launchLibrary = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      ...(Platform.OS === 'ios' ? { aspect: [1, 1] as [number, number] } : {}),
-      quality: 0.5,
-    });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
-  }, []);
-
-  const pickPhoto = useCallback(async () => {
-    const options = ['Cancel', 'Take Photo', 'Choose from Library', ...(photoUri ? ['Remove Photo'] : [])];
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: 0,
-          destructiveButtonIndex: photoUri ? 3 : undefined,
-        },
-        async (idx) => {
-          if (idx === 1) await launchCamera();
-          else if (idx === 2) await launchLibrary();
-          else if (idx === 3) setPhotoUri(null);
-        },
-      );
-    } else {
-      Alert.alert('Edit Photo', 'Choose an option', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photo', onPress: launchCamera },
-        { text: 'Choose from Library', onPress: launchLibrary },
-        ...(photoUri ? [{ text: 'Remove Photo', style: 'destructive' as const, onPress: () => setPhotoUri(null) }] : []),
-      ]);
-    }
-  }, [photoUri, launchCamera, launchLibrary]);
 
   if (!pet) {
     return (

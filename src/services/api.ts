@@ -1,6 +1,6 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 const BASE_URL = 'https://phd-be-production.up.railway.app/api';
@@ -80,6 +80,31 @@ api.interceptors.response.use(
 // upload budgets (~600KB/frame).
 const UPLOAD_MAX_DIMENSION = 2000;
 
+export class ApiUploadError extends Error {
+  code?: string;
+  suggestion?: string;
+  status: number;
+
+  constructor(status: number, body: { error?: string; message?: string; suggestion?: string }) {
+    super(body.message || body.error || `Upload failed (${status})`);
+    this.name = 'ApiUploadError';
+    this.code = body.error;
+    this.suggestion = body.suggestion;
+    this.status = status;
+  }
+}
+
+/** React Native FormData expects different URI shapes per platform. */
+function getUploadUri(uri: string): string {
+  if (Platform.OS === 'ios') {
+    return uri.replace('file://', '');
+  }
+  if (uri.startsWith('file://') || uri.startsWith('content://')) {
+    return uri;
+  }
+  return `file://${uri}`;
+}
+
 /**
  * Multipart upload with field name `image` (JPEG). Optional string fields are appended for mixed forms.
  *
@@ -126,7 +151,7 @@ export async function uploadImage<T>(
 
   const formData = new FormData();
   formData.append(fieldName, {
-    uri: jpegUri,
+    uri: getUploadUri(jpegUri),
     type: 'image/jpeg',
     name: `${fieldName}.jpg`,
   } as unknown as Blob);
@@ -140,9 +165,38 @@ export async function uploadImage<T>(
   }
 
   try {
-    // Let the client set multipart boundary (required on React Native).
-    const { data } = await api.post<T>(endpoint, formData);
-    return data;
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401 && !isLoggingOut) {
+      isLoggingOut = true;
+      try {
+        const { clearAuthData } = await import('../utils/tokenUtils');
+        const { resetToLogin } = await import('../navigation/navigationRef');
+        await clearAuthData();
+        Alert.alert(
+          'Session Expired',
+          'Please log in again to continue.',
+          [{ text: 'OK', onPress: () => resetToLogin() }],
+        );
+      } catch (logoutErr) {
+        console.warn('[API] Failed to handle 401 logout:', logoutErr);
+      } finally {
+        setTimeout(() => { isLoggingOut = false; }, 3000);
+      }
+    }
+    if (!response.ok) {
+      throw new ApiUploadError(response.status, data as { error?: string; message?: string; suggestion?: string });
+    }
+    return data as T;
   } catch (e) {
     logApiError(e, `uploadImage ${endpoint}`);
     throw e;
