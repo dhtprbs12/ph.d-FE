@@ -22,7 +22,7 @@ import type { ScanHistoryItem } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
 import * as communityService from '../services/communityService';
-import { buildImageUrl, formatDate, formatProductTitleText } from '../utils/helpers';
+import { buildImageUrl, formatDate, formatLifeStage, formatProductTitleText } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<HistoryStackParamList>;
 
@@ -216,7 +216,7 @@ function HistoryCard({ item, onPress, isSaved, onToggleSave }: {
                 <View style={styles.badge}>
                   <Ionicons name="pricetag-outline" size={10} color={colors.textSecondary} />
                   <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>
-                    {item.product_life_stage.replace(/\b\w/g, l => l.toUpperCase())}
+                    {formatLifeStage(item.product_life_stage, item.pet_type)}
                   </Text>
                 </View>
               )}

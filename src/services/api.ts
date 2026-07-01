@@ -83,13 +83,23 @@ const UPLOAD_MAX_DIMENSION = 2000;
 export class ApiUploadError extends Error {
   code?: string;
   suggestion?: string;
+  missingFields?: string[];
   status: number;
 
-  constructor(status: number, body: { error?: string; message?: string; suggestion?: string }) {
+  constructor(
+    status: number,
+    body: {
+      error?: string;
+      message?: string;
+      suggestion?: string;
+      missingFields?: string[];
+    }
+  ) {
     super(body.message || body.error || `Upload failed (${status})`);
     this.name = 'ApiUploadError';
     this.code = body.error;
     this.suggestion = body.suggestion;
+    this.missingFields = body.missingFields;
     this.status = status;
   }
 }
@@ -194,7 +204,12 @@ export async function uploadImage<T>(
       }
     }
     if (!response.ok) {
-      throw new ApiUploadError(response.status, data as { error?: string; message?: string; suggestion?: string });
+      throw new ApiUploadError(response.status, data as {
+        error?: string;
+        message?: string;
+        suggestion?: string;
+        missingFields?: string[];
+      });
     }
     return data as T;
   } catch (e) {

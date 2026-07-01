@@ -36,13 +36,31 @@ import type {
   ScanResult,
 } from '../types';
 import { ManualIngredientsFlow } from './ManualIngredientsScreen';
-import { buildImageUrl, formatProductTitleText, toIngredientTitleCase } from '../utils/helpers';
+import { buildImageUrl, formatLifeStage, formatProductTitleText, toIngredientTitleCase } from '../utils/helpers';
 import { pollUntilComplete } from '../utils/analysisPoll';
 import {
   clearPendingAnalysisScan,
   loadPendingAnalysisScan,
   savePendingAnalysisScan,
 } from '../utils/pendingAnalysisScan';
+
+const MISSING_FRONT_FIELD_LABEL: Record<string, string> = {
+  brand: 'brand',
+  lineName: 'product line',
+  targetPet: 'dog or cat label',
+};
+
+function buildFrontRescanMessage(missingFields?: string[]): string {
+  if (!missingFields?.length) {
+    return 'Please scan the front label again.';
+  }
+  const parts = missingFields.map((f) => MISSING_FRONT_FIELD_LABEL[f] ?? f);
+  let joined: string;
+  if (parts.length === 1) joined = parts[0];
+  else if (parts.length === 2) joined = `${parts[0]} or ${parts[1]}`;
+  else joined = `${parts.slice(0, -1).join(', ')}, or ${parts[parts.length - 1]}`;
+  return `We couldn't read the ${joined}. Please scan the front label again.`;
+}
 
 type ScanStep =
   | 'front'
@@ -125,6 +143,7 @@ export function TwoStepScanScreen() {
   }>({});
   const [analyzeStepsDone, setAnalyzeStepsDone] = useState([false, false, false, false]);
   const [processing, setProcessing] = useState(false);
+  const [frontRescanMessage, setFrontRescanMessage] = useState<string | null>(null);
   const [analyzeLabels, setAnalyzeLabels] = useState([
     'Reading ingredients',
     'Checking database',
@@ -245,10 +264,53 @@ export function TwoStepScanScreen() {
     };
   }, [runPoll, finishWithResult]);
 
+  /** DB product match → quickAnalyze → Result (same as tapping a suggestion). */
+  const runQuickAnalyzeForProduct = useCallback(
+    async (productId: string, meta?: { name?: string; brand?: string; productType?: string }) => {
+      if (!pet) return;
+      setProcessing(true);
+      setFrontMeta({
+        productName: meta?.name,
+        brand: meta?.brand,
+        productType: meta?.productType,
+      });
+      setAnalyzeLabels([
+        'Loading ingredients',
+        'Checking database',
+        'Scoring',
+        'Generating report',
+      ]);
+      try {
+        const raw = await scanService.quickAnalyze(petToQuickAnalyzeBody(pet, productId));
+        const scanId = extractScanId(raw);
+        setStep('analyzing');
+        setProcessing(false);
+        const result = await runPoll(scanId);
+        finishWithResult(result);
+      } catch (e) {
+        console.warn('[SCAN] quickAnalyze failed:', e);
+        setProcessing(false);
+        Alert.alert('Analysis Failed', 'Could not analyze this product. Please try again.');
+      }
+    },
+    [pet, runPoll, finishWithResult]
+  );
+
   /** Shared front-scan tail: metadata + candidate list or straight to back step. */
   const applyFrontResult = useCallback(async (res: ScanFrontResponse) => {
+    setFrontRescanMessage(null);
     setPendingScanId(res.pendingScanId ?? null);
     packageShapeRef.current = res.captured?.packageShape ?? null;
+
+    if (res.matchType === 'exact' && res.product?.id) {
+      await runQuickAnalyzeForProduct(res.product.id, {
+        name: res.product.name ?? res.captured?.productName,
+        brand: res.product.brand ?? res.captured?.brand,
+        productType: res.product.productType ?? res.captured?.productType,
+      });
+      return;
+    }
+
     setFrontMeta({
       productName: res.captured?.productName,
       brand: res.captured?.brand,
@@ -268,7 +330,7 @@ export function TwoStepScanScreen() {
         setStep('back');
       }
     }
-  }, [pet, runPoll, finishWithResult]);
+  }, [runQuickAnalyzeForProduct]);
 
   const doFrontScan = useCallback(async (uri: string) => {
     if (frontScanInFlightRef.current) return;
@@ -279,10 +341,16 @@ export function TwoStepScanScreen() {
       const res = await scanService.scanFrontLabel(uri);
       pendingFrontImageRef.current = null;
       frontScanInFlightRef.current = false;
-      applyFrontResult(res);
+      await applyFrontResult(res);
     } catch (e) {
       console.warn('[FRONT] scan failed:', e);
       frontScanInFlightRef.current = false;
+      if (e instanceof ApiUploadError && e.code === 'incomplete_front_scan') {
+        const msg = buildFrontRescanMessage(e.missingFields);
+        setFrontRescanMessage(msg);
+        Alert.alert('Rescan needed', msg, [{ text: 'OK' }]);
+        return;
+      }
       if (e instanceof ApiUploadError && e.code === 'back_label_detected') {
         Alert.alert(
           'Ingredients label detected',
@@ -344,28 +412,13 @@ export function TwoStepScanScreen() {
   const onSelectCandidate = useCallback(
     async (c: ProductCandidate) => {
       if (!pet || !pendingScanId) return;
-      setProcessing(true);
-      setFrontMeta({ productName: c.name, brand: c.brand, productType: c.productType ?? c.product_type });
-      setAnalyzeLabels([
-        'Loading ingredients',
-        'Checking database',
-        'Scoring',
-        'Generating report',
-      ]);
-      try {
-        const body = petToQuickAnalyzeBody(pet, c.id);
-        const raw = await scanService.quickAnalyze(body);
-        const scanId = extractScanId(raw);
-        setStep('analyzing');
-        setProcessing(false);
-        const result = await runPoll(scanId);
-        finishWithResult(result);
-      } catch (e) {
-        console.warn('[SCAN] onSelectCandidate error:', e);
-        setProcessing(false);
-      }
+      await runQuickAnalyzeForProduct(c.id, {
+        name: c.name,
+        brand: c.brand,
+        productType: c.productType ?? c.product_type,
+      });
     },
-    [pet, pendingScanId, runPoll, finishWithResult]
+    [pet, pendingScanId, runQuickAnalyzeForProduct]
   );
 
   const onNotHereScanBack = useCallback(() => {
@@ -569,7 +622,7 @@ export function TwoStepScanScreen() {
                         {lifeStage && lifeStage !== 'all' ? (
                           <View style={[s.candidateTypePill, { backgroundColor: colors.accent + '14' }]}>
                             <Text style={[s.candidateTypeText, { color: colors.accent }]}>
-                              {lifeStage.replace(/\b\w/g, l => l.toUpperCase())}
+                              {formatLifeStage(lifeStage, petType)}
                             </Text>
                           </View>
                         ) : null}
@@ -640,6 +693,12 @@ export function TwoStepScanScreen() {
             <View style={s.textBlock}>
               <Text style={s.stepTitle}>Scan the Front Label</Text>
             </View>
+            {frontRescanMessage ? (
+              <View style={s.frontRescanBanner}>
+                <Ionicons name="alert-circle" size={22} color={colors.warning} />
+                <Text style={s.frontRescanBody}>{frontRescanMessage}</Text>
+              </View>
+            ) : null}
             <View style={s.spacer} />
             <View style={s.buttonGroup}>
               <Pressable style={s.primaryBtn} onPress={onFrontCapture}>
@@ -1010,6 +1069,25 @@ const s = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
     textAlign: 'center',
+  },
+  frontRescanBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: spacing.lg,
+    marginHorizontal: spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: colors.warning + '18',
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    borderColor: colors.warning + '55',
+  },
+  frontRescanBody: {
+    ...typography.bodySmall,
+    flex: 1,
+    color: colors.textPrimary,
+    lineHeight: 18,
   },
   cameraTipBox: {
     flexDirection: 'row',
@@ -1512,6 +1590,11 @@ const s = StyleSheet.create({
   editorRowActive: {
     backgroundColor: colors.primary,
   },
+  editorRowTouched: {
+    backgroundColor: colors.safe + '22',
+    borderWidth: 1,
+    borderColor: colors.safe + '44',
+  },
   editorRowTextActive: {
     color: colors.white,
   },
@@ -1699,6 +1782,7 @@ interface EditorRowProps {
   item: EditorItem;
   index: number;
   editingId: string | null;
+  isLastTouched: boolean;
   startEdit: (id: string, text: string) => void;
   removeItem: (id: string) => void;
 }
@@ -1804,6 +1888,7 @@ const EditorRowItem = memo(function EditorRowItem({
   item,
   index: idx,
   editingId,
+  isLastTouched,
   startEdit,
   removeItem,
 }: EditorRowProps) {
@@ -1811,7 +1896,11 @@ const EditorRowItem = memo(function EditorRowItem({
   const isEditing = editingId === item.id;
 
   return (
-    <View style={[s.editorRow, isEditing && s.editorRowActive]}>
+    <View style={[
+      s.editorRow,
+      isLastTouched && !isEditing && s.editorRowTouched,
+      isEditing && s.editorRowActive,
+    ]}>
       <Pressable onLongPress={drag} style={s.editorDragHandle}>
         <Ionicons name="reorder-three" size={22} color={colors.textSecondary} />
       </Pressable>
@@ -1891,9 +1980,11 @@ function IngredientEditorStep({
   const removeItem = useCallback((id: string) => {
     setItems(prev => prev.filter(it => it.id !== id));
     if (editingId === id) { setEditingId(null); setEditText(''); setSuggestions([]); }
+    setLastTouchedId(prev => (prev === id ? null : prev));
   }, [editingId]);
 
   const [insertIndex, setInsertIndex] = useState<number | null>(null);
+  const [lastTouchedId, setLastTouchedId] = useState<string | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const [inputDockHeight, setInputDockHeight] = useState(0);
   const [suggestDockHeight, setSuggestDockHeight] = useState(0);
@@ -2052,9 +2143,11 @@ function IngredientEditorStep({
       const newId = `ing-${nextIdRef.current++}`;
       const pos = insertIndex ?? items.length;
       setItems(prev => [...prev.slice(0, pos), { id: newId, text: trimmed }, ...prev.slice(pos)]);
+      setLastTouchedId(newId);
       scrollToInsertedItem(pos, items.length + 1);
     } else {
       setItems(prev => prev.map(it => it.id === editingId ? { ...it, text: trimmed } : it));
+      setLastTouchedId(editingId);
     }
     setEditingId(null);
     setEditText('');
@@ -2077,9 +2170,11 @@ function IngredientEditorStep({
       const newId = `ing-${nextIdRef.current++}`;
       const pos = insertIndex ?? items.length;
       setItems(prev => [...prev.slice(0, pos), { id: newId, text }, ...prev.slice(pos)]);
+      setLastTouchedId(newId);
       scrollToInsertedItem(pos, items.length + 1);
     } else {
       setItems(prev => prev.map(it => it.id === editingId ? { ...it, text } : it));
+      setLastTouchedId(editingId);
     }
     setEditingId(null);
     setEditText('');
@@ -2098,6 +2193,7 @@ function IngredientEditorStep({
         item={item}
         index={index}
         editingId={editingId}
+        isLastTouched={lastTouchedId === item.id}
         startEdit={startEdit}
         removeItem={removeItem}
       />
@@ -2119,7 +2215,7 @@ function IngredientEditorStep({
         <View style={s.editorInsertLine} />
       </Pressable>
     </View>
-  ), [editingId, startEdit, removeItem, startAdd, insertIndex, isAdding]);
+  ), [editingId, startEdit, removeItem, startAdd, insertIndex, isAdding, lastTouchedId]);
 
   return (
     <View style={s.editorContainer}>

@@ -90,3 +90,22 @@ export function toIngredientTitleCase(value: string): string {
     )
     .join(' ');
 }
+
+/** Life stage pill label (handles legacy puppy_kitten). */
+export function formatLifeStage(
+  lifeStage?: string | null,
+  petType?: string | null
+): string {
+  if (!lifeStage || lifeStage === 'all') return '';
+  const stage = lifeStage.toLowerCase();
+  if (stage === 'puppy') return 'Puppy';
+  if (stage === 'kitten') return 'Kitten';
+  if (stage === 'puppy_kitten') {
+    if (petType === 'cat') return 'Kitten';
+    if (petType === 'dog') return 'Puppy';
+    return 'Young';
+  }
+  if (stage === 'adult') return 'Adult';
+  if (stage === 'senior') return 'Senior';
+  return lifeStage.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}

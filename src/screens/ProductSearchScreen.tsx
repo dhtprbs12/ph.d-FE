@@ -41,7 +41,7 @@ async function fetchWithRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 15
 
 type PetTypeFilter = 'dog' | 'cat' | '';
 type FoodType = '' | 'dry_food' | 'wet_food' | 'treats' | 'supplement';
-type LifeStage = '' | 'puppy_kitten' | 'adult' | 'senior';
+type LifeStage = '' | 'puppy' | 'kitten' | 'adult' | 'senior';
 type Diet = '' | 'grain_free' | 'with_grains';
 type Protein = '' | 'chicken' | 'beef' | 'fish' | 'lamb' | 'turkey' | 'duck';
 
@@ -62,20 +62,21 @@ const FOOD_CHIPS: ChipDef<FoodType>[] = [
 function lifeStageChips(petType: PetTypeFilter): ChipDef<LifeStage>[] {
   if (petType === 'dog') {
     return [
-      { value: 'puppy_kitten', label: 'Puppy', emoji: '🐶' },
+      { value: 'puppy', label: 'Puppy', emoji: '🐶' },
       { value: 'adult', label: 'Adult', emoji: '🐾' },
       { value: 'senior', label: 'Senior', emoji: '🐾' },
     ];
   }
   if (petType === 'cat') {
     return [
-      { value: 'puppy_kitten', label: 'Kitten', emoji: '🐱' },
+      { value: 'kitten', label: 'Kitten', emoji: '🐱' },
       { value: 'adult', label: 'Adult', emoji: '🐾' },
       { value: 'senior', label: 'Senior', emoji: '🐾' },
     ];
   }
   return [
-    { value: 'puppy_kitten', label: 'Puppy / Kitten', emoji: '🐾' },
+    { value: 'puppy', label: 'Puppy', emoji: '🐶' },
+    { value: 'kitten', label: 'Kitten', emoji: '🐱' },
     { value: 'adult', label: 'Adult', emoji: '🐾' },
     { value: 'senior', label: 'Senior', emoji: '🐾' },
   ];
