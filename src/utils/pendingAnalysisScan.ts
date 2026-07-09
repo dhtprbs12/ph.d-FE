@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PENDING_ANALYSIS_SCAN_KEY = 'pendingAnalysisScan';
-const PENDING_MAX_AGE_MS = 30 * 60 * 1000;
+const PENDING_MAX_AGE_MS = 3 * 60 * 1000;
 
 export interface PendingAnalysisScan {
   scanId: string;

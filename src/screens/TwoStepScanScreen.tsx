@@ -257,6 +257,8 @@ export function TwoStepScanScreen() {
         if (!cancelled) finishWithResult(result);
       } catch (e) {
         console.warn('[SCAN] resume pending analysis failed:', e);
+        await clearPendingAnalysisScan();
+        if (!cancelled) setStep('front');
       }
     })();
     return () => {
@@ -805,13 +807,16 @@ export function TwoStepScanScreen() {
                 );
               })}
             </View>
+            <View style={s.analyzeTimeHint}>
+              <Ionicons name="time-outline" size={22} color={colors.warning} />
+              <Text style={s.analyzeTimeHintText}>
+                First-time scans can take up to a minute while we build your report
+              </Text>
+            </View>
             <View style={s.spacer} />
             <View style={s.analyzeFooter}>
               <Text style={s.analyzeFooterLight}>
                 You can switch apps — we'll pick up when you return
-              </Text>
-              <Text style={s.analyzeFooterLight}>
-                First-time scans take longer while we build the analysis
               </Text>
               <Text style={s.analyzeFooterTeal}>Previously scanned products are instant</Text>
             </View>
@@ -1398,20 +1403,41 @@ const s = StyleSheet.create({
     fontWeight: '400',
     color: colors.textSecondary,
   },
+  analyzeTimeHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: spacing.xl + spacing.sm,
+    marginHorizontal: spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: colors.warning + '18',
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    borderColor: colors.warning + '45',
+  },
+  analyzeTimeHintText: {
+    flex: 1,
+    ...typography.bodyMedium,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    lineHeight: 22,
+  },
   analyzeFooter: {
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingBottom: spacing.xl,
   },
   analyzeFooterLight: {
-    fontSize: 12,
-    color: 'rgba(92,107,102,0.6)',
+    ...typography.bodySmall,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   analyzeFooterTeal: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(45,106,79,0.7)',
+    ...typography.bodySmall,
+    fontWeight: '600',
+    color: colors.primary,
+    textAlign: 'center',
   },
   illusOuter: {
     alignSelf: 'center',
