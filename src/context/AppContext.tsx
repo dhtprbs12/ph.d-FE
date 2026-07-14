@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useReducer, useCallback } 
 import type { Pet } from '../types';
 import * as authService from '../services/authService';
 import * as petService from '../services/petService';
+import { uploadImage } from '../services/api';
 import { savePetsLocally, loadPetsLocally, saveSelectedPetId, getSelectedPetId, clearAllData } from '../utils/storage';
 
 interface AppState {
@@ -158,6 +159,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           })),
         });
         const finalPet = { ...newPet, id: serverPet.id };
+
+        if (newPet.photoData && !newPet.photoData.startsWith('http')) {
+          try {
+            const photoRes = await uploadImage<{ photo_url: string }>(
+              `/pets/${serverPet.id}/photo`, newPet.photoData, undefined, 'photo'
+            );
+            finalPet.photo_url = photoRes.photo_url;
+          } catch (photoErr) {
+            console.warn('Pet photo upload failed:', photoErr);
+          }
+        }
+
         dispatch({ type: 'UPDATE_PET', pet: finalPet, oldId: newPet.id });
         dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
         await saveSelectedPetId(finalPet.id);
@@ -190,6 +203,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             notes: c.notes,
           })),
         });
+
+        if (pet.photoData && !pet.photoData.startsWith('http')) {
+          try {
+            await uploadImage<{ photo_url: string }>(
+              `/pets/${pet.id}/photo`, pet.photoData, undefined, 'photo'
+            );
+          } catch (photoErr) {
+            console.warn('Pet photo upload failed:', photoErr);
+          }
+        }
       } catch (e) {
         console.warn('Server update failed:', e);
       }

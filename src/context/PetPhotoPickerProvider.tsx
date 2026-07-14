@@ -25,7 +25,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { PetPhotoCropEditor } from '../components/PetPhotoCropEditor';
 import { colors, radius, spacing, typography } from '../theme';
 
-type FlowStep = 'camera' | 'loading' | 'crop';
+type FlowStep = 'camera' | 'crop';
 
 type CropData = {
   uri: string;
@@ -108,32 +108,32 @@ export function PetPhotoPickerProvider({ children }: { children: React.ReactNode
   const launchLibrary = useCallback(async () => {
     if (busyRef.current) return;
     setBusy(true);
-    setStep('loading');
-    setVisible(true);
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Needed', 'Photo library access is required to choose a photo.');
-        closeFlow();
+        setBusy(false);
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: false,
+        allowsEditing: true,
+        aspect: [1, 1],
         quality: 0.85,
       });
       if (result.canceled || !result.assets[0]?.uri) {
-        closeFlow();
+        setBusy(false);
         return;
       }
       const asset = result.assets[0];
-      openCrop(asset.uri, asset.width, asset.height);
+      optionsRef.current?.onPhotoSelected(asset.uri);
+      setBusy(false);
     } catch (e) {
       console.warn('[PetPhotoPicker] library failed:', e);
       Alert.alert('Error', 'Could not open the photo library.');
-      closeFlow();
+      setBusy(false);
     }
-  }, [closeFlow, openCrop, setBusy]);
+  }, [setBusy]);
 
   const openPicker = useCallback((options: PickerOptions) => {
     if (busyRef.current) return;
@@ -236,27 +236,18 @@ export function PetPhotoPickerProvider({ children }: { children: React.ReactNode
                 </>
               )}
             </View>
-          ) : (
+          ) : step === 'crop' && cropData ? (
             <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-              {step === 'loading' && (
-                <View style={styles.loadingScreen}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <Text style={styles.loadingText}>Opening photo…</Text>
-                </View>
-              )}
-
-              {step === 'crop' && cropData && (
-                <PetPhotoCropEditor
-                  active={step === 'crop'}
-                  imageUri={cropData.uri}
-                  imageWidth={cropData.width}
-                  imageHeight={cropData.height}
-                  onCancel={closeFlow}
-                  onDone={handleCropDone}
-                />
-              )}
+              <PetPhotoCropEditor
+                active={step === 'crop'}
+                imageUri={cropData.uri}
+                imageWidth={cropData.width}
+                imageHeight={cropData.height}
+                onCancel={closeFlow}
+                onDone={handleCropDone}
+              />
             </View>
-          )}
+          ) : null}
         </GestureHandlerRootView>
       </Modal>
     </PetPhotoPickerContext.Provider>
@@ -356,15 +347,5 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: colors.white,
-  },
-  loadingScreen: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  loadingText: {
-    ...typography.bodyMedium,
-    color: colors.white,
   },
 });
