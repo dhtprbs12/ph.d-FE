@@ -122,6 +122,15 @@ function petToBackFields(pet: Pet): scanService.ScanBackPetFields {
   };
 }
 
+function formatBrandLine(manufacturer?: string, brand?: string): string | null {
+  const mfr = manufacturer?.trim();
+  const b = brand?.trim();
+  if (!mfr && !b) return null;
+  if (!mfr || mfr.toLowerCase() === b?.toLowerCase()) return b || null;
+  if (!b) return mfr;
+  return `${mfr} · ${b}`;
+}
+
 export function TwoStepScanScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList, 'TwoStepScan'>>();
   const { selectedPet } = useApp();
@@ -138,6 +147,7 @@ export function TwoStepScanScreen() {
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [frontMeta, setFrontMeta] = useState<{
     productName?: string;
+    manufacturer?: string;
     brand?: string;
     productType?: string;
   }>({});
@@ -268,11 +278,12 @@ export function TwoStepScanScreen() {
 
   /** DB product match → quickAnalyze → Result (same as tapping a suggestion). */
   const runQuickAnalyzeForProduct = useCallback(
-    async (productId: string, meta?: { name?: string; brand?: string; productType?: string }) => {
+    async (productId: string, meta?: { name?: string; manufacturer?: string; brand?: string; productType?: string }) => {
       if (!pet) return;
       setProcessing(true);
       setFrontMeta({
         productName: meta?.name,
+        manufacturer: meta?.manufacturer,
         brand: meta?.brand,
         productType: meta?.productType,
       });
@@ -307,6 +318,7 @@ export function TwoStepScanScreen() {
     if (res.matchType === 'exact' && res.product?.id) {
       await runQuickAnalyzeForProduct(res.product.id, {
         name: res.product.name ?? res.captured?.productName,
+        manufacturer: res.product.manufacturer ?? res.captured?.manufacturer,
         brand: res.product.brand ?? res.captured?.brand,
         productType: res.product.productType ?? res.captured?.productType,
       });
@@ -315,6 +327,7 @@ export function TwoStepScanScreen() {
 
     setFrontMeta({
       productName: res.captured?.productName,
+      manufacturer: res.captured?.manufacturer,
       brand: res.captured?.brand,
       productType: res.captured?.productType,
     });
@@ -416,6 +429,7 @@ export function TwoStepScanScreen() {
       if (!pet || !pendingScanId) return;
       await runQuickAnalyzeForProduct(c.id, {
         name: c.name,
+        manufacturer: c.manufacturer,
         brand: c.brand,
         productType: c.productType ?? c.product_type,
       });
@@ -562,10 +576,10 @@ export function TwoStepScanScreen() {
               <Ionicons name="search" size={18} color={colors.primary} />
               <Text style={s.candidateTitle}>Is this your product?</Text>
             </View>
-            {(frontMeta.brand || frontMeta.productName) && (
+            {(frontMeta.brand || frontMeta.manufacturer || frontMeta.productName) && (
               <Text style={s.candidateSubtitle}>
                 Matches for "
-                {[frontMeta.brand, frontMeta.productName]
+                {[formatBrandLine(frontMeta.manufacturer, frontMeta.brand), frontMeta.productName]
                   .filter(Boolean)
                   .map((x) => formatProductTitleText(String(x)))
                   .join(' ')}
@@ -677,7 +691,7 @@ export function TwoStepScanScreen() {
           <IngredientEditorStep
             ingredients={ingredientsForEditor}
             productName={frontMeta.productName}
-            brand={frontMeta.brand}
+            brand={formatBrandLine(frontMeta.manufacturer, frontMeta.brand) ?? undefined}
             onConfirm={onEditorConfirm}
             onCancel={() => setStep('back')}
           />
@@ -719,7 +733,7 @@ export function TwoStepScanScreen() {
           <View style={s.stepContainer}>
             {/* Captured chip pinned at top so the user always sees what
                 product they're scanning ingredients for. */}
-            {(frontMeta.brand || frontMeta.productName) && (
+            {(frontMeta.brand || frontMeta.manufacturer || frontMeta.productName) && (
               <View style={s.capturedChipTop}>
                 <Ionicons
                   name="checkmark-circle"
@@ -728,9 +742,9 @@ export function TwoStepScanScreen() {
                   style={s.capturedChipIcon}
                 />
                 <View style={s.capturedChipTextCol}>
-                  {frontMeta.brand ? (
+                  {formatBrandLine(frontMeta.manufacturer, frontMeta.brand) ? (
                     <Text style={s.capturedChipBrand} numberOfLines={1}>
-                      {formatProductTitleText(frontMeta.brand)}
+                      {formatProductTitleText(formatBrandLine(frontMeta.manufacturer, frontMeta.brand)!)}
                     </Text>
                   ) : null}
                   <Text style={s.capturedChipName} numberOfLines={2}>
@@ -772,10 +786,10 @@ export function TwoStepScanScreen() {
         {step === 'analyzing' && (
           <View style={s.analyzingContainer}>
             <View style={s.spacer} />
-            {(frontMeta.brand || frontMeta.productName) && (
+            {(frontMeta.brand || frontMeta.manufacturer || frontMeta.productName) && (
               <View style={s.analyzingCard}>
-                {frontMeta.brand ? (
-                  <Text style={s.analyzingBrand}>{formatProductTitleText(frontMeta.brand)}</Text>
+                {formatBrandLine(frontMeta.manufacturer, frontMeta.brand) ? (
+                  <Text style={s.analyzingBrand}>{formatProductTitleText(formatBrandLine(frontMeta.manufacturer, frontMeta.brand)!)}</Text>
                 ) : null}
                 <Text style={s.analyzingName}>{formatProductTitleText(frontMeta.productName ?? 'Product')}</Text>
               </View>

@@ -103,9 +103,18 @@ const ResultSharePngCard = React.forwardRef<
     const pet = scanResult.pet;
     const ai = scanResult.aiInsights;
     const nameRaw = p?.name ?? scanResult.extracted?.productName ?? 'Product';
+    const mfrRaw = p?.manufacturer ?? scanResult.extracted?.manufacturer;
     const brandRaw = p?.brand ?? scanResult.extracted?.brand;
     const name = formatProductTitleText(nameRaw);
-    const brand = brandRaw ? formatProductTitleText(brandRaw) : undefined;
+    const brandLine = (() => {
+      const mfr = mfrRaw?.trim();
+      const b = brandRaw?.trim();
+      if (!mfr && !b) return undefined;
+      if (!mfr || mfr.toLowerCase() === b?.toLowerCase()) return b;
+      if (!b) return mfr;
+      return `${mfr} · ${b}`;
+    })();
+    const brand = brandLine ? formatProductTitleText(brandLine) : undefined;
     const score = Math.round(a?.finalScore ?? 0);
     const grade = (a?.grade ?? '—').toString().toUpperCase();
     const gDesc = getGradeDescription(grade);
@@ -708,9 +717,17 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
       )}
 
       {/* Brand */}
-      {product?.brand && (
-        <Text style={st.headerBrand}>{formatProductTitleText(product.brand)}</Text>
-      )}
+      {(() => {
+        const mfr = product?.manufacturer?.trim();
+        const b = product?.brand?.trim();
+        const fallbackBrand = scanResult.extracted?.brand?.trim();
+        const brandVal = b || fallbackBrand;
+        if (!mfr && !brandVal) return null;
+        const display = (!mfr || mfr.toLowerCase() === brandVal?.toLowerCase())
+          ? brandVal
+          : !brandVal ? mfr : `${mfr} · ${brandVal}`;
+        return display ? <Text style={st.headerBrand}>{formatProductTitleText(display)}</Text> : null;
+      })()}
 
       {/* Name */}
       <Text style={st.headerName}>

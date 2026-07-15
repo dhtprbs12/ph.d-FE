@@ -71,6 +71,7 @@ export interface ScanFrontResponse {
   product?: {
     id: string;
     name?: string;
+    manufacturer?: string;
     brand?: string;
     imageUrl?: string;
     productType?: string;
@@ -78,6 +79,7 @@ export interface ScanFrontResponse {
   };
   captured?: {
     productName?: string;
+    manufacturer?: string;
     brand?: string;
     targetPet?: string;
     productType?: string;
@@ -153,6 +155,7 @@ export interface Product {
   id: string;
   barcode?: string;
   name: string;
+  manufacturer?: string;
   brand?: string;
   product_type?: string;
   texture?: string;
@@ -170,6 +173,7 @@ export interface ScanResult {
   scanType: string;
   extracted?: {
     productName?: string;
+    manufacturer?: string;
     brand?: string;
     targetPet?: string;
     ingredientCount?: number;
@@ -178,6 +182,7 @@ export interface ScanResult {
   product?: {
     id?: string;
     name?: string;
+    manufacturer?: string;
     brand?: string;
     imageUrl?: string;
     image_url?: string;
@@ -251,6 +256,7 @@ export interface ConditionWarning {
 export interface ProductCandidate {
   id: string;
   name?: string;
+  manufacturer?: string;
   brand?: string;
   imageUrl?: string;
   image_url?: string;
