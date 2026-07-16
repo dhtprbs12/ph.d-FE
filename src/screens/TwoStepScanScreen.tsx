@@ -577,14 +577,18 @@ export function TwoStepScanScreen() {
               <Text style={s.candidateTitle}>Is this your product?</Text>
             </View>
             {(frontMeta.brand || frontMeta.manufacturer || frontMeta.productName) && (
-              <Text style={s.candidateSubtitle}>
-                Matches for "
-                {[formatBrandLine(frontMeta.manufacturer, frontMeta.brand), frontMeta.productName]
-                  .filter(Boolean)
-                  .map((x) => formatProductTitleText(String(x)))
-                  .join(' ')}
-                "
-              </Text>
+              <View style={s.candidateScannedInfo}>
+                {formatBrandLine(frontMeta.manufacturer, frontMeta.brand) ? (
+                  <Text style={s.candidateScannedBrand} numberOfLines={1}>
+                    {formatProductTitleText(formatBrandLine(frontMeta.manufacturer, frontMeta.brand)!)}
+                  </Text>
+                ) : null}
+                {frontMeta.productName ? (
+                  <Text style={s.candidateScannedName} numberOfLines={2}>
+                    {formatProductTitleText(frontMeta.productName)}
+                  </Text>
+                ) : null}
+              </View>
             )}
           </View>
           <ScrollView
@@ -1185,10 +1189,22 @@ const s = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
   },
-  candidateSubtitle: {
+  candidateScannedInfo: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  candidateScannedBrand: {
     fontSize: 12,
-    color: colors.textSecondary,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.5,
+  },
+  candidateScannedName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
     textAlign: 'center',
+    marginTop: 2,
   },
   // selectCandidate step is rendered OUTSIDE the screen-wide ScrollView
   // so we own a flex column here: header (intrinsic) + list (flex: 1)
