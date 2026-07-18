@@ -1,4 +1,3 @@
-import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Platform } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -6,90 +5,118 @@ import * as ImageManipulator from 'expo-image-manipulator';
 const BASE_URL = 'https://phd-be-production.up.railway.app/api';
 const AUTH_TOKEN_KEY = 'authToken';
 
-const api: AxiosInstance = axios.create({
-  baseURL: BASE_URL,
-  timeout: 120_000,
-  headers: {
-    Accept: 'application/json',
-  },
-});
+let isLoggingOut = false;
 
-function logApiError(error: unknown, context?: string): void {
-  const prefix = context ? `[API] ${context}` : '[API]';
-  if (axios.isAxiosError(error)) {
-    const ax = error as AxiosError;
-    const status = ax.response?.status;
-    const data = ax.response?.data;
-    const msg = ax.message;
-    console.error(prefix, { status, data, message: msg, url: ax.config?.url });
-  } else {
-    console.error(prefix, error);
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  try {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {}
+  return headers;
+}
+
+async function handle401() {
+  if (isLoggingOut) return;
+  isLoggingOut = true;
+  try {
+    const { clearAuthData } = await import('../utils/tokenUtils');
+    const { resetToLogin } = await import('../navigation/navigationRef');
+    await clearAuthData();
+    Alert.alert('Session Expired', 'Please log in again to continue.', [
+      { text: 'OK', onPress: () => resetToLogin() },
+    ]);
+  } catch (e) {
+    console.warn('[API] Failed to handle 401 logout:', e);
+  } finally {
+    setTimeout(() => { isLoggingOut = false; }, 3000);
   }
 }
 
-api.interceptors.request.use(
-  async (config: InternalAxiosRequestConfig) => {
-    try {
-      const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch (e) {
-      logApiError(e, 'request interceptor (AsyncStorage)');
+type ApiResponse<T = any> = { data: T; status: number };
+
+async function request<T = any>(
+  method: string,
+  url: string,
+  body?: any,
+  config?: { timeout?: number; params?: Record<string, string> }
+): Promise<ApiResponse<T>> {
+  const fullUrl = new URL(`${BASE_URL}${url}`);
+  if (config?.params) {
+    for (const [k, v] of Object.entries(config.params)) {
+      if (v !== undefined && v !== null) fullUrl.searchParams.set(k, v);
     }
-    if (
-      config.data &&
-      typeof config.data === 'object' &&
-      !(config.data instanceof FormData) &&
-      !config.headers['Content-Type']
-    ) {
-      config.headers['Content-Type'] = 'application/json';
-      config.data = JSON.stringify(config.data);
+  }
+
+  const headers = await getAuthHeaders();
+
+  const fetchOptions: RequestInit = { method, headers };
+
+  if (body && method !== 'GET') {
+    (headers as Record<string, string>)['Content-Type'] = 'application/json';
+    fetchOptions.body = JSON.stringify(body);
+  }
+
+  const controller = new AbortController();
+  const timeout = config?.timeout ?? 120_000;
+  const timer = setTimeout(() => controller.abort(), timeout);
+  fetchOptions.signal = controller.signal;
+
+  try {
+    const response = await fetch(fullUrl.toString(), fetchOptions);
+    clearTimeout(timer);
+
+    const text = await response.text();
+    let data: any;
+    try { data = JSON.parse(text); } catch { data = text; }
+
+    if (response.status === 401) {
+      handle401();
     }
-    return config;
+
+    if (!response.ok) {
+      const error: any = new Error(data?.message || data?.error || `Request failed with status code ${response.status}`);
+      error.response = { status: response.status, data };
+      error.status = response.status;
+      error.config = { url };
+      console.error('[API] response', { status: response.status, data, message: error.message, url });
+      throw error;
+    }
+
+    return { data, status: response.status };
+  } catch (e: any) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') {
+      const error: any = new Error('Network timeout');
+      error.config = { url };
+      console.error('[API] response', { status: undefined, data: undefined, message: 'Network timeout', url });
+      throw error;
+    }
+    if (!e.response) {
+      console.error('[API] response', { status: undefined, data: undefined, message: e.message, url });
+    }
+    throw e;
+  }
+}
+
+const api = {
+  get<T = any>(url: string, config?: { params?: Record<string, string>; timeout?: number }): Promise<ApiResponse<T>> {
+    return request<T>('GET', url, undefined, config);
   },
-  (error) => {
-    logApiError(error, 'request interceptor');
-    return Promise.reject(error);
-  }
-);
+  post<T = any>(url: string, data?: any, config?: { timeout?: number }): Promise<ApiResponse<T>> {
+    return request<T>('POST', url, data, config);
+  },
+  put<T = any>(url: string, data?: any, config?: { timeout?: number }): Promise<ApiResponse<T>> {
+    return request<T>('PUT', url, data, config);
+  },
+  patch<T = any>(url: string, data?: any, config?: { timeout?: number }): Promise<ApiResponse<T>> {
+    return request<T>('PATCH', url, data, config);
+  },
+  delete<T = any>(url: string, config?: { timeout?: number }): Promise<ApiResponse<T>> {
+    return request<T>('DELETE', url, undefined, config);
+  },
+};
 
-let isLoggingOut = false;
-
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    logApiError(error, 'response');
-
-    if (error.response?.status === 401 && !isLoggingOut) {
-      isLoggingOut = true;
-      try {
-        const { clearAuthData } = await import('../utils/tokenUtils');
-        const { resetToLogin } = await import('../navigation/navigationRef');
-        await clearAuthData();
-        Alert.alert(
-          'Session Expired',
-          'Please log in again to continue.',
-          [{ text: 'OK', onPress: () => resetToLogin() }],
-        );
-      } catch (e) {
-        console.warn('[API] Failed to handle 401 logout:', e);
-      } finally {
-        setTimeout(() => { isLoggingOut = false; }, 3000);
-      }
-    }
-
-    return Promise.reject(error);
-  }
-);
-
-// Cap on the longest image side before upload. Server downsizes the
-// final image again (sharp ➜ JPEG) so going bigger here than the
-// server's bound is pure waste; going smaller here is the OCR
-// bottleneck because small printed text on ingredient panels needs
-// pixel headroom. 2000 was chosen to keep ~7-pt label text legible
-// after the JPEG round-trip while staying under typical cellular
-// upload budgets (~600KB/frame).
 const UPLOAD_MAX_DIMENSION = 2000;
 
 export class ApiUploadError extends Error {
@@ -100,12 +127,7 @@ export class ApiUploadError extends Error {
 
   constructor(
     status: number,
-    body: {
-      error?: string;
-      message?: string;
-      suggestion?: string;
-      missingFields?: string[];
-    }
+    body: { error?: string; message?: string; suggestion?: string; missingFields?: string[] }
   ) {
     super(body.message || body.error || `Upload failed (${status})`);
     this.name = 'ApiUploadError';
@@ -116,25 +138,12 @@ export class ApiUploadError extends Error {
   }
 }
 
-/** React Native FormData expects different URI shapes per platform. */
 function getUploadUri(uri: string): string {
-  if (Platform.OS === 'ios') {
-    return uri.replace('file://', '');
-  }
-  if (uri.startsWith('file://') || uri.startsWith('content://')) {
-    return uri;
-  }
+  if (Platform.OS === 'ios') return uri.replace('file://', '');
+  if (uri.startsWith('file://') || uri.startsWith('content://')) return uri;
   return `file://${uri}`;
 }
 
-/**
- * Multipart upload with field name `image` (JPEG). Optional string fields are appended for mixed forms.
- *
- * Resizes the image so the longest side is at most UPLOAD_MAX_DIMENSION before
- * uploading. expo-image-manipulator preserves aspect ratio when only one of
- * `width` / `height` is supplied, so we pick whichever side is the longer one.
- * Falls back to a no-resize JPEG conversion if we can't read dimensions.
- */
 export async function uploadImage<T>(
   endpoint: string,
   imageUri: string,
@@ -147,9 +156,7 @@ export async function uploadImage<T>(
     const probe = await ImageManipulator.manipulateAsync(imageUri, [], {});
     probedWidth = probe.width;
     probedHeight = probe.height;
-  } catch {
-    // Probe failed — proceed with no resize, just HEIC→JPEG conversion.
-  }
+  } catch {}
 
   const resizeAction: ImageManipulator.Action[] = [];
   if (probedWidth && probedHeight) {
@@ -163,7 +170,6 @@ export async function uploadImage<T>(
     }
   }
 
-  // Convert HEIC/HEIF to JPEG and (optionally) resize in one pass
   const manipulated = await ImageManipulator.manipulateAsync(
     imageUri,
     resizeAction,
@@ -187,45 +193,23 @@ export async function uploadImage<T>(
   }
 
   try {
-    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    const headers = await getAuthHeaders();
     const response = await fetch(`${BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { Accept: 'application/json', ...headers },
       body: formData,
     });
 
     const data = await response.json().catch(() => ({}));
-    if (response.status === 401 && !isLoggingOut) {
-      isLoggingOut = true;
-      try {
-        const { clearAuthData } = await import('../utils/tokenUtils');
-        const { resetToLogin } = await import('../navigation/navigationRef');
-        await clearAuthData();
-        Alert.alert(
-          'Session Expired',
-          'Please log in again to continue.',
-          [{ text: 'OK', onPress: () => resetToLogin() }],
-        );
-      } catch (logoutErr) {
-        console.warn('[API] Failed to handle 401 logout:', logoutErr);
-      } finally {
-        setTimeout(() => { isLoggingOut = false; }, 3000);
-      }
-    }
+    if (response.status === 401) handle401();
     if (!response.ok) {
       throw new ApiUploadError(response.status, data as {
-        error?: string;
-        message?: string;
-        suggestion?: string;
-        missingFields?: string[];
+        error?: string; message?: string; suggestion?: string; missingFields?: string[];
       });
     }
     return data as T;
   } catch (e) {
-    logApiError(e, `uploadImage ${endpoint}`);
+    console.error('[API] uploadImage', endpoint, e);
     throw e;
   }
 }
