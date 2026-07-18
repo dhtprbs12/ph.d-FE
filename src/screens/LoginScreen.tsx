@@ -7,6 +7,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as authService from '../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useApp } from '../context/AppContext';
 import { colors, spacing, radius, typography } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -14,6 +15,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { authenticateAndSync } = useApp();
   const [nickname, setNickname] = useState('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,6 +36,7 @@ export default function LoginScreen({ navigation }: Props) {
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('userId', user.id);
       await AsyncStorage.setItem('userNickname', nickname.trim());
+      await authenticateAndSync();
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (e: any) {
       const data = e?.response?.data;
