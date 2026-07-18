@@ -10,8 +10,7 @@ const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 120_000,
   headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    Accept: 'application/json',
   },
 });
 
@@ -37,6 +36,15 @@ api.interceptors.request.use(
       }
     } catch (e) {
       logApiError(e, 'request interceptor (AsyncStorage)');
+    }
+    if (
+      config.data &&
+      typeof config.data === 'object' &&
+      !(config.data instanceof FormData) &&
+      !config.headers['Content-Type']
+    ) {
+      config.headers['Content-Type'] = 'application/json';
+      config.data = JSON.stringify(config.data);
     }
     return config;
   },
