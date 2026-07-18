@@ -32,6 +32,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [nicknameChecking, setNicknameChecking] = useState(false);
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
+  const [showPin, setShowPin] = useState(false);
 
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<'dog' | 'cat'>('dog');
@@ -184,28 +185,38 @@ export default function SignupScreen({ navigation }: Props) {
             )}
 
             <Text style={styles.label}>PIN (4-6 digits)</Text>
-            <TextInput
-              style={styles.input}
-              value={pin}
-              onChangeText={setPin}
-              placeholder="••••"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="number-pad"
-              secureTextEntry
-              maxLength={6}
-            />
+            <View style={styles.pinRow}>
+              <TextInput
+                style={[styles.input, styles.pinInput]}
+                value={pin}
+                onChangeText={setPin}
+                placeholder="••••"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="number-pad"
+                secureTextEntry={!showPin}
+                maxLength={6}
+              />
+              <TouchableOpacity onPress={() => setShowPin(!showPin)} style={styles.eyeBtn}>
+                <Ionicons name={showPin ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.label}>Confirm PIN</Text>
-            <TextInput
-              style={styles.input}
-              value={pinConfirm}
-              onChangeText={setPinConfirm}
-              placeholder="••••"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="number-pad"
-              secureTextEntry
-              maxLength={6}
-            />
+            <View style={styles.pinRow}>
+              <TextInput
+                style={[styles.input, styles.pinInput]}
+                value={pinConfirm}
+                onChangeText={setPinConfirm}
+                placeholder="••••"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="number-pad"
+                secureTextEntry={!showPin}
+                maxLength={6}
+              />
+              <TouchableOpacity onPress={() => setShowPin(!showPin)} style={styles.eyeBtn}>
+                <Ionicons name={showPin ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
             {pinConfirm.length > 0 && !pinMatch && <Text style={styles.hint}>PINs do not match</Text>}
 
             <TouchableOpacity
@@ -416,6 +427,9 @@ const styles = StyleSheet.create({
   buttonText: { color: colors.white, ...typography.titleMedium },
   linkBtn: { marginTop: spacing.md, alignItems: 'center' },
   linkText: { color: colors.primary, ...typography.bodySmall },
+  pinRow: { flexDirection: 'row', alignItems: 'center' },
+  pinInput: { flex: 1 },
+  eyeBtn: { paddingHorizontal: 12, paddingVertical: 14 },
   row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   fieldUnit: { ...typography.labelSmall, color: colors.textSecondary, textAlign: 'center', marginTop: 4 },
   petTypeBtn: {
