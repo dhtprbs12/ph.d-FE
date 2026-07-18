@@ -9,6 +9,10 @@ const AUTH_TOKEN_KEY = 'authToken';
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 120_000,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
 });
 
 function logApiError(error: unknown, context?: string): void {
