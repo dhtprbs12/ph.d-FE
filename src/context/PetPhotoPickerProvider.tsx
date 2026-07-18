@@ -117,8 +117,7 @@ export function PetPhotoPickerProvider({ children }: { children: React.ReactNode
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
+        allowsEditing: false,
         quality: 0.85,
       });
       if (result.canceled || !result.assets[0]?.uri) {
@@ -126,14 +125,13 @@ export function PetPhotoPickerProvider({ children }: { children: React.ReactNode
         return;
       }
       const asset = result.assets[0];
-      optionsRef.current?.onPhotoSelected(asset.uri);
-      setBusy(false);
+      openCrop(asset.uri, asset.width, asset.height);
     } catch (e) {
       console.warn('[PetPhotoPicker] library failed:', e);
       Alert.alert('Error', 'Could not open the photo library.');
       setBusy(false);
     }
-  }, [setBusy]);
+  }, [setBusy, openCrop]);
 
   const openPicker = useCallback((options: PickerOptions) => {
     if (busyRef.current) return;
