@@ -39,9 +39,12 @@ function buildUpdateBody(data: UpdatePetData): Record<string, unknown> {
 }
 
 export async function getPets(): Promise<Pet[]> {
-  const { data } = await api.get<{ pets: Pet[] } | Pet[]>('/pets');
-  if (Array.isArray(data)) return data;
-  return data.pets ?? [];
+  const { data } = await api.get<{ pets: any[] } | any[]>('/pets');
+  const raw = Array.isArray(data) ? data : (data.pets ?? []);
+  return raw.map((p: any) => ({
+    ...p,
+    photoData: p.photoData ?? p.photo_url ?? undefined,
+  }));
 }
 
 export async function createPet(data: CreatePetData): Promise<Pet> {

@@ -106,7 +106,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const localPhotoMap = new Map(localPets.map(p => [p.id, p.photoData]));
         const merged = serverPets.map(sp => ({
           ...sp,
-          photoData: sp.photoData ?? localPhotoMap.get(sp.id) ?? undefined,
+          photoData: sp.photoData ?? (sp as any).photo_url ?? localPhotoMap.get(sp.id) ?? undefined,
         }));
 
         dispatch({ type: 'SET_PETS', pets: merged });
