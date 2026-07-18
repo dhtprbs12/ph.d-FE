@@ -41,38 +41,34 @@ async function request<T = any>(
   body?: any,
   config?: { timeout?: number; params?: Record<string, string> }
 ): Promise<ApiResponse<T>> {
-  const fullUrl = new URL(`${BASE_URL}${url}`);
+  let fullUrl = `${BASE_URL}${url}`;
   if (config?.params) {
+    const parts: string[] = [];
     for (const [k, v] of Object.entries(config.params)) {
-      if (v !== undefined && v !== null) fullUrl.searchParams.set(k, v);
+      if (v !== undefined && v !== null) parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
     }
+    if (parts.length) fullUrl += (fullUrl.includes('?') ? '&' : '?') + parts.join('&');
   }
 
   const headers = await getAuthHeaders();
-
-  const fetchOptions: RequestInit = { method, headers };
-
   if (body && method !== 'GET') {
-    (headers as Record<string, string>)['Content-Type'] = 'application/json';
-    fetchOptions.body = JSON.stringify(body);
+    headers['Content-Type'] = 'application/json';
   }
 
-  const controller = new AbortController();
-  const timeout = config?.timeout ?? 120_000;
-  const timer = setTimeout(() => controller.abort(), timeout);
-  fetchOptions.signal = controller.signal;
+  console.log(`[API] ${method} ${url}`, body ? '(with body)' : '');
 
   try {
-    const response = await fetch(fullUrl.toString(), fetchOptions);
-    clearTimeout(timer);
+    const response = await fetch(fullUrl, {
+      method,
+      headers,
+      ...(body && method !== 'GET' ? { body: JSON.stringify(body) } : {}),
+    });
 
     const text = await response.text();
     let data: any;
     try { data = JSON.parse(text); } catch { data = text; }
 
-    if (response.status === 401) {
-      handle401();
-    }
+    if (response.status === 401) handle401();
 
     if (!response.ok) {
       const error: any = new Error(data?.message || data?.error || `Request failed with status code ${response.status}`);
@@ -85,15 +81,8 @@ async function request<T = any>(
 
     return { data, status: response.status };
   } catch (e: any) {
-    clearTimeout(timer);
-    if (e.name === 'AbortError') {
-      const error: any = new Error('Network timeout');
-      error.config = { url };
-      console.error('[API] response', { status: undefined, data: undefined, message: 'Network timeout', url });
-      throw error;
-    }
     if (!e.response) {
-      console.error('[API] response', { status: undefined, data: undefined, message: e.message, url });
+      console.error('[API] response', { status: undefined, data: undefined, message: e.message, url, cause: e.cause ?? e.stack?.slice(0, 200) });
     }
     throw e;
   }
