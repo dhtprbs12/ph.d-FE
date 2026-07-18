@@ -8,7 +8,10 @@ const AUTH_TOKEN_KEY = 'authToken';
 let isLoggingOut = false;
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Connection: 'close',
+  };
   try {
     const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -35,6 +38,9 @@ async function handle401() {
 
 type ApiResponse<T = any> = { data: T; status: number };
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
+
 async function request<T = any>(
   method: string,
   url: string,
@@ -50,42 +56,49 @@ async function request<T = any>(
     if (parts.length) fullUrl += (fullUrl.includes('?') ? '&' : '?') + parts.join('&');
   }
 
-  const headers = await getAuthHeaders();
-  if (body && method !== 'GET') {
-    headers['Content-Type'] = 'application/json';
-  }
+  let lastError: any;
 
-  console.log(`[API] ${method} ${url}`, body ? '(with body)' : '');
-
-  try {
-    const response = await fetch(fullUrl, {
-      method,
-      headers,
-      ...(body && method !== 'GET' ? { body: JSON.stringify(body) } : {}),
-    });
-
-    const text = await response.text();
-    let data: any;
-    try { data = JSON.parse(text); } catch { data = text; }
-
-    if (response.status === 401) handle401();
-
-    if (!response.ok) {
-      const error: any = new Error(data?.message || data?.error || `Request failed with status code ${response.status}`);
-      error.response = { status: response.status, data };
-      error.status = response.status;
-      error.config = { url };
-      console.error('[API] response', { status: response.status, data, message: error.message, url });
-      throw error;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const headers = await getAuthHeaders();
+    if (body && method !== 'GET') {
+      headers['Content-Type'] = 'application/json';
     }
 
-    return { data, status: response.status };
-  } catch (e: any) {
-    if (!e.response) {
-      console.error('[API] response', { status: undefined, data: undefined, message: e.message, url, cause: e.cause ?? e.stack?.slice(0, 200) });
+    try {
+      const response = await fetch(fullUrl, {
+        method,
+        headers,
+        ...(body && method !== 'GET' ? { body: JSON.stringify(body) } : {}),
+      });
+
+      const text = await response.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch { data = text; }
+
+      if (response.status === 401) handle401();
+
+      if (!response.ok) {
+        const error: any = new Error(data?.message || data?.error || `Request failed with status code ${response.status}`);
+        error.response = { status: response.status, data };
+        error.status = response.status;
+        error.config = { url };
+        console.error('[API] response', { status: response.status, data, message: error.message, url });
+        throw error;
+      }
+
+      return { data, status: response.status };
+    } catch (e: any) {
+      lastError = e;
+      if (e.response) throw e;
+      console.warn(`[API] ${method} ${url} attempt ${attempt}/${MAX_RETRIES} failed: ${e.message}`);
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+      }
     }
-    throw e;
   }
+
+  console.error('[API] response', { status: undefined, data: undefined, message: lastError?.message, url });
+  throw lastError;
 }
 
 const api = {
