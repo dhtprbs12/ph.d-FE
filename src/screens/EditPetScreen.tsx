@@ -9,8 +9,6 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  Platform,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -136,15 +134,11 @@ export default function EditPetScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + 60}
-      >
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
       >
         {/* Photo + Type */}
         <View style={[styles.photoSection, { backgroundColor: colors.lightGray }]}>
@@ -314,7 +308,6 @@ export default function EditPetScreen() {
           <Text style={[typography.labelMedium, { color: colors.danger }]}>Delete Pet</Text>
         </Pressable>
       </ScrollView>
-      </KeyboardAvoidingView>
     </View>
   );
 }

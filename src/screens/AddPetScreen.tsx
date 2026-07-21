@@ -11,7 +11,6 @@ import {
   Image,
   Platform,
   Keyboard,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -138,16 +137,12 @@ export default function AddPetScreen() {
         ))}
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + 60}
-      >
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
       >
         {currentStep === 0 && (
           <View style={styles.stepContent}>
@@ -365,7 +360,6 @@ export default function AddPetScreen() {
           </View>
         )}
       </ScrollView>
-      </KeyboardAvoidingView>
 
       {/* Bottom buttons */}
       {!keyboardVisible && (
@@ -442,6 +436,7 @@ const styles = StyleSheet.create({
   },
   fieldGroup: {
     gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
   input: {
     backgroundColor: colors.lightGray,

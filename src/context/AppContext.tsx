@@ -158,7 +158,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             notes: c.notes,
           })),
         });
-        const finalPet = { ...newPet, id: serverPet.id };
+        const finalPet = { ...newPet, id: serverPet.id, is_primary: serverPet.is_primary ?? newPet.is_primary };
 
         if (newPet.photoData && !newPet.photoData.startsWith('http')) {
           try {
@@ -172,8 +172,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         dispatch({ type: 'UPDATE_PET', pet: finalPet, oldId: newPet.id });
-        dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
-        await saveSelectedPetId(finalPet.id);
+        if (willBeSelected) {
+          dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
+          await saveSelectedPetId(finalPet.id);
+        }
         const updatedPets = allPets.map(p => (p.id === newPet.id ? finalPet : p));
         await savePetsLocally(updatedPets);
       } catch (e) {
