@@ -153,7 +153,7 @@ export default function EditPetScreen() {
               {photoUri ? (
                 <Image
                   source={{
-                    uri: photoUri.startsWith('data:') ? photoUri : photoUri.startsWith('file') ? photoUri : `data:image/jpeg;base64,${photoUri}`,
+                    uri: photoUri.startsWith('data:') ? photoUri : (photoUri.startsWith('file') || photoUri.startsWith('http')) ? photoUri : `data:image/jpeg;base64,${photoUri}`,
                   }}
                   style={styles.photoImage}
                 />
