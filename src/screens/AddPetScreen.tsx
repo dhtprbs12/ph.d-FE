@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  Keyboard,
   KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +32,13 @@ export default function AddPetScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   const [name, setName] = useState('');
   const [petType, setPetType] = useState<PetType>('dog');
@@ -360,6 +368,7 @@ export default function AddPetScreen() {
       </KeyboardAvoidingView>
 
       {/* Bottom buttons */}
+      {!keyboardVisible && (
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
           {currentStep > 0 && (
@@ -402,6 +411,7 @@ export default function AddPetScreen() {
           )}
         </View>
       </View>
+      )}
     </View>
   );
 }
@@ -509,8 +519,6 @@ const styles = StyleSheet.create({
   bottomBar: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
     backgroundColor: colors.background,
   },
   secondaryBtn: {
