@@ -95,12 +95,12 @@ function PetsStackNavigator() {
       <PetsStack.Screen
         name="AddPet"
         component={AddPetScreen}
-        options={{ presentation: 'modal', headerShown: false }}
+        options={{ headerShown: false }}
       />
       <PetsStack.Screen
         name="EditPet"
         component={EditPetScreen}
-        options={{ presentation: 'modal', headerShown: false }}
+        options={{ headerShown: false }}
       />
     </PetsStack.Navigator>
   );
