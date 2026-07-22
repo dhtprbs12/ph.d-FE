@@ -1862,18 +1862,6 @@ const EditorInputRow = memo(function EditorInputRow({
   onConfirm,
   onCancel,
 }: EditorInputRowProps) {
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const task = InteractionManager.runAfterInteractions(() => {
-      const delay = Platform.OS === 'ios' ? 220 : 80;
-      timer = setTimeout(() => inputRef.current?.focus(), delay);
-    });
-    return () => {
-      task.cancel();
-      if (timer) clearTimeout(timer);
-    };
-  }, [inputRef]);
-
   return (
     <View style={[s.editorInputRow, keyboardOpen && s.editorInputRowKeyboard]}>
       <TextInput
@@ -1886,6 +1874,7 @@ const EditorInputRow = memo(function EditorInputRow({
         onSubmitEditing={onConfirm}
         returnKeyType="done"
         autoCapitalize="words"
+        autoFocus
       />
       <Pressable onPress={onConfirm} hitSlop={8} style={s.editorInputBtn}>
         <Ionicons name={isAdding ? 'add-circle' : 'checkmark-circle'} size={28} color={colors.primary} />
@@ -2079,7 +2068,6 @@ function IngredientEditorStep({
     setTimeout(() => {
       const ref = listRef.current;
       if (!ref) return;
-      const dock = composerHeightRef.current + 24;
       if (adding && at === 0) {
         ref.scrollToOffset?.({ offset: 0, animated: true });
         return;
@@ -2092,20 +2080,10 @@ function IngredientEditorStep({
         targetIndex = items.findIndex(it => it.id === editId);
       }
       if (targetIndex < 0) return;
-      try {
-        ref.scrollToIndex?.({
-          index: targetIndex,
-          animated: true,
-          viewPosition: 0,
-          viewOffset: dock,
-        });
-      } catch {
-        ref.scrollToOffset?.({
-          offset: Math.max(0, targetIndex * 88 - dock),
-          animated: true,
-        });
-      }
-    }, Platform.OS === 'ios' ? 280 : 120);
+      const itemHeight = 56;
+      const offset = Math.max(0, targetIndex * itemHeight - 100);
+      ref.scrollToOffset?.({ offset, animated: true });
+    }, Platform.OS === 'ios' ? 350 : 150);
   }, [editingId, isAdding, insertIndex, items]);
 
   useEffect(() => {
@@ -2344,6 +2322,7 @@ function IngredientEditorStep({
             onLayout={(e) => setInputDockHeight(e.nativeEvent.layout.height)}
           >
             <EditorInputRow
+              key={`${editingId}-${insertIndex}`}
               inputRef={editInputRef}
               editText={editText}
               setEditText={setEditText}

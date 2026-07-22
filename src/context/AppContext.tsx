@@ -171,13 +171,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        dispatch({ type: 'UPDATE_PET', pet: finalPet, oldId: newPet.id });
-        if (willBeSelected) {
-          dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
-          await saveSelectedPetId(finalPet.id);
-        }
-        const updatedPets = allPets.map(p => (p.id === newPet.id ? finalPet : p));
-        await savePetsLocally(updatedPets);
+        await authenticateAndSync();
       } catch (e) {
         console.warn('Server create failed:', e);
       }
@@ -223,10 +217,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deletePetAction = useCallback(async (pet: Pet) => {
     dispatch({ type: 'REMOVE_PET', petId: pet.id });
-    const newPets = state.pets.filter(p => p.id !== pet.id);
-    await savePetsLocally(newPets);
     if (state.selectedPet?.id === pet.id) {
-      const next = newPets[0] ?? null;
+      const remaining = state.pets.filter(p => p.id !== pet.id);
+      const next = remaining[0] ?? null;
       dispatch({ type: 'SET_SELECTED_PET', pet: next });
       await saveSelectedPetId(next?.id ?? null);
     }
@@ -234,11 +227,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (state.isAuthenticated) {
       try {
         await petService.deletePet(pet.id);
+        await authenticateAndSync();
       } catch (e) {
         console.warn('Server delete failed:', e);
       }
+    } else {
+      const newPets = state.pets.filter(p => p.id !== pet.id);
+      await savePetsLocally(newPets);
     }
-  }, [state.pets, state.selectedPet, state.isAuthenticated]);
+  }, [state.pets, state.selectedPet, state.isAuthenticated, authenticateAndSync]);
 
   const setPrimaryPetAction = useCallback((pet: Pet) => {
     const updatedPets = state.pets.map(p => ({
