@@ -989,17 +989,17 @@ function BarcodeStep({
   onSkip: () => void;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [hasScanned, setHasScanned] = useState(false);
+  const scannedRef = useRef(false);
 
   useEffect(() => {
     if (!permission?.granted) requestPermission();
   }, [permission]);
 
   const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {
-    if (hasScanned) return;
-    setHasScanned(true);
+    if (scannedRef.current) return;
+    scannedRef.current = true;
     onScanned(data);
-  }, [hasScanned, onScanned]);
+  }, [onScanned]);
 
   if (!permission?.granted) {
     return (
@@ -1024,7 +1024,7 @@ function BarcodeStep({
         <CameraView
           style={barcodeStyles.camera}
           barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'code93', 'itf14', 'qr'] }}
-          onBarcodeScanned={hasScanned ? undefined : handleBarCodeScanned}
+          onBarcodeScanned={handleBarCodeScanned}
         />
         <View style={barcodeStyles.overlay}>
           <View style={barcodeStyles.scanLine} />
