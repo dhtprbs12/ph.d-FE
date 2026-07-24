@@ -875,16 +875,16 @@ export default function HomeScreen() {
             </StaggeredView>
 
             <StaggeredView index={5}>
-              <IngredientManualCard
+              <FoodCheckCard
                 isEnabled={selectedPet != null}
-                onPress={() => navigation.navigate('ManualIngredients')}
+                onPress={() => navigation.navigate('FoodCheck')}
               />
             </StaggeredView>
 
             <StaggeredView index={6}>
-              <FoodCheckCard
+              <IngredientManualCard
                 isEnabled={selectedPet != null}
-                onPress={() => navigation.navigate('FoodCheck')}
+                onPress={() => navigation.navigate('ManualIngredients')}
               />
             </StaggeredView>
 
