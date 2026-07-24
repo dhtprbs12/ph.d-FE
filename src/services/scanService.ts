@@ -91,6 +91,7 @@ export interface ConfirmIngredientsRequest {
   productName?: string;
   brand?: string;
   productType?: string;
+  barcode?: string;
 }
 
 export async function confirmIngredients(body: ConfirmIngredientsRequest): Promise<unknown> {

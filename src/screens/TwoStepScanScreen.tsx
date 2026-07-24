@@ -17,9 +17,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReorderableList, { ReorderableListReorderEvent, reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
@@ -68,6 +71,7 @@ type ScanStep =
   | 'back'
   | 'manualIngredients'
   | 'editor'
+  | 'barcode'
   | 'analyzing';
 
 /** Shown above manual ingredient entry when embedded in label scan (round pack only). */
@@ -161,8 +165,10 @@ export function TwoStepScanScreen() {
     'Generating report',
   ]);
   const [ingredientsForEditor, setIngredientsForEditor] = useState<string[]>([]);
+  const [confirmedIngredients, setConfirmedIngredients] = useState<string[]>([]);
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
 
-  const showLoadingOverlay = processing && step !== 'analyzing' && step !== 'manualIngredients' && step !== 'editor';
+  const showLoadingOverlay = processing && step !== 'analyzing' && step !== 'manualIngredients' && step !== 'editor' && step !== 'barcode';
 
   // Loading overlay copy. Each step picks the most specific message
   // available so the user always knows which phase is in flight (and
@@ -492,7 +498,13 @@ export function TwoStepScanScreen() {
     await handleBackImage(uri);
   }, [pet, pendingScanId, pickImage, handleBackImage]);
 
-  const onEditorConfirm = useCallback(async (confirmedIngredients: string[]) => {
+  const onEditorConfirm = useCallback((ingredients: string[]) => {
+    setConfirmedIngredients(ingredients);
+    setScannedBarcode(null);
+    setStep('barcode');
+  }, []);
+
+  const startAnalysis = useCallback(async (barcode: string | null) => {
     if (!pet) return;
     setProcessing(true);
     setAnalyzeLabels([
@@ -521,6 +533,7 @@ export function TwoStepScanScreen() {
         productName: frontMeta.productName,
         brand: frontMeta.brand,
         productType: frontMeta.productType,
+        barcode: barcode ?? undefined,
       });
       const scanId = extractScanId(raw);
       setProcessing(false);
@@ -531,13 +544,14 @@ export function TwoStepScanScreen() {
       setProcessing(false);
       setStep('editor');
     }
-  }, [pet, pendingScanId, frontMeta, runPoll, finishWithResult]);
+  }, [pet, pendingScanId, frontMeta, confirmedIngredients, runPoll, finishWithResult]);
 
   const step1Active = step === 'front';
   const step1Complete = step !== 'front';
   const step2Active = step === 'back' || step === 'manualIngredients' || step === 'editor';
-  /** Back label is only "done" after the user has submitted it and analysis is running. */
-  const step2Complete = step === 'analyzing';
+  const step2Complete = step === 'barcode' || step === 'analyzing';
+  const step3Active = step === 'barcode';
+  const step3Complete = step === 'analyzing';
   const barActive = step !== 'front';
 
   return (
@@ -557,6 +571,8 @@ export function TwoStepScanScreen() {
           <StepIndicator number={1} title="Product" subtitle="" isActive={step1Active} isComplete={step1Complete} />
           <View style={[s.progressBar, barActive && s.progressBarActive]} />
           <StepIndicator number={2} title="Ingredients" subtitle="" isActive={step2Active} isComplete={step2Complete} />
+          <View style={[s.progressBar, step2Complete && s.progressBarActive]} />
+          <StepIndicator number={3} title="Barcode" subtitle="" isActive={step3Active} isComplete={step3Complete} />
         </View>
       </View>
 
@@ -609,7 +625,7 @@ export function TwoStepScanScreen() {
                 >
                   <Pressable onPress={() => imgUri && setZoomImageUri(imgUri)}>
                     {imgUri ? (
-                      <Image source={{ uri: imgUri }} style={s.candidateImg} resizeMode="cover" />
+                      <Image source={{ uri: imgUri }} style={s.candidateImg} resizeMode="contain" />
                     ) : (
                       <View style={[s.candidateImg, s.candidateImgPh]}>
                         <Ionicons name="paw" size={28} color={colors.primary} />
@@ -700,6 +716,16 @@ export function TwoStepScanScreen() {
             onCancel={() => setStep('back')}
           />
         </View>
+      ) : step === 'barcode' ? (
+        <BarcodeStep
+          productName={frontMeta.productName}
+          brand={formatBrandLine(frontMeta.manufacturer, frontMeta.brand) ?? undefined}
+          onScanned={(code) => {
+            setScannedBarcode(code);
+            startAnalysis(code);
+          }}
+          onSkip={() => startAnalysis(null)}
+        />
       ) : (
       <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
         {!pet && (
@@ -858,31 +884,236 @@ export function TwoStepScanScreen() {
         </View>
       </Modal>
 
-      {/* Candidate image zoom */}
+      {/* Candidate image zoom with pinch */}
       <Modal
         visible={!!zoomImageUri}
         transparent
         animationType="fade"
         onRequestClose={() => setZoomImageUri(null)}
       >
-        <Pressable style={s.zoomBackdrop} onPress={() => setZoomImageUri(null)}>
-          <View style={s.zoomContainer}>
-            <View style={s.zoomBanner}>
-              <Ionicons name="information-circle-outline" size={14} color={colors.white} />
-              <Text style={s.zoomBannerText}>Package design may differ from yours</Text>
-            </View>
-            {zoomImageUri && (
-              <Image source={{ uri: zoomImageUri }} style={s.zoomImage} resizeMode="contain" />
-            )}
-            <Pressable onPress={() => setZoomImageUri(null)} style={s.zoomCloseBtn}>
-              <Ionicons name="close-circle" size={32} color={colors.white} />
-            </Pressable>
-          </View>
-        </Pressable>
+        <ZoomableImageModal uri={zoomImageUri} onClose={() => setZoomImageUri(null)} />
       </Modal>
     </SafeAreaView>
   );
 }
+
+function ZoomableImageModal({ uri, onClose }: { uri: string | null; onClose: () => void }) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const pinch = Gesture.Pinch()
+    .onUpdate((e) => { scale.value = savedScale.value * e.scale; })
+    .onEnd(() => {
+      if (scale.value < 1) { scale.value = withTiming(1); savedScale.value = 1; }
+      else { savedScale.value = scale.value; }
+    });
+
+  const pan = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = savedTranslateX.value + e.translationX;
+      translateY.value = savedTranslateY.value + e.translationY;
+    })
+    .onEnd(() => {
+      if (scale.value <= 1) {
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        savedTranslateX.value = translateX.value;
+        savedTranslateY.value = translateY.value;
+      }
+    });
+
+  const doubleTap = Gesture.Tap().numberOfTaps(2).onEnd(() => {
+    if (scale.value > 1) {
+      scale.value = withTiming(1);
+      savedScale.value = 1;
+      translateX.value = withTiming(0);
+      translateY.value = withTiming(0);
+      savedTranslateX.value = 0;
+      savedTranslateY.value = 0;
+    } else {
+      scale.value = withTiming(2.5);
+      savedScale.value = 2.5;
+    }
+  });
+
+  const composed = Gesture.Simultaneous(pinch, pan, doubleTap);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const screenW = Dimensions.get('window').width;
+  const imgSize = screenW * 0.9;
+
+  return (
+    <GestureHandlerRootView style={s.zoomBackdrop}>
+      <Pressable style={s.zoomCloseBtn} onPress={onClose}>
+        <Ionicons name="close-circle" size={36} color={colors.white} />
+      </Pressable>
+      <View style={s.zoomBanner}>
+        <Ionicons name="information-circle-outline" size={14} color={colors.white} />
+        <Text style={s.zoomBannerText}>Pinch to zoom · Double-tap to toggle</Text>
+      </View>
+      <GestureDetector gesture={composed}>
+        <Animated.View style={[{ width: imgSize, height: imgSize }, animatedStyle]}>
+          {uri && (
+            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+          )}
+        </Animated.View>
+      </GestureDetector>
+    </GestureHandlerRootView>
+  );
+}
+
+/* ─────────── Barcode Scan Step ─────────── */
+function BarcodeStep({
+  productName,
+  brand,
+  onScanned,
+  onSkip,
+}: {
+  productName?: string;
+  brand?: string;
+  onScanned: (code: string) => void;
+  onSkip: () => void;
+}) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [hasScanned, setHasScanned] = useState(false);
+
+  useEffect(() => {
+    if (!permission?.granted) requestPermission();
+  }, [permission]);
+
+  const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {
+    if (hasScanned) return;
+    setHasScanned(true);
+    onScanned(data);
+  }, [hasScanned, onScanned]);
+
+  if (!permission?.granted) {
+    return (
+      <View style={barcodeStyles.container}>
+        <Text style={barcodeStyles.permText}>Camera permission is required to scan barcodes.</Text>
+        <Pressable style={barcodeStyles.skipBtn} onPress={onSkip}>
+          <Text style={barcodeStyles.skipBtnText}>Skip</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={barcodeStyles.container}>
+      {(brand || productName) && (
+        <View style={barcodeStyles.productChip}>
+          {brand ? <Text style={barcodeStyles.chipBrand}>{brand}</Text> : null}
+          <Text style={barcodeStyles.chipName} numberOfLines={2}>{productName ?? 'Product'}</Text>
+        </View>
+      )}
+      <View style={barcodeStyles.cameraWrap}>
+        <CameraView
+          style={barcodeStyles.camera}
+          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'code93', 'itf14', 'qr'] }}
+          onBarcodeScanned={hasScanned ? undefined : handleBarCodeScanned}
+        />
+        <View style={barcodeStyles.overlay}>
+          <View style={barcodeStyles.scanLine} />
+        </View>
+      </View>
+      <Text style={barcodeStyles.hint}>Point your camera at the barcode</Text>
+      <Pressable style={barcodeStyles.skipBtn} onPress={onSkip}>
+        <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+        <Text style={barcodeStyles.skipBtnText}>Skip Barcode</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const barcodeStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  productChip: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  chipBrand: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  chipName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  cameraWrap: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanLine: {
+    width: '70%',
+    height: 2,
+    backgroundColor: colors.primary,
+    opacity: 0.7,
+    borderRadius: 1,
+  },
+  hint: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  skipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  skipBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  permText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 40,
+    marginBottom: 20,
+  },
+});
 
 function StepIndicator({
   number,
@@ -1024,17 +1255,19 @@ const s = StyleSheet.create({
   progressHeader: {
     backgroundColor: colors.card,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   progressRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   progressBar: {
     flex: 1,
     height: 2,
     backgroundColor: 'rgba(92,107,102,0.2)',
     marginHorizontal: 4,
+    marginTop: 18,
   },
   progressBarActive: {
     backgroundColor: colors.primary,
@@ -1042,6 +1275,7 @@ const s = StyleSheet.create({
   stepIndicator: {
     alignItems: 'center',
     gap: 1,
+    width: 72,
   },
   stepCircle: {
     width: 36,
@@ -1049,7 +1283,7 @@ const s = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   stepNumber: {
     fontSize: 15,
@@ -1554,16 +1788,13 @@ const s = StyleSheet.create({
   // Zoom modal
   zoomBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.92)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  zoomContainer: {
-    width: '85%',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
   zoomBanner: {
+    position: 'absolute',
+    top: 60,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1577,13 +1808,11 @@ const s = StyleSheet.create({
     color: colors.white,
     fontWeight: '500',
   },
-  zoomImage: {
-    width: '100%',
-    height: 300,
-    borderRadius: radius.large,
-  },
   zoomCloseBtn: {
-    marginTop: spacing.sm,
+    position: 'absolute',
+    top: 54,
+    right: 20,
+    zIndex: 10,
   },
   // Editor styles
   editorContainer: {
@@ -1591,10 +1820,10 @@ const s = StyleSheet.create({
   },
   editorHeader: {
     backgroundColor: colors.card,
-    paddingVertical: 16,
+    paddingVertical: 6,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
   },
   editorBrand: {
     fontSize: 10,
@@ -1603,12 +1832,12 @@ const s = StyleSheet.create({
     letterSpacing: 1.5,
   },
   editorProductName: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary,
   },
   editorCount: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
   },
   editorList: {
@@ -2055,36 +2284,6 @@ function IngredientEditorStep({
     ? Math.max(0, keyboardInset - insets.bottom)
     : insets.bottom;
 
-  const scrollEditorIntoView = useCallback((opts?: {
-    adding?: boolean;
-    atIndex?: number | null;
-    editId?: string | null;
-  }) => {
-    const adding = opts?.adding ?? isAdding;
-    const at = opts?.atIndex !== undefined ? opts.atIndex : insertIndex;
-    const editId = opts?.editId !== undefined ? opts.editId : editingId;
-    if (!adding && !editId) return;
-
-    setTimeout(() => {
-      const ref = listRef.current;
-      if (!ref) return;
-      if (adding && at === 0) {
-        ref.scrollToOffset?.({ offset: 0, animated: true });
-        return;
-      }
-      let targetIndex: number;
-      if (adding) {
-        const pos = at ?? items.length;
-        targetIndex = Math.max(0, pos - 1);
-      } else {
-        targetIndex = items.findIndex(it => it.id === editId);
-      }
-      if (targetIndex < 0) return;
-      const itemHeight = 56;
-      const offset = Math.max(0, targetIndex * itemHeight - 100);
-      ref.scrollToOffset?.({ offset, animated: true });
-    }, Platform.OS === 'ios' ? 350 : 150);
-  }, [editingId, isAdding, insertIndex, items]);
 
   useEffect(() => {
     if (!panelActive) {
@@ -2100,7 +2299,6 @@ function IngredientEditorStep({
         : e.endCoordinates.height;
       keyboardInsetRef.current = height;
       setKeyboardInset(height);
-      scrollEditorIntoView();
     });
     const hideSub = Keyboard.addListener(hideEvent, () => {
       keyboardInsetRef.current = 0;
@@ -2110,12 +2308,7 @@ function IngredientEditorStep({
       showSub.remove();
       hideSub.remove();
     };
-  }, [panelActive, scrollEditorIntoView]);
-
-  useEffect(() => {
-    if (!panelActive) return;
-    scrollEditorIntoView();
-  }, [composerHeight, suggestions.length, panelActive, scrollEditorIntoView]);
+  }, [panelActive]);
 
   useEffect(() => {
     if (!showSuggestions) setSuggestDockHeight(0);
@@ -2125,42 +2318,17 @@ function IngredientEditorStep({
     setInsertIndex(null);
     setEditingId(id);
     setEditText(text);
-    setTimeout(() => {
-      scrollEditorIntoView({ adding: false, editId: id });
-    }, 100);
-  }, [scrollEditorIntoView]);
-
-  const scrollToInsertedItem = useCallback((index: number, itemCount: number) => {
-    if (itemCount <= 0) return;
-    const targetIndex = Math.min(Math.max(index, 0), itemCount - 1);
-    setTimeout(() => {
-      try {
-        listRef.current?.scrollToIndex?.({
-          index: targetIndex,
-          animated: true,
-          viewPosition: 0.45,
-        });
-      } catch {
-        // Layout not measured yet — skip rather than jumping to list end.
-      }
-    }, 200);
   }, []);
 
-  const onScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
-    listRef.current?.scrollToOffset?.({
-      offset: Math.max(0, info.averageItemLength * info.index - 48),
-      animated: true,
-    });
-  }, []);
+  const scrollToInsertedItem = useCallback((_index: number, _itemCount: number) => {}, []);
+
+  const onScrollToIndexFailed = useCallback(() => {}, []);
 
   const startAdd = useCallback((afterIndex: number) => {
     setInsertIndex(afterIndex);
     setEditingId('__new__');
     setEditText('');
-    setTimeout(() => {
-      scrollEditorIntoView({ adding: true, atIndex: afterIndex });
-    }, 100);
-  }, [scrollEditorIntoView]);
+  }, []);
 
   const confirmEdit = useCallback(() => {
     if (editingId === null) return;
@@ -2270,7 +2438,7 @@ function IngredientEditorStep({
         style={s.editorList}
         contentContainerStyle={[
           s.editorListContent,
-          panelActive && composerHeight > 0 && { paddingBottom: composerHeight + spacing.md },
+          { paddingBottom: 320 },
         ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
   Image,
   InteractionManager,
   LayoutAnimation,
@@ -20,6 +21,8 @@ import {
 import { CommonActions, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
+import RNAnimated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -691,7 +694,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
           key={img}
           source={{ uri: img }}
           style={st.headerProductImgOverlay}
-          resizeMode="cover"
+          resizeMode="contain"
           onError={() => {
             setHideRemoteImage(true);
             recoverFromError();
@@ -864,10 +867,6 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
         </Text>
       </View>
 
-      {/* Tap-to-enlarge: simple full-screen viewer. We deliberately don't add
-          pinch-to-zoom — the headers serve a marketing/SerpAPI thumbnail, not
-          a high-res user-captured label, so contain-fit on a black backdrop is
-          enough for "is this really my product?" verification. */}
       <Modal
         visible={imageZoomOpen && canZoom}
         animationType="fade"
@@ -876,29 +875,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
         onRequestClose={() => setImageZoomOpen(false)}
       >
         <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.95)" />
-        <Pressable
-          style={st.imageZoomBackdrop}
-          onPress={() => setImageZoomOpen(false)}
-          accessibilityRole="button"
-          accessibilityLabel="Close image"
-        >
-          {img ? (
-            <Image
-              source={{ uri: img }}
-              style={st.imageZoomImg}
-              resizeMode="contain"
-            />
-          ) : null}
-          <Pressable
-            onPress={() => setImageZoomOpen(false)}
-            hitSlop={16}
-            style={st.imageZoomCloseBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          >
-            <Ionicons name="close" size={28} color={colors.white} />
-          </Pressable>
-        </Pressable>
+        <ResultZoomableImage uri={img} onClose={() => setImageZoomOpen(false)} />
       </Modal>
     </View>
   );
@@ -1868,6 +1845,85 @@ export function ResultScreen() {
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function ResultZoomableImage({ uri, onClose }: { uri: string | null; onClose: () => void }) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const pinch = Gesture.Pinch()
+    .onUpdate((e) => { scale.value = savedScale.value * e.scale; })
+    .onEnd(() => {
+      if (scale.value < 1) { scale.value = withTiming(1); savedScale.value = 1; }
+      else { savedScale.value = scale.value; }
+    });
+
+  const pan = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = savedTranslateX.value + e.translationX;
+      translateY.value = savedTranslateY.value + e.translationY;
+    })
+    .onEnd(() => {
+      if (scale.value <= 1) {
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        savedTranslateX.value = translateX.value;
+        savedTranslateY.value = translateY.value;
+      }
+    });
+
+  const doubleTap = Gesture.Tap().numberOfTaps(2).onEnd(() => {
+    if (scale.value > 1) {
+      scale.value = withTiming(1);
+      savedScale.value = 1;
+      translateX.value = withTiming(0);
+      translateY.value = withTiming(0);
+      savedTranslateX.value = 0;
+      savedTranslateY.value = 0;
+    } else {
+      scale.value = withTiming(2.5);
+      savedScale.value = 2.5;
+    }
+  });
+
+  const composed = Gesture.Simultaneous(pinch, pan, doubleTap);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const { width: screenW } = Dimensions.get('window');
+  const imgSize = screenW * 0.85;
+
+  return (
+    <GestureHandlerRootView style={st.imageZoomBackdrop}>
+      <Pressable onPress={onClose} hitSlop={16} style={st.imageZoomCloseBtn} accessibilityRole="button" accessibilityLabel="Close">
+        <Ionicons name="close-circle" size={36} color={colors.white} />
+      </Pressable>
+      <View style={{ position: 'absolute', top: 60, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.medium }}>
+        <Ionicons name="information-circle-outline" size={14} color={colors.white} />
+        <Text style={{ fontSize: 12, color: colors.white, fontWeight: '500' }}>Pinch to zoom · Double-tap to toggle</Text>
+      </View>
+      <GestureDetector gesture={composed}>
+        <RNAnimated.View style={[{ width: imgSize, height: imgSize }, animatedStyle]}>
+          {uri && (
+            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+          )}
+        </RNAnimated.View>
+      </GestureDetector>
+    </GestureHandlerRootView>
   );
 }
 

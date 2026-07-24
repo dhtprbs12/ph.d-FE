@@ -133,7 +133,7 @@ function ProductThumb({
     <Image
       source={{ uri: imageUrl }}
       style={styles.thumbImage}
-      resizeMode="cover"
+      resizeMode="contain"
       onError={() => setFailed(true)}
       accessibilityIgnoresInvertColors
       accessibilityLabel={brandHint ? `${brandHint} product` : 'Product image'}

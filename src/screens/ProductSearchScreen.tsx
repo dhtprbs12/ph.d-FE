@@ -212,6 +212,7 @@ const ProductCard = React.memo(function ProductCard({
     <Image
       source={{ uri }}
       style={st.productImg}
+      resizeMode="contain"
       onError={() => setImgFailed(true)}
     />
   );
