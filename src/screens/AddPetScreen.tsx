@@ -168,30 +168,19 @@ export default function AddPetScreen() {
               </Text>
             </Pressable>
 
-            {/* Pet Type */}
+            {/* Pet Type — dog only for now */}
             <View style={styles.fieldGroup}>
               <Text style={[typography.labelMedium, { color: colors.textSecondary }]}>Pet Type</Text>
               <View style={{ flexDirection: 'row', gap: spacing.md }}>
-                {(['dog', 'cat'] as PetType[]).map(type => {
-                  const isSelected = petType === type;
-                  const typeColor = type === 'dog' ? colors.primary : colors.accent;
-                  return (
-                    <Pressable
-                      key={type}
-                      onPress={() => setPetType(type)}
-                      style={[
-                        styles.petTypeBtn,
-                        { backgroundColor: isSelected ? typeColor + '26' : colors.lightGray },
-                        isSelected && { borderColor: typeColor, borderWidth: 2 },
-                      ]}
-                    >
-                      <Text style={{ fontSize: 40 }}>{type === 'dog' ? '🐕' : '🐱'}</Text>
-                      <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>
-                        {type === 'dog' ? 'Dog' : 'Cat'}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                <View
+                  style={[
+                    styles.petTypeBtn,
+                    { backgroundColor: colors.primary + '26', borderColor: colors.primary, borderWidth: 2 },
+                  ]}
+                >
+                  <Text style={{ fontSize: 40 }}>🐕</Text>
+                  <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>Dog</Text>
+                </View>
               </View>
             </View>
 

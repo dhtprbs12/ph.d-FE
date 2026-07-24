@@ -237,11 +237,11 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.subtitle}>Tell us about your first pet</Text>
 
             <Pressable onPress={pickPhoto} style={styles.photoWrapper}>
-              <View style={[styles.photoCircle, { backgroundColor: petType === 'dog' ? colors.accent + '33' : colors.primary + '33' }]}>
+              <View style={[styles.photoCircle, { backgroundColor: colors.accent + '33' }]}>
                 {photoUri ? (
                   <Image source={{ uri: photoUri }} style={styles.photoImage} />
                 ) : (
-                  <Text style={{ fontSize: 44 }}>{petType === 'dog' ? '🐕' : '🐱'}</Text>
+                  <Text style={{ fontSize: 44 }}>🐕</Text>
                 )}
               </View>
               <View style={styles.cameraBadge}>
@@ -262,14 +262,10 @@ export default function SignupScreen({ navigation }: Props) {
 
             <Text style={styles.label}>Type</Text>
             <View style={styles.row}>
-              <TouchableOpacity style={[styles.petTypeBtn, petType === 'dog' && styles.petTypeBtnActive]} onPress={() => setPetType('dog')}>
+              <View style={[styles.petTypeBtn, styles.petTypeBtnActive]}>
                 <Text style={{ fontSize: 28 }}>🐕</Text>
-                <Text style={[styles.chipText, petType === 'dog' && styles.chipTextActive]}>Dog</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.petTypeBtn, petType === 'cat' && styles.petTypeBtnActive]} onPress={() => setPetType('cat')}>
-                <Text style={{ fontSize: 28 }}>🐱</Text>
-                <Text style={[styles.chipText, petType === 'cat' && styles.chipTextActive]}>Cat</Text>
-              </TouchableOpacity>
+                <Text style={[styles.chipText, styles.chipTextActive]}>Dog</Text>
+              </View>
             </View>
 
             <Text style={styles.label}>Breed (Optional)</Text>
