@@ -26,6 +26,7 @@ import AddPetScreen from '../screens/AddPetScreen';
 import EditPetScreen from '../screens/EditPetScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { TwoStepScanScreen } from '../screens/TwoStepScanScreen';
+import { QuickScanScreen } from '../screens/QuickScanScreen';
 import { ManualIngredientsScreen } from '../screens/ManualIngredientsScreen';
 import { FoodCheckScreen } from '../screens/FoodCheckScreen';
 import SignupScreen from '../screens/SignupScreen';
@@ -49,6 +50,11 @@ function HomeStackNavigator() {
       <HomeStack.Screen
         name="TwoStepScan"
         component={TwoStepScanScreen}
+        options={{ presentation: 'fullScreenModal', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="QuickScan"
+        component={QuickScanScreen}
         options={{ presentation: 'fullScreenModal', headerShown: false }}
       />
       <HomeStack.Screen

@@ -469,6 +469,66 @@ function LabelScanPromptCard({
   );
 }
 
+/* ─── Quick Scan Card ──────────────────────────────────────────── */
+
+function QuickScanCard({
+  isEnabled,
+  onPress,
+}: {
+  isEnabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!isEnabled}
+      style={({ pressed }) => [
+        styles.cardBase,
+        shadows.card,
+        { opacity: isEnabled ? (pressed ? 0.92 : 1) : 0.6 },
+      ]}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          padding: spacing.md,
+          gap: spacing.md,
+        }}
+      >
+        <View
+          style={[
+            styles.iconPlate,
+            { backgroundColor: withOpacity(colors.accent, 0.15) },
+          ]}
+        >
+          <Ionicons name="barcode-outline" size={26} color={colors.accent} />
+        </View>
+        <View style={{ flex: 1, gap: spacing.xxs }}>
+          <Text
+            style={[
+              typography.bodyLarge,
+              { fontWeight: '600', color: colors.textPrimary },
+            ]}
+          >
+            Quick Scan
+          </Text>
+          <Text
+            style={[typography.bodySmall, { color: colors.textSecondary }]}
+          >
+            Scan barcode for instant results
+          </Text>
+        </View>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={colors.textSecondary}
+        />
+      </View>
+    </Pressable>
+  );
+}
+
 /** Enter ingredients manually (no label photo) — same flow as round packs from label scan. */
 function IngredientManualCard({
   isEnabled,
@@ -868,27 +928,34 @@ export default function HomeScreen() {
             </StaggeredView>
 
             <StaggeredView index={4}>
+              <QuickScanCard
+                isEnabled={selectedPet != null}
+                onPress={() => navigation.navigate('QuickScan')}
+              />
+            </StaggeredView>
+
+            <StaggeredView index={5}>
               <FindSafeFoodCard
                 pet={selectedPet}
                 onPress={() => navigation.navigate('ProductSearch')}
               />
             </StaggeredView>
 
-            <StaggeredView index={5}>
+            <StaggeredView index={6}>
               <FoodCheckCard
                 isEnabled={selectedPet != null}
                 onPress={() => navigation.navigate('FoodCheck')}
               />
             </StaggeredView>
 
-            <StaggeredView index={6}>
+            <StaggeredView index={7}>
               <IngredientManualCard
                 isEnabled={selectedPet != null}
                 onPress={() => navigation.navigate('ManualIngredients')}
               />
             </StaggeredView>
 
-            <StaggeredView index={7}>
+            <StaggeredView index={8}>
               <AafcoGuidelinesCallout />
             </StaggeredView>
           </View>

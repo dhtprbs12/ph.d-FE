@@ -49,6 +49,7 @@ export type HomeStackParamList = {
   ProductSearch: undefined;
   Result: ResultParams;
   TwoStepScan: undefined;
+  QuickScan: undefined;
   ManualIngredients: ManualIngredientsParams | undefined;
   FoodCheck: undefined;
   AddPet: undefined;
