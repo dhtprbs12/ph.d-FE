@@ -1,0 +1,432 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  FlatList,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Image,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, radius, typography } from '../theme';
+import shopService, { ShopItem, SlotName, CharacterState, EquippedItem } from '../services/shopService';
+import gamificationService from '../services/gamificationService';
+import { getBaseCharacter, getItemLayer, getItemThumb } from '../utils/characterAssets';
+import { useApp } from '../context/AppContext';
+
+const CATEGORIES: { key: SlotName; label: string; emoji: string }[] = [
+  { key: 'hat', label: 'Hats', emoji: '🎩' },
+  { key: 'glasses', label: 'Glasses', emoji: '👓' },
+  { key: 'accessory', label: 'Acc', emoji: '🎀' },
+  { key: 'clothes', label: 'Clothes', emoji: '👔' },
+  { key: 'background', label: 'BG', emoji: '🖼' },
+  { key: 'effect', label: 'Effects', emoji: '✨' },
+];
+
+export default function CharacterScreen() {
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { selectedPet } = useApp();
+  const petName = selectedPet?.name;
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [character, setCharacter] = useState<CharacterState | null>(null);
+  const [tokenBalance, setTokenBalance] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState<SlotName>('hat');
+  const [items, setItems] = useState<ShopItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
+  const [localEquipped, setLocalEquipped] = useState<Record<SlotName, EquippedItem | null>>({
+    hat: null, glasses: null, accessory: null, clothes: null, background: null, effect: null,
+  });
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [charData, tokenData] = await Promise.all([
+        shopService.getCharacter(),
+        gamificationService.getTokens(),
+      ]);
+      setCharacter(charData);
+      setLocalEquipped(charData.equipped);
+      setTokenBalance(tokenData.balance);
+    } catch (e) {
+      console.warn('Failed to load character data:', e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    shopService.getItems(selectedCategory).then(setItems).catch(console.warn);
+  }, [selectedCategory]);
+
+  const handleItemPress = (item: ShopItem) => {
+    setSelectedItem(item);
+    if (item.isOwned || character?.ownedItems.includes(item.id)) {
+      setLocalEquipped(prev => ({
+        ...prev,
+        [item.category]: {
+          id: item.id,
+          assetKey: item.assetKey,
+          layerType: item.layerType,
+          positionX: item.positionX,
+          positionY: item.positionY,
+          name: item.name,
+          nameKo: item.nameKo,
+        },
+      }));
+    }
+  };
+
+  const handlePurchase = async () => {
+    if (!selectedItem) return;
+    setIsPurchasing(true);
+    try {
+      const result = await shopService.purchaseItem(selectedItem.id);
+      setTokenBalance(result.newBalance);
+      setItems(prev => prev.map(i => i.id === selectedItem.id ? { ...i, isOwned: true } : i));
+      setCharacter(prev => prev ? { ...prev, ownedItems: [...prev.ownedItems, selectedItem.id] } : prev);
+      setLocalEquipped(prev => ({
+        ...prev,
+        [selectedItem.category]: {
+          id: selectedItem.id,
+          assetKey: selectedItem.assetKey,
+          layerType: selectedItem.layerType,
+          positionX: selectedItem.positionX,
+          positionY: selectedItem.positionY,
+          name: selectedItem.name,
+          nameKo: selectedItem.nameKo,
+        },
+      }));
+      Alert.alert('🎉 Purchased!', `${selectedItem.name} is now yours!`);
+    } catch (e: any) {
+      const msg = e.response?.data?.error === 'insufficient_tokens'
+        ? 'Not enough tokens! Keep checking in to earn more 🦴'
+        : e.message || 'Purchase failed';
+      Alert.alert('Oops', msg);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const slots: SlotName[] = ['hat', 'glasses', 'accessory', 'clothes', 'background', 'effect'];
+      for (const slot of slots) {
+        const localItem = localEquipped[slot];
+        const serverItem = character?.equipped[slot];
+        if (localItem?.id !== serverItem?.id) {
+          await shopService.equipItem(slot, localItem?.id || null);
+        }
+      }
+      setCharacter(prev => prev ? { ...prev, equipped: { ...localEquipped } } : prev);
+      Alert.alert('✅ Saved!', 'Your character look has been updated!', [
+        { text: 'OK' },
+      ]);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUnequip = () => {
+    setLocalEquipped(prev => ({ ...prev, [selectedCategory]: null }));
+    setSelectedItem(null);
+  };
+
+  const isItemOwned = (item: ShopItem) => item.isOwned || character?.ownedItems.includes(item.id);
+  const hasUnsavedChanges = character && JSON.stringify(localEquipped) !== JSON.stringify(character.equipped);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top }, styles.center]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  const characterEmoji = character?.characterType === 'cat' ? '🐱' : '🐕';
+
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+        </Pressable>
+        <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>Character</Text>
+        <View style={styles.tokenDisplay}>
+          <Text style={{ fontSize: 14 }}>🦴</Text>
+          <Text style={[typography.labelLarge, { color: colors.accent }]}>{tokenBalance}</Text>
+        </View>
+      </View>
+
+      {/* Character Preview */}
+      <View style={styles.previewArea}>
+        <View style={styles.characterContainer}>
+          {localEquipped.background && (
+            <View style={[styles.layerPlaceholder, { backgroundColor: colors.accent + '22' }]}>
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>{localEquipped.background.nameKo || localEquipped.background.name}</Text>
+            </View>
+          )}
+          <Image
+            source={getBaseCharacter(character?.characterType || 'dog')}
+            style={styles.baseCharacterImg}
+            resizeMode="contain"
+          />
+          {/* Accessory layers */}
+          {(['hat', 'glasses', 'accessory', 'clothes', 'effect'] as SlotName[]).map(slot => {
+            const equipped = localEquipped[slot];
+            if (!equipped) return null;
+            const layer = getItemLayer(equipped.assetKey);
+            if (!layer) return null;
+            return (
+              <Image
+                key={slot}
+                source={layer}
+                style={[styles.itemLayerImg, {
+                  top: equipped.positionY || 0,
+                  left: equipped.positionX || 0,
+                }]}
+                resizeMode="contain"
+              />
+            );
+          })}
+        </View>
+        <Text style={[typography.labelLarge, { color: colors.textPrimary, marginTop: spacing.sm }]}>
+          Lil {petName || 'Buddy'}
+        </Text>
+      </View>
+
+      {/* Category Tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryBar} contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.xs }}>
+        {CATEGORIES.map(cat => {
+          const isActive = selectedCategory === cat.key;
+          return (
+            <Pressable
+              key={cat.key}
+              onPress={() => { setSelectedCategory(cat.key); setSelectedItem(null); }}
+              style={[styles.categoryTab, isActive && styles.categoryTabActive]}
+            >
+              <Text style={{ fontSize: 18 }}>{cat.emoji}</Text>
+              <Text style={[typography.labelSmall, { color: isActive ? colors.white : colors.textSecondary }]}>{cat.label}</Text>
+            </Pressable>
+          );
+        })}
+        {localEquipped[selectedCategory] && (
+          <Pressable onPress={handleUnequip} style={[styles.categoryTab, { borderColor: '#E74C3C', borderWidth: 1 }]}>
+            <Ionicons name="close-circle-outline" size={18} color="#E74C3C" />
+            <Text style={[typography.labelSmall, { color: '#E74C3C' }]}>Remove</Text>
+          </Pressable>
+        )}
+      </ScrollView>
+
+      {/* Item Grid */}
+      <FlatList
+        data={items}
+        numColumns={4}
+        keyExtractor={i => i.id}
+        contentContainerStyle={{ padding: spacing.md, gap: spacing.sm }}
+        columnWrapperStyle={{ gap: spacing.sm }}
+        renderItem={({ item }) => {
+          const owned = isItemOwned(item);
+          const isSelected = selectedItem?.id === item.id;
+          const isEquipped = localEquipped[item.category]?.id === item.id;
+
+          return (
+            <Pressable
+              onPress={() => handleItemPress(item)}
+              style={[
+                styles.itemCard,
+                isSelected && { borderColor: colors.primary, borderWidth: 2 },
+                isEquipped && { borderColor: colors.accent, borderWidth: 2 },
+              ]}
+            >
+              {(() => {
+                const thumb = getItemThumb(item.assetKey || item.asset_key);
+                if (thumb) {
+                  return <Image source={thumb} style={{ width: 40, height: 40 }} resizeMode="contain" />;
+                }
+                const emoji = item.category === 'hat' ? '🎩' :
+                  item.category === 'glasses' ? '👓' :
+                  item.category === 'accessory' ? '🎀' :
+                  item.category === 'clothes' ? '👔' :
+                  item.category === 'background' ? '🖼' : '✨';
+                return <Text style={{ fontSize: 28 }}>{emoji}</Text>;
+              })()}
+              <Text style={[typography.labelSmall, { color: colors.textPrimary, textAlign: 'center' }]} numberOfLines={1}>
+                {item.nameKo || item.name}
+              </Text>
+              {owned ? (
+                <Text style={[typography.labelSmall, { color: colors.primary, fontSize: 9 }]}>
+                  {isEquipped ? '✓ ON' : 'Owned'}
+                </Text>
+              ) : (
+                <Text style={[typography.labelSmall, { color: colors.accent, fontSize: 10 }]}>🦴{item.price}</Text>
+              )}
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          <View style={{ alignItems: 'center', padding: spacing.xl }}>
+            <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>
+              No items in this category yet
+            </Text>
+            <Text style={[typography.bodySmall, { color: colors.textSecondary, marginTop: spacing.xs }]}>
+              Items coming soon! 🎉
+            </Text>
+          </View>
+        }
+      />
+
+      {/* Bottom Action Bar */}
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
+        {selectedItem && !isItemOwned(selectedItem) ? (
+          <Pressable
+            onPress={handlePurchase}
+            disabled={isPurchasing}
+            style={[styles.purchaseBtn, isPurchasing && { opacity: 0.6 }]}
+          >
+            {isPurchasing ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={[typography.labelLarge, { color: colors.white }]}>
+                Purchase for 🦴{selectedItem.price}
+              </Text>
+            )}
+          </Pressable>
+        ) : hasUnsavedChanges ? (
+          <Pressable
+            onPress={handleSave}
+            disabled={isSaving}
+            style={[styles.saveBtn, isSaving && { opacity: 0.6 }]}
+          >
+            {isSaving ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={[typography.labelLarge, { color: colors.white }]}>Save Changes</Text>
+            )}
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
+  center: { justifyContent: 'center', alignItems: 'center' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  tokenDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.accent + '1A',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  previewArea: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.white,
+    marginHorizontal: spacing.md,
+    borderRadius: radius.large,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  characterContainer: {
+    width: 220,
+    height: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  layerPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.large,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  equippedBadges: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    flexDirection: 'row',
+    gap: 2,
+  },
+  equippedEmoji: { fontSize: 20 },
+  baseCharacterImg: {
+    width: 200,
+    height: 200,
+  },
+  itemLayerImg: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+  },
+  categoryBar: {
+    flexGrow: 0,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  categoryTab: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.lightGray,
+    gap: 2,
+  },
+  categoryTabActive: {
+    backgroundColor: colors.primary,
+  },
+  itemCard: {
+    flex: 1,
+    maxWidth: '23%',
+    alignItems: 'center',
+    padding: spacing.sm,
+    borderRadius: radius.medium,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    gap: 2,
+  },
+  bottomBar: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    backgroundColor: colors.background,
+  },
+  purchaseBtn: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderRadius: radius.medium,
+    backgroundColor: colors.accent,
+  },
+  saveBtn: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderRadius: radius.medium,
+    backgroundColor: colors.primary,
+  },
+});

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Image,
   Platform,
   Keyboard,
+  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +21,7 @@ import { colors, spacing, radius, typography, shadows } from '../theme';
 import { CONDITION_TYPES, ACTIVITY_LEVELS, PET_SEX_OPTIONS } from '../types';
 import type { PetType, ActivityLevel, PetSex } from '../types';
 import { useApp } from '../context/AppContext';
+import { DOG_BREEDS, CAT_BREEDS } from '../data/breeds';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 
@@ -49,11 +51,24 @@ export default function AddPetScreen() {
   const [sex, setSex] = useState<PetSex | null>(null);
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
+  const [breedDropdownVisible, setBreedDropdownVisible] = useState(false);
+
+  const breedList = petType === 'dog' ? DOG_BREEDS : CAT_BREEDS;
+  const filteredBreeds = useMemo(() => {
+    const q = breed.trim().toLowerCase();
+    if (!q) return [];
+    return breedList.filter(b => b.toLowerCase().includes(q)).slice(0, 6);
+  }, [breed, breedList]);
+
+  const selectBreed = (b: string) => {
+    setBreed(b);
+    setBreedDropdownVisible(false);
+  };
 
   const canProceed = currentStep === 0 ? name.trim().length > 0 : true;
 
   const goNext = () => {
-    if (currentStep < 2) setCurrentStep(s => s + 1);
+    if (currentStep < 3) setCurrentStep(s => s + 1);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -77,35 +92,68 @@ export default function AddPetScreen() {
     });
   };
 
+  const savePetCore = async () => {
+    const totalAgeMonths = (parseInt(ageYears || '0') * 12) + parseInt(ageMonths || '0');
+    const weightInLbs = parseFloat(weightLbs);
+    const weightKg = isNaN(weightInLbs) ? undefined : weightInLbs * 0.453592;
+
+    const healthConditions = Array.from(selectedConditions).map(ct => ({
+      id: `${Date.now()}-${ct}`,
+      condition_type: ct,
+      severity: 'moderate' as const,
+      notes: undefined,
+    }));
+
+    await addPet({
+      id: `local-${Date.now()}`,
+      name: name.trim(),
+      pet_type: petType,
+      breed: breed.trim() || undefined,
+      age_months: totalAgeMonths > 0 ? totalAgeMonths : undefined,
+      weight_kg: weightKg,
+      sex: sex ?? undefined,
+      activity_level: activityLevel,
+      is_primary: pets.length === 0,
+      healthConditions,
+      photoData: photoUri ?? undefined,
+    });
+  };
+
   const savePet = async () => {
     setIsLoading(true);
     try {
-      const totalAgeMonths = (parseInt(ageYears || '0') * 12) + parseInt(ageMonths || '0');
-      const weightInLbs = parseFloat(weightLbs);
-      const weightKg = isNaN(weightInLbs) ? undefined : weightInLbs * 0.453592;
-
-      const healthConditions = Array.from(selectedConditions).map(ct => ({
-        id: `${Date.now()}-${ct}`,
-        condition_type: ct,
-        severity: 'moderate' as const,
-        notes: undefined,
-      }));
-
-      await addPet({
-        id: `local-${Date.now()}`,
-        name: name.trim(),
-        pet_type: petType,
-        breed: breed.trim() || undefined,
-        age_months: totalAgeMonths > 0 ? totalAgeMonths : undefined,
-        weight_kg: weightKg,
-        sex: sex ?? undefined,
-        activity_level: activityLevel,
-        is_primary: pets.length === 0,
-        healthConditions,
-        photoData: photoUri ?? undefined,
-      });
-
+      await savePetCore();
       navigation.goBack();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add pet');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const savePetAndScanFood = async () => {
+    setIsLoading(true);
+    try {
+      await savePetCore();
+      navigation.goBack();
+      setTimeout(() => {
+        (navigation as any).navigate('QuickScan');
+      }, 300);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add pet');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const savePetAndRegisterFood = async () => {
+    setIsLoading(true);
+    try {
+      await savePetCore();
+      navigation.goBack();
+      setTimeout(() => {
+        (navigation as any).navigate('ProductRegister');
+      }, 300);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to add pet');
     } finally {
@@ -129,7 +177,7 @@ export default function AddPetScreen() {
 
       {/* Progress */}
       <View style={styles.progressRow}>
-        {[0, 1, 2].map(step => (
+        {[0, 1, 2, 3].map(step => (
           <View
             key={step}
             style={[styles.progressCapsule, { backgroundColor: step <= currentStep ? colors.primary : colors.lightGray }]}
@@ -168,18 +216,33 @@ export default function AddPetScreen() {
               </Text>
             </Pressable>
 
-            {/* Pet Type — dog only for now */}
+            {/* Pet Type */}
             <View style={styles.fieldGroup}>
               <Text style={[typography.labelMedium, { color: colors.textSecondary }]}>Pet Type</Text>
               <View style={{ flexDirection: 'row', gap: spacing.md }}>
-                <View
+                <Pressable
+                  onPress={() => setPetType('dog')}
                   style={[
                     styles.petTypeBtn,
-                    { backgroundColor: colors.primary + '26', borderColor: colors.primary, borderWidth: 2 },
+                    petType === 'dog'
+                      ? { backgroundColor: colors.primary + '26', borderColor: colors.primary, borderWidth: 2 }
+                      : { borderWidth: 2, borderColor: colors.lightGray },
                   ]}
                 >
                   <Text style={{ fontSize: 40 }}>🐕</Text>
                   <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>Dog</Text>
+                </Pressable>
+                <View
+                  style={[
+                    styles.petTypeBtn,
+                    { borderWidth: 2, borderColor: colors.lightGray, opacity: 0.45 },
+                  ]}
+                >
+                  <Text style={{ fontSize: 40 }}>🐱</Text>
+                  <Text style={[typography.labelLarge, { color: colors.textSecondary }]}>Cat</Text>
+                  <View style={{ backgroundColor: colors.accent + '33', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.full }}>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: colors.accent }}>Coming Soon</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -197,15 +260,39 @@ export default function AddPetScreen() {
             </View>
 
             {/* Breed */}
-            <View style={styles.fieldGroup}>
+            <View style={[styles.fieldGroup, { zIndex: 10, position: 'relative' }]}>
               <Text style={[typography.labelMedium, { color: colors.textSecondary }]}>Breed (Optional)</Text>
               <TextInput
                 style={styles.input}
                 value={breed}
-                onChangeText={setBreed}
+                onChangeText={(text) => {
+                  setBreed(text);
+                  setBreedDropdownVisible(true);
+                }}
+                onFocus={() => setBreedDropdownVisible(true)}
+                onBlur={() => {
+                  setTimeout(() => setBreedDropdownVisible(false), 200);
+                }}
                 placeholder={petType === 'dog' ? 'e.g., Labrador, Mixed' : 'e.g., Persian, Tabby'}
                 placeholderTextColor={colors.textSecondary}
               />
+              {breedDropdownVisible && filteredBreeds.length > 0 && (
+                <View style={styles.breedDropdown}>
+                  {filteredBreeds.map((b, i) => (
+                    <Pressable
+                      key={b}
+                      onPress={() => selectBreed(b)}
+                      style={[
+                        styles.breedDropdownItem,
+                        i < filteredBreeds.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
+                      ]}
+                    >
+                      <Ionicons name="paw-outline" size={14} color={colors.textSecondary} />
+                      <Text style={[typography.bodyMedium, { color: colors.textPrimary, flex: 1 }]}>{b}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -348,6 +435,50 @@ export default function AddPetScreen() {
             })}
           </View>
         )}
+
+        {currentStep === 3 && (
+          <View style={styles.stepContent}>
+            <View style={{ alignItems: 'center', gap: spacing.sm }}>
+              <Text style={{ fontSize: 50 }}>{petEmoji}</Text>
+              <Text style={[typography.displaySmall, { color: colors.textPrimary, textAlign: 'center' }]}>
+                What does {name || 'your pet'} eat?
+              </Text>
+              <Text style={[typography.bodyMedium, { color: colors.textSecondary, textAlign: 'center' }]}>
+                Register your pet's current food to track their nutrition journey
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={savePetAndScanFood}
+              disabled={isLoading}
+              style={({ pressed }) => [styles.foodOptionBtn, pressed && { opacity: 0.9 }]}
+            >
+              <Ionicons name="barcode-outline" size={28} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>Scan Food Barcode</Text>
+                <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
+                  Quick scan to identify the product
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </Pressable>
+
+            <Pressable
+              onPress={savePetAndRegisterFood}
+              disabled={isLoading}
+              style={({ pressed }) => [styles.foodOptionBtn, pressed && { opacity: 0.9 }]}
+            >
+              <Ionicons name="camera-outline" size={28} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>Take Photos</Text>
+                <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
+                  Front label + ingredients + barcode
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
 
       {/* Bottom buttons */}
@@ -363,7 +494,7 @@ export default function AddPetScreen() {
             </Pressable>
           )}
 
-          {currentStep < 2 ? (
+          {currentStep < 3 ? (
             <Pressable
               onPress={goNext}
               disabled={!canProceed}
@@ -531,5 +662,46 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textSecondary + '66',
     shadowOpacity: 0,
     elevation: 0,
+  },
+  breedDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 999,
+    backgroundColor: colors.white,
+    borderRadius: radius.medium,
+    marginTop: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  breedDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+  },
+  foodOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.white,
+    borderRadius: radius.large,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
 });

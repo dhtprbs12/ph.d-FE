@@ -180,11 +180,10 @@ export async function uploadImage<T>(
   const jpegUri = manipulated.uri;
 
   const formData = new FormData();
-  formData.append(fieldName, {
-    uri: getUploadUri(jpegUri),
-    type: 'image/jpeg',
-    name: `${fieldName}.jpg`,
-  } as unknown as Blob);
+
+  const fileResponse = await fetch(jpegUri);
+  const blob = await fileResponse.blob();
+  formData.append(fieldName, blob, `${fieldName}.jpg`);
 
   if (additionalFields) {
     for (const [key, value] of Object.entries(additionalFields)) {

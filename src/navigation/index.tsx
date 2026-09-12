@@ -32,6 +32,11 @@ import { FoodCheckScreen } from '../screens/FoodCheckScreen';
 import SignupScreen from '../screens/SignupScreen';
 import LoginScreen from '../screens/LoginScreen';
 import CommunityScreen from '../screens/CommunityScreen';
+import ProductRegisterScreen from '../screens/ProductRegisterScreen';
+import CheckInScreen from '../screens/CheckInScreen';
+import CharacterScreen from '../screens/CharacterScreen';
+import PassportScreen from '../screens/PassportScreen';
+import InsightDetailScreen from '../screens/InsightDetailScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -72,6 +77,23 @@ function HomeStackNavigator() {
         component={AddPetScreen}
         options={{ presentation: 'modal', headerShown: false }}
       />
+      <HomeStack.Screen
+        name="ProductRegister"
+        component={ProductRegisterScreen}
+        options={{ presentation: 'fullScreenModal', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="CheckIn"
+        component={CheckInScreen}
+        options={{ presentation: 'modal', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="Character"
+        component={CharacterScreen}
+        options={{ presentation: 'modal', headerShown: false }}
+      />
+      <HomeStack.Screen name="Passport" component={PassportScreen} options={{ headerShown: false }} />
+      <HomeStack.Screen name="InsightDetail" component={InsightDetailScreen} options={{ headerShown: false }} />
     </HomeStack.Navigator>
   );
 }

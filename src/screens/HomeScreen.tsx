@@ -9,6 +9,8 @@ import {
   Modal,
   Animated,
   Dimensions,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -16,12 +18,17 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
-import type { CommunityStats, Pet, UserStats } from '../types';
+import type { CommunityStats, Pet } from '../types';
 import { formatCommunityScans } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
 import * as communityService from '../services/communityService';
 import type { RecentActivity } from '../services/communityService';
+import gamificationService, { GamificationSummary } from '../services/gamificationService';
+import petFoodService, { CurrentFood } from '../services/petFoodService';
+import api from '../services/api';
+import { toTitleCase } from '../utils/helpers';
+import { getBaseCharacter } from '../utils/characterAssets';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -116,86 +123,289 @@ function PetAvatar({ pet, size = 56 }: { pet: Pet; size?: number }) {
   );
 }
 
-/* ─── User Badge Card ──────────────────────────────────────────── */
+/* ─── Gamification Header ──────────────────────────────────────── */
 
-function UserBadgeCard({ stats }: { stats: UserStats }) {
-  const { badge, scanCount } = stats;
-  const badgeColor = badge.color || colors.primary;
-  const progress =
-    badge.progress != null
-      ? badge.progress <= 1
-        ? badge.progress
-        : badge.progress / 100
-      : 0;
+function GamificationHeader({ onCharacterPress, petName }: { onCharacterPress: () => void; petName?: string }) {
+  const [summary, setSummary] = useState<GamificationSummary | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    gamificationService.getSummary().then(setSummary).catch(console.warn);
+  }, []));
+
+  if (!summary) return null;
+
+  const characterEmoji = '🐕';
+  const baseImg = getBaseCharacter('dog');
 
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: spacing.md,
-        borderRadius: radius.large,
-        backgroundColor: withOpacity(badgeColor, 0.08),
-        borderWidth: 1,
-        borderColor: withOpacity(badgeColor, 0.3),
-        gap: spacing.md,
-      }}
-    >
-      <Text style={{ fontSize: 36 }}>{badge.icon}</Text>
-
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text style={{ fontSize: 18, fontWeight: '700', color: badgeColor }}>
-          {badge.title}
-        </Text>
-        <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-          {scanCount} scans completed
-        </Text>
-      </View>
-
-      {badge.nextAt != null && badge.progress != null ? (
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: '500',
-              color: colors.textSecondary,
-            }}
-          >
-            Level {badge.level}
-          </Text>
-          <View
-            style={{
-              width: 60,
-              height: 8,
-              borderRadius: 4,
-              backgroundColor: colors.lightGray,
-            }}
-          >
-            <View
-              style={{
-                width: 60 * Math.min(1, progress),
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: badgeColor,
-              }}
-            />
+    <Pressable onPress={onCharacterPress} style={styles.gamHeader}>
+      <View style={styles.gamCharacterArea}>
+        <Image source={baseImg} style={{ width: 120, height: 120 }} resizeMode="contain" />
+        <Text style={[typography.titleMedium, { color: colors.textPrimary, marginTop: -4 }]}>Lil {petName || 'Buddy'}</Text>
+        {summary.scanLevel.nextLevel && (
+          <View style={styles.gamProgressBar}>
+            <View style={[styles.gamProgressFill, {
+              width: `${Math.min(100, (summary.scanLevel.nextLevel.progress.current / summary.scanLevel.nextLevel.progress.target) * 100)}%`,
+            }]} />
           </View>
-          <Text style={{ fontSize: 10, color: colors.textSecondary }}>
-            {badge.nextAt - scanCount} to next
+        )}
+      </View>
+      <View style={styles.gamBottomRow}>
+        <View style={styles.gamLevelBadge}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Lv.{summary.scanLevel.currentLevel}</Text>
+        </View>
+        <View style={styles.gamTokenBadge}>
+          <Text style={{ fontSize: 14 }}>🦴</Text>
+          <Text style={[typography.labelLarge, { color: colors.accent }]}>
+            {summary.tokens.balance}
           </Text>
         </View>
+        {summary.streak.currentStreak > 0 && (
+          <View style={styles.gamStreakBadge}>
+            <Text style={{ fontSize: 14 }}>🔥</Text>
+            <Text style={[typography.labelMedium, { color: colors.danger }]}>
+              {summary.streak.currentStreak}d
+            </Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+/* ─── Quick Action Row ─────────────────────────────────────────── */
+
+function QuickActionRow({
+  isEnabled,
+  navigation,
+  selectedPet,
+}: {
+  isEnabled: boolean;
+  navigation: Nav;
+  selectedPet: Pet | null;
+}) {
+  const actions = [
+    { icon: 'camera' as const, label: 'Scan', color: colors.primary, onPress: () => navigation.navigate('TwoStepScan') },
+    { icon: 'barcode-outline' as const, label: 'Barcode', color: colors.accent, onPress: () => navigation.navigate('QuickScan') },
+    { icon: 'search' as const, label: 'Search', color: colors.safe, onPress: () => navigation.navigate('ProductSearch') },
+    {
+      icon: 'clipboard-outline' as const,
+      label: 'Check-in',
+      color: '#E74C3C',
+      onPress: () => {
+        if (selectedPet) {
+          navigation.navigate('CheckIn', { petId: selectedPet.id, petName: selectedPet.name });
+        }
+      },
+    },
+  ];
+
+  return (
+    <View style={styles.quickActionRow}>
+      {actions.map(a => (
+        <Pressable
+          key={a.label}
+          onPress={a.onPress}
+          disabled={!isEnabled}
+          style={[styles.quickActionBtn, { opacity: isEnabled ? 1 : 0.5 }]}
+        >
+          <View style={[styles.quickActionIcon, { backgroundColor: a.color + '1A' }]}>
+            <Ionicons name={a.icon} size={22} color={a.color} />
+          </View>
+          <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>{a.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+/* ─── Current Food Card ────────────────────────────────────────── */
+
+function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
+  const [currentFood, setCurrentFood] = useState<CurrentFood | null>(null);
+  const [showFoodInput, setShowFoodInput] = useState(false);
+  const [foodNameInput, setFoodNameInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    if (pet?.id) {
+      petFoodService.getCurrentFood(pet.id).then(setCurrentFood).catch(console.warn);
+    }
+  }, [pet?.id]));
+
+  const handleSearchFood = (text: string) => {
+    setFoodNameInput(text);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (text.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const { data } = await api.get('/products/search', { params: { q: text.trim(), petType: pet.pet_type, limit: 5 } });
+        setSearchResults(data.products || []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+  };
+
+  const handleSelectProduct = async (product: any) => {
+    setSaving(true);
+    try {
+      await petFoodService.setCurrentFood(pet.id, {
+        productId: product.id,
+        productName: product.name,
+        brand: product.brand || undefined,
+      });
+      const updated = await petFoodService.getCurrentFood(pet.id);
+      setCurrentFood(updated);
+      setShowFoodInput(false);
+      setFoodNameInput('');
+      setSearchResults([]);
+    } catch (e) {
+      console.warn('Failed to save food:', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveFreeText = async () => {
+    if (!foodNameInput.trim()) return;
+    setSaving(true);
+    try {
+      await petFoodService.setCurrentFood(pet.id, { productName: foodNameInput.trim() });
+      const updated = await petFoodService.getCurrentFood(pet.id);
+      setCurrentFood(updated);
+      setShowFoodInput(false);
+      setFoodNameInput('');
+      setSearchResults([]);
+    } catch (e) {
+      console.warn('Failed to save food:', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const hasProductId = currentFood?.productId != null;
+
+  return (
+    <View style={[styles.card, shadows.card]}>
+      {currentFood ? (
+        <View style={{ gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            {currentFood.imageUrl ? (
+              <Image source={{ uri: currentFood.imageUrl }} style={styles.foodImage} />
+            ) : (
+              <View style={[styles.foodImage, { backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name="nutrition-outline" size={24} color={colors.primary} />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.labelLarge, { color: colors.textPrimary }]} numberOfLines={1}>
+                {toTitleCase(currentFood.productName)}
+              </Text>
+              <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
+                {pet.name} · Day {currentFood.daysOnFood}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => navigation.navigate('CheckIn', {
+                petId: pet.id,
+                petName: pet.name,
+                foodName: currentFood.productName,
+                daysOnFood: currentFood.daysOnFood,
+              })}
+              style={styles.checkinBtn}
+            >
+              <Text style={[typography.labelSmall, { color: colors.white }]}>Check-in</Text>
+            </Pressable>
+          </View>
+          {/* Scan nudge for free-text food */}
+          {!hasProductId && (
+            <Pressable
+              onPress={() => navigation.navigate('QuickScan', { mode: 'selectFood', petId: pet.id })}
+              style={styles.scanNudge}
+            >
+              <Ionicons name="scan-outline" size={14} color={colors.accent} />
+              <Text style={{ fontSize: 12, color: colors.accent, fontWeight: '600', flex: 1 }}>Scan to unlock full tracking & insights</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+            </Pressable>
+          )}
+        </View>
       ) : (
-        <View style={{ alignItems: 'center', gap: 2 }}>
-          <Text style={{ fontSize: 20 }}>👑</Text>
-          <Text
-            style={{
-              fontSize: 10,
-              fontWeight: '700',
-              color: colors.textSecondary,
-            }}
-          >
-            MAX
-          </Text>
+        <Pressable
+          onPress={() => setShowFoodInput(true)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs }}
+        >
+          <View style={[styles.foodImage, { backgroundColor: colors.primary + '10', alignItems: 'center', justifyContent: 'center' }]}>
+            <Ionicons name="add" size={24} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>Add Current Food</Text>
+            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Track what {pet.name} eats</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </Pressable>
+      )}
+      {showFoodInput && (
+        <View style={{ marginTop: spacing.sm, gap: spacing.xs }}>
+          <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+            <TextInput
+              style={[styles.foodInput, { flex: 1 }]}
+              value={foodNameInput}
+              onChangeText={handleSearchFood}
+              placeholder="Search food name..."
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="words"
+              autoFocus
+            />
+            <Pressable onPress={() => { setShowFoodInput(false); setSearchResults([]); }}>
+              <Ionicons name="close-circle" size={24} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+          {/* Search results dropdown */}
+          {searchResults.length > 0 && (
+            <View style={styles.foodDropdown}>
+              {searchResults.map((p: any) => (
+                <Pressable key={p.id} onPress={() => handleSelectProduct(p)} style={styles.foodDropdownItem}>
+                  <Ionicons name="nutrition-outline" size={16} color={colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, color: colors.textPrimary, fontWeight: '500' }} numberOfLines={1}>{p.name}</Text>
+                    {p.brand && <Text style={{ fontSize: 11, color: colors.textSecondary }}>{p.brand}</Text>}
+                  </View>
+                  {p.base_dog_score && (
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{p.base_dog_score}pt</Text>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {searching && <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 4 }} />}
+          {/* Free text save + barcode option */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+            {foodNameInput.trim().length > 0 && (
+              <Pressable onPress={handleSaveFreeText} disabled={saving} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="create-outline" size={14} color={colors.textSecondary} />
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  {saving ? 'Saving...' : `Save "${foodNameInput.trim()}" as-is`}
+                </Text>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => { setShowFoodInput(false); setSearchResults([]); navigation.navigate('QuickScan', { mode: 'selectFood', petId: pet.id }); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            >
+              <Ionicons name="barcode-outline" size={14} color={colors.primary} />
+              <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600' }}>Scan barcode</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </View>
@@ -841,7 +1051,6 @@ export default function HomeScreen() {
   const { pets, selectedPet, selectPet } = useApp();
   const [communityStats, setCommunityStats] =
     useState<CommunityStats | null>(null);
-  const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [petModalVisible, setPetModalVisible] = useState(false);
 
@@ -850,15 +1059,13 @@ export default function HomeScreen() {
       let cancelled = false;
       (async () => {
         try {
-          const [comm, u, act] = await Promise.allSettled([
+          const [comm, act] = await Promise.allSettled([
             scanService.getCommunityStats(),
-            scanService.getUserStats(),
             communityService.getRecentActivity(),
           ]);
 
           if (cancelled) return;
           if (comm.status === 'fulfilled') setCommunityStats(comm.value);
-          if (u.status === 'fulfilled') setUserStats(u.value);
           if (act.status === 'fulfilled') setRecentActivity(act.value);
         } catch (e) {
           console.warn('[Home] loadStats error:', e);
@@ -895,12 +1102,10 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.vstack}>
-          {/* User Badge */}
-          {userStats && (
-            <StaggeredView index={0}>
-              <UserBadgeCard stats={userStats} />
-            </StaggeredView>
-          )}
+          {/* Gamification Header — replaces old UserBadgeCard */}
+          <StaggeredView index={0}>
+            <GamificationHeader onCharacterPress={() => navigation.navigate('Character')} petName={selectedPet?.name} />
+          </StaggeredView>
 
           {/* Pet Selector / No Pet */}
           <StaggeredView index={1}>
@@ -913,49 +1118,65 @@ export default function HomeScreen() {
             )}
           </StaggeredView>
 
-          {/* Community Trust Banner */}
+          {/* Quick Action Row */}
           <StaggeredView index={2}>
+            <QuickActionRow
+              isEnabled={selectedPet != null}
+              navigation={navigation}
+              selectedPet={selectedPet}
+            />
+          </StaggeredView>
+
+          {/* Current Food Card */}
+          {selectedPet && (
+            <StaggeredView index={3}>
+              <CurrentFoodCard pet={selectedPet} navigation={navigation} />
+            </StaggeredView>
+          )}
+
+          {/* Community Trust Banner */}
+          <StaggeredView index={4}>
             <CommunityTrustBanner stats={communityStats} activity={recentActivity} />
           </StaggeredView>
 
           {/* Action Cards */}
           <View style={{ gap: spacing.md, paddingBottom: spacing.lg }}>
-            <StaggeredView index={3}>
+            <StaggeredView index={5}>
               <LabelScanPromptCard
                 isEnabled={selectedPet != null}
                 onPress={() => navigation.navigate('TwoStepScan')}
               />
             </StaggeredView>
 
-            <StaggeredView index={4}>
+            <StaggeredView index={6}>
               <QuickScanCard
                 isEnabled={selectedPet != null}
                 onPress={() => navigation.navigate('QuickScan')}
               />
             </StaggeredView>
 
-            <StaggeredView index={5}>
+            <StaggeredView index={7}>
               <FindSafeFoodCard
                 pet={selectedPet}
                 onPress={() => navigation.navigate('ProductSearch')}
               />
             </StaggeredView>
 
-            <StaggeredView index={6}>
+            <StaggeredView index={8}>
               <FoodCheckCard
                 isEnabled={selectedPet != null}
                 onPress={() => navigation.navigate('FoodCheck')}
               />
             </StaggeredView>
 
-            <StaggeredView index={7}>
+            <StaggeredView index={9}>
               <IngredientManualCard
                 isEnabled={selectedPet != null}
                 onPress={() => navigation.navigate('ManualIngredients')}
               />
             </StaggeredView>
 
-            <StaggeredView index={8}>
+            <StaggeredView index={10}>
               <AafcoGuidelinesCallout />
             </StaggeredView>
           </View>
@@ -1146,5 +1367,130 @@ const styles = StyleSheet.create({
   },
   modalRowLast: {
     borderBottomWidth: 0,
+  },
+  gamHeader: {
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: radius.large,
+    gap: spacing.sm,
+    ...shadows.card,
+  },
+  gamCharacterArea: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  gamLevelBadge: {
+    backgroundColor: colors.primary + '1A',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  gamBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  gamStatsArea: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  gamStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  gamTokenBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.accent + '1A',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  gamStreakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.danger + '1A',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  gamProgressBar: {
+    height: 6,
+    width: 120,
+    borderRadius: 3,
+    backgroundColor: colors.lightGray,
+  },
+  gamProgressFill: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  quickActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  quickActionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing.xxs,
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkinBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  foodImage: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.medium,
+    overflow: 'hidden',
+  },
+  scanNudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.accent + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.medium,
+  },
+  foodInput: {
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderRadius: radius.medium,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    fontSize: 14,
+    backgroundColor: colors.card,
+    color: colors.textPrimary,
+  },
+  foodDropdown: {
+    backgroundColor: colors.white,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    overflow: 'hidden',
+  },
+  foodDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
   },
 });

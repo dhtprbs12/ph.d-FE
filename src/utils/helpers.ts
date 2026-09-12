@@ -6,6 +6,13 @@ export function buildImageUrl(imageUrl?: string | null): string | null {
   return `${API_BASE}${imageUrl}`;
 }
 
+export function toTitleCase(str?: string | null): string {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .replace(/(?:^|\s|[-/])\S/g, (c) => c.toUpperCase());
+}
+
 export function productTypeLabel(type?: string): string {
   switch (type) {
     case 'dry_food': return 'Dry Food';

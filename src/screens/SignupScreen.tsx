@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, Alert, ActivityIndicator, Image, Platform, Pressable,
@@ -17,6 +17,8 @@ import { colors, spacing, radius, typography } from '../theme';
 import { CONDITION_TYPES, PET_SEX_OPTIONS } from '../types';
 import type { PetSex } from '../types';
 import type { RootStackParamList } from '../navigation/types';
+import { DOG_BREEDS, CAT_BREEDS } from '../data/breeds';
+import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 
@@ -37,6 +39,17 @@ export default function SignupScreen({ navigation }: Props) {
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<'dog' | 'cat'>('dog');
   const [breed, setBreed] = useState('');
+  const [breedDropdownVisible, setBreedDropdownVisible] = useState(false);
+  const breedList = petType === 'dog' ? DOG_BREEDS : CAT_BREEDS;
+  const filteredBreeds = useMemo(() => {
+    const q = breed.trim().toLowerCase();
+    if (!q) return [];
+    return breedList.filter(b => b.toLowerCase().includes(q)).slice(0, 6);
+  }, [breed, breedList]);
+  const selectBreed = (b: string) => {
+    setBreed(b);
+    setBreedDropdownVisible(false);
+  };
   const [ageYears, setAgeYears] = useState('');
   const [ageMonthsVal, setAgeMonthsVal] = useState('');
   const [weightLbs, setWeightLbs] = useState('');
@@ -44,6 +57,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [activityLevel, setActivityLevel] = useState<'low' | 'moderate' | 'high'>('moderate');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
+  const [currentFoodSelection, setCurrentFoodSelection] = useState<FoodSelection | null>(null);
 
   const toggleCondition = useCallback((value: string) => {
     setSelectedConditions(prev => {
@@ -140,6 +154,18 @@ export default function SignupScreen({ navigation }: Props) {
         }
       }
 
+      if (currentFoodSelection?.productName && createdPet?.id) {
+        try {
+          await api.post(`/pets/${createdPet.id}/current-food`, {
+            productId: currentFoodSelection.productId || undefined,
+            productName: currentFoodSelection.productName,
+            brand: currentFoodSelection.brand || undefined,
+          });
+        } catch (e) {
+          console.warn('Current food registration failed:', e);
+        }
+      }
+
       await savePetsLocally([{ ...createdPet, photoData: photoUri ?? undefined }]);
       await authenticateAndSync();
 
@@ -231,7 +257,7 @@ export default function SignupScreen({ navigation }: Props) {
               <Text style={styles.linkText}>Already have an account? Log in</Text>
             </TouchableOpacity>
           </View>
-        ) : (
+        ) : step === 1 ? (
           <View key="step-pet" style={styles.form}>
             <Text style={styles.title}>Your Pet</Text>
             <Text style={styles.subtitle}>Tell us about your first pet</Text>
@@ -262,21 +288,57 @@ export default function SignupScreen({ navigation }: Props) {
 
             <Text style={styles.label}>Type</Text>
             <View style={styles.row}>
-              <View style={[styles.petTypeBtn, styles.petTypeBtnActive]}>
+              <Pressable
+                onPress={() => setPetType('dog')}
+                style={[styles.petTypeBtn, petType === 'dog' && styles.petTypeBtnActive]}
+              >
                 <Text style={{ fontSize: 28 }}>🐕</Text>
-                <Text style={[styles.chipText, styles.chipTextActive]}>Dog</Text>
+                <Text style={[styles.chipText, petType === 'dog' && styles.chipTextActive]}>Dog</Text>
+              </Pressable>
+              <View style={[styles.petTypeBtn, { opacity: 0.45 }]}>
+                <Text style={{ fontSize: 28 }}>🐱</Text>
+                <Text style={[styles.chipText, { color: colors.textSecondary }]}>Cat</Text>
+                <View style={{ backgroundColor: colors.accent + '33', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.full }}>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: colors.accent }}>Coming Soon</Text>
+                </View>
               </View>
             </View>
 
             <Text style={styles.label}>Breed (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={breed}
-              onChangeText={setBreed}
-              placeholder={petType === 'dog' ? 'e.g. Labrador, Mixed' : 'e.g. Persian, Tabby'}
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="words"
-            />
+            <View style={{ zIndex: 10, position: 'relative' }}>
+              <TextInput
+                style={styles.input}
+                value={breed}
+                onChangeText={(text) => {
+                  setBreed(text);
+                  setBreedDropdownVisible(true);
+                }}
+                onFocus={() => setBreedDropdownVisible(true)}
+                onBlur={() => {
+                  setTimeout(() => setBreedDropdownVisible(false), 200);
+                }}
+                placeholder={petType === 'dog' ? 'e.g. Labrador, Mixed' : 'e.g. Persian, Tabby'}
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="words"
+              />
+              {breedDropdownVisible && filteredBreeds.length > 0 && (
+                <View style={styles.breedDropdown}>
+                  {filteredBreeds.map((b, i) => (
+                    <Pressable
+                      key={b}
+                      onPress={() => selectBreed(b)}
+                      style={[
+                        styles.breedDropdownItem,
+                        i < filteredBreeds.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
+                      ]}
+                    >
+                      <Ionicons name="paw-outline" size={14} color={colors.textSecondary} />
+                      <Text style={[{ fontSize: 14, color: colors.textPrimary, flex: 1 }]}>{b}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
 
             <Text style={styles.label}>Age</Text>
             <View style={styles.row}>
@@ -378,11 +440,77 @@ export default function SignupScreen({ navigation }: Props) {
                 <Text style={styles.backBtnText}>Back</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.button, styles.flex1, (!step2Ready || loading) && styles.buttonDisabled]}
-                onPress={handleRegister}
-                disabled={!step2Ready || loading}
+                style={[styles.button, styles.flex1, !step2Ready && styles.buttonDisabled]}
+                onPress={() => setStep(2)}
+                disabled={!step2Ready}
               >
-                {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Create Account</Text>}
+                <Text style={styles.buttonText}>Next</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View key="step-food" style={styles.form}>
+            <Text style={styles.title}>Current Food</Text>
+            <Text style={styles.subtitle}>What does {petName || 'your pet'} eat? You can always change this later.</Text>
+
+            <View style={{ alignItems: 'center', marginVertical: spacing.md }}>
+              <Text style={{ fontSize: 64 }}>🍖</Text>
+            </View>
+
+            {currentFoodSelection ? (
+              <View style={styles.selectedFood}>
+                <Ionicons name="checkmark-circle" size={20} color={colors.safe} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{currentFoodSelection.productName}</Text>
+                  {currentFoodSelection.brand && (
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{currentFoodSelection.brand}</Text>
+                  )}
+                </View>
+                <Pressable onPress={() => setCurrentFoodSelection(null)}>
+                  <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            ) : (
+              <FoodSearchInput
+                petType={petType}
+                onSelect={(food) => setCurrentFoodSelection(food)}
+                placeholder="Search or type food name..."
+              />
+            )}
+
+            <View style={styles.orDivider}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>or</Text>
+              <View style={styles.orLine} />
+            </View>
+
+            <Pressable
+              style={styles.scanFoodBtn}
+              onPress={() => handleRegister()}
+              disabled={loading}
+            >
+              <Ionicons name="barcode-outline" size={22} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Scan Food Barcode</Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>You can scan after signup from the home screen</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </Pressable>
+
+            <View style={[styles.row, { marginTop: spacing.lg }]}>
+              <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
+                <Text style={styles.backBtnText}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.flex1, loading && styles.buttonDisabled]}
+                onPress={handleRegister}
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator color={colors.white} /> : (
+                  <Text style={styles.buttonText}>
+                    {currentFoodSelection ? 'Create Account' : 'Skip & Create Account'}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -483,5 +611,69 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radius.full,
+  },
+  breedDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 999,
+    backgroundColor: colors.white,
+    borderRadius: radius.medium,
+    marginTop: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  breedDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+  },
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginVertical: spacing.lg,
+  },
+  orLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.divider,
+  },
+  orText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  scanFoodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.primary + '0D',
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.primary + '33',
+  },
+  selectedFood: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.safe + '15',
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.safe + '33',
   },
 });

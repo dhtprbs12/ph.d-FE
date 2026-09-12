@@ -16,6 +16,7 @@ import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import { useApp } from '../context/AppContext';
+import MiniCharacter from '../components/MiniCharacter';
 
 /** Mirrors `expo.version` from app.json; falls back after native build */
 const APP_VERSION =
@@ -195,7 +196,7 @@ const dividerStyles = StyleSheet.create({
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { pets, resetApp } = useApp();
-  const fadeStyles = useStaggeredFade(5);
+  const fadeStyles = useStaggeredFade(6);
 
   const onReset = () => {
     Alert.alert(
@@ -235,15 +236,26 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
 
+        {/* My Character */}
+        <Animated.View style={[styles.profileOuter, fadeStyles[1]]}>
+          <View style={[styles.profileCard, shadows.card]}>
+            <MiniCharacter size={80} />
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>My Character</Text>
+              <Text style={styles.profileSub}>{pets.length} pet{pets.length !== 1 ? 's' : ''} registered</Text>
+            </View>
+          </View>
+        </Animated.View>
+
         {/* Your Stats */}
-        <SettingsSection title="Your Stats" style={fadeStyles[1]}>
+        <SettingsSection title="Your Stats" style={fadeStyles[2]}>
           <SettingsRow icon="paw" iconColor={colors.primary} title="Pets" value={String(pets.length)} />
         </SettingsSection>
 
         <View style={styles.sectionGap} />
 
         {/* About */}
-        <SettingsSection title="About" style={fadeStyles[2]}>
+        <SettingsSection title="About" style={fadeStyles[3]}>
           <SettingsRow
             icon="hand-left"
             iconColor={colors.primary}
@@ -272,7 +284,7 @@ export default function SettingsScreen() {
         <View style={styles.sectionGap} />
 
         {/* Data */}
-        <SettingsSection title="Data" style={fadeStyles[3]}>
+        <SettingsSection title="Data" style={fadeStyles[4]}>
           <SettingsRow
             icon="refresh"
             iconColor={colors.danger}
@@ -283,7 +295,7 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         {/* Footer */}
-        <Animated.View style={[styles.footer, fadeStyles[4]]}>
+        <Animated.View style={[styles.footer, fadeStyles[5]]}>
           <Text style={styles.footerText}>Made with ❤️ for pet lovers</Text>
         </Animated.View>
       </ScrollView>
@@ -338,6 +350,29 @@ const styles = StyleSheet.create({
   },
   sectionGap: {
     height: spacing.lg,
+  },
+  profileOuter: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  profileCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.large,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileInfo: {
+    marginLeft: spacing.md,
+    gap: 4,
+  },
+  profileName: {
+    ...typography.titleMedium,
+    color: colors.textPrimary,
+  },
+  profileSub: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
   },
   footer: {
     paddingVertical: spacing.lg,

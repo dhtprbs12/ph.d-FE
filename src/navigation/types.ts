@@ -49,10 +49,15 @@ export type HomeStackParamList = {
   ProductSearch: undefined;
   Result: ResultParams;
   TwoStepScan: undefined;
-  QuickScan: undefined;
+  QuickScan: { mode?: 'analyze' | 'selectFood'; petId?: string } | undefined;
   ManualIngredients: ManualIngredientsParams | undefined;
   FoodCheck: undefined;
   AddPet: undefined;
+  ProductRegister: { barcode?: string } | undefined;
+  CheckIn: { petId: string; petName?: string; foodName?: string; daysOnFood?: number };
+  Character: undefined;
+  Passport: { petId: string; petName?: string };
+  InsightDetail: { insight: any };
 };
 
 export type HistoryStackParamList = {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,16 +9,21 @@ import type { HomeStackParamList } from '../navigation/types';
 import { useApp } from '../context/AppContext';
 import { colors } from '../theme';
 import api from '../services/api';
+import petFoodService from '../services/petFoodService';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
 export function QuickScanScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<any>();
   const { selectedPet } = useApp();
+  const mode = route.params?.mode || 'analyze';
+  const foodPetId = route.params?.petId;
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
   const [looking, setLooking] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!permission?.granted) requestPermission();
@@ -29,6 +34,7 @@ export function QuickScanScreen() {
     scannedRef.current = true;
     setLooking(true);
     setNotFound(false);
+    setScannedBarcode(data);
 
     try {
       const res = await api.get<any>(`/scan/barcode-lookup`, {
@@ -37,7 +43,22 @@ export function QuickScanScreen() {
       const result = res.data;
 
       if (result?.product && result?.analysis) {
-        // Build ScanResult-compatible object
+        if (mode === 'selectFood' && foodPetId) {
+          try {
+            await petFoodService.setCurrentFood(foodPetId, {
+              productId: result.product.id,
+              productName: result.product.name,
+              brand: result.product.brand || undefined,
+            });
+            Alert.alert('✅ Food Set!', `${result.product.name} is now ${selectedPet?.name || 'your pet'}'s current food.`, [
+              { text: 'OK', onPress: () => navigation.goBack() },
+            ]);
+          } catch {
+            Alert.alert('Error', 'Failed to set current food.');
+          }
+          setLooking(false);
+          return;
+        }
         const scanResult = {
           scanId: `barcode-${Date.now()}`,
           scanType: 'barcode_lookup',
@@ -96,7 +117,7 @@ export function QuickScanScreen() {
         <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
           <Ionicons name="close" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={s.title}>Quick Scan</Text>
+        <Text style={s.title}>{mode === 'selectFood' ? 'Scan Food' : 'Quick Scan'}</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -128,15 +149,21 @@ export function QuickScanScreen() {
             <Ionicons name="search-outline" size={48} color={colors.textSecondary} />
             <Text style={s.notFoundTitle}>Product Not Found</Text>
             <Text style={s.notFoundSub}>
-              This barcode isn't in our database yet.{'\n'}Use Label Scan to add it.
+              This barcode isn't in our database yet.{'\n'}Help us add it and earn tokens!
             </Text>
             <View style={s.notFoundBtns}>
               <Pressable onPress={retry} style={s.retryBtn}>
                 <Text style={s.retryBtnText}>Scan Again</Text>
               </Pressable>
-              <Pressable onPress={() => navigation.replace('TwoStepScan')} style={s.labelScanBtn}>
+              <Pressable
+                onPress={() => navigation.replace('ProductRegister', { barcode: scannedBarcode ?? undefined })}
+                style={s.registerBtn}
+              >
                 <Ionicons name="camera" size={16} color={colors.white} />
-                <Text style={s.labelScanBtnText}>Label Scan</Text>
+                <Text style={s.registerBtnText}>Register Product</Text>
+                <View style={s.tokenBadge}>
+                  <Text style={s.tokenBadgeText}>+🦴20</Text>
+                </View>
               </Pressable>
             </View>
           </View>
@@ -204,6 +231,23 @@ const s = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   labelScanBtnText: { color: colors.white, fontWeight: '600', fontSize: 14 },
+  registerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+  },
+  registerBtnText: { color: colors.white, fontWeight: '600', fontSize: 14 },
+  tokenBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  tokenBadgeText: { fontSize: 11, color: '#fff', fontWeight: '700' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   permText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginBottom: 16 },
   backBtn: { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.primary },

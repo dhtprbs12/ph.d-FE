@@ -52,7 +52,9 @@
           "cameraPermission": "PHD needs camera access to scan pet food labels."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
