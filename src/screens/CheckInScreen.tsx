@@ -8,9 +8,10 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../theme';
 import checkinService from '../services/checkinService';
@@ -36,9 +37,10 @@ export default function CheckInScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<any>();
-  const { petId, petName, foodName: initialFoodName, daysOnFood } = route.params || {};
+  const { petId, petName, foodName: initialFoodName, foodImage, daysOnFood } = route.params || {};
 
   const [currentFoodName, setCurrentFoodName] = useState<string | undefined>(initialFoodName);
+  const [currentFoodImage, setCurrentFoodImage] = useState<string | undefined>(foodImage);
   const [showFoodChange, setShowFoodChange] = useState(false);
   const [stoolScore, setStoolScore] = useState<number>(3);
   const [appetite, setAppetite] = useState<'low' | 'normal' | 'high'>('normal');
@@ -46,6 +48,17 @@ export default function CheckInScreen() {
   const [itching, setItching] = useState(false);
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    if (petId) {
+      petFoodService.getCurrentFood(petId).then(food => {
+        if (food) {
+          setCurrentFoodName(food.productName);
+          setCurrentFoodImage(food.imageUrl || undefined);
+        }
+      }).catch(console.warn);
+    }
+  }, [petId]));
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -59,6 +72,7 @@ export default function CheckInScreen() {
         brand: food.brand,
       });
       setCurrentFoodName(food.productName);
+      setCurrentFoodImage(food.imageUrl || undefined);
       setShowFoodChange(false);
     } catch (e) {
       console.warn('Failed to change food:', e);
@@ -126,17 +140,28 @@ export default function CheckInScreen() {
       >
         {/* Date + Food info */}
         <View style={styles.card}>
-          <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>📝 {dateStr}</Text>
+          <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>
+            📝 {dateStr}{daysOnFood != null ? `  ·  Day ${daysOnFood}` : ''}
+          </Text>
           {currentFoodName ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-              <Text style={[typography.bodyMedium, { color: colors.textSecondary, flex: 1 }]}>
-                {toTitleCase(currentFoodName)}{daysOnFood != null ? ` · Day ${daysOnFood}` : ''}
-              </Text>
-              <Pressable onPress={() => setShowFoodChange(!showFoodChange)}>
-                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600' }}>
-                  {showFoodChange ? 'Cancel' : 'Switch Food'}
+            <View style={{ gap: spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                {currentFoodImage ? (
+                  <Image source={{ uri: currentFoodImage }} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="cover" />
+                ) : (
+                  <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.lightGray, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="nutrition" size={22} color={colors.textSecondary} />
+                  </View>
+                )}
+                <Text style={[typography.bodyMedium, { color: colors.textPrimary, fontWeight: '600', flex: 1 }]}>
+                  {toTitleCase(currentFoodName)}
                 </Text>
-              </Pressable>
+                <Pressable onPress={() => setShowFoodChange(!showFoodChange)}>
+                  <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600' }}>
+                    {showFoodChange ? 'Cancel' : 'Switch Food'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <Pressable onPress={() => setShowFoodChange(true)}>

@@ -28,7 +28,8 @@ import gamificationService, { GamificationSummary } from '../services/gamificati
 import petFoodService, { CurrentFood } from '../services/petFoodService';
 import api from '../services/api';
 import { toTitleCase } from '../utils/helpers';
-import { getBaseCharacter } from '../utils/characterAssets';
+import { getBaseCharacter, getItemLayer } from '../utils/characterAssets';
+import shopService, { CharacterState } from '../services/shopService';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -127,20 +128,37 @@ function PetAvatar({ pet, size = 56 }: { pet: Pet; size?: number }) {
 
 function GamificationHeader({ onCharacterPress, petName }: { onCharacterPress: () => void; petName?: string }) {
   const [summary, setSummary] = useState<GamificationSummary | null>(null);
+  const [equipped, setEquipped] = useState<CharacterState['equipped'] | null>(null);
 
   useFocusEffect(useCallback(() => {
     gamificationService.getSummary().then(setSummary).catch(console.warn);
+    shopService.getCharacter().then(c => setEquipped(c.equipped)).catch(console.warn);
   }, []));
 
   if (!summary) return null;
 
-  const characterEmoji = '🐕';
   const baseImg = getBaseCharacter('dog');
 
   return (
     <Pressable onPress={onCharacterPress} style={styles.gamHeader}>
       <View style={styles.gamCharacterArea}>
-        <Image source={baseImg} style={{ width: 120, height: 120 }} resizeMode="contain" />
+        <View style={{ width: 120, height: 120, position: 'relative' }}>
+          <Image source={baseImg} style={{ position: 'absolute', top: 0, left: 0, width: 120, height: 120 }} resizeMode="contain" />
+          {equipped && (['hat', 'glasses', 'accessory', 'clothes', 'effect'] as const).map(slot => {
+            const item = equipped[slot];
+            if (!item) return null;
+            const layer = getItemLayer(item.assetKey);
+            if (!layer) return null;
+            return (
+              <Image
+                key={slot}
+                source={layer}
+                style={{ position: 'absolute', top: 0, left: 0, width: 120, height: 120 }}
+                resizeMode="contain"
+              />
+            );
+          })}
+        </View>
         <Text style={[typography.titleMedium, { color: colors.textPrimary, marginTop: -4 }]}>Lil {petName || 'Buddy'}</Text>
         {summary.scanLevel.nextLevel && (
           <View style={styles.gamProgressBar}>
@@ -179,10 +197,12 @@ function QuickActionRow({
   isEnabled,
   navigation,
   selectedPet,
+  currentFood,
 }: {
   isEnabled: boolean;
   navigation: Nav;
   selectedPet: Pet | null;
+  currentFood?: CurrentFood | null;
 }) {
   const actions = [
     { icon: 'camera' as const, label: 'Scan', color: colors.primary, onPress: () => navigation.navigate('TwoStepScan') },
@@ -194,7 +214,13 @@ function QuickActionRow({
       color: '#E74C3C',
       onPress: () => {
         if (selectedPet) {
-          navigation.navigate('CheckIn', { petId: selectedPet.id, petName: selectedPet.name });
+          navigation.navigate('CheckIn', {
+            petId: selectedPet.id,
+            petName: selectedPet.name,
+            foodName: currentFood?.productName,
+            foodImage: currentFood?.imageUrl,
+            daysOnFood: currentFood?.daysOnFood,
+          });
         }
       },
     },
@@ -320,6 +346,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
                 petId: pet.id,
                 petName: pet.name,
                 foodName: currentFood.productName,
+                foodImage: currentFood.imageUrl,
                 daysOnFood: currentFood.daysOnFood,
               })}
               style={styles.checkinBtn}
@@ -1053,6 +1080,15 @@ export default function HomeScreen() {
     useState<CommunityStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [petModalVisible, setPetModalVisible] = useState(false);
+  const [homeCurrentFood, setHomeCurrentFood] = useState<CurrentFood | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedPet?.id) {
+        petFoodService.getCurrentFood(selectedPet.id).then(setHomeCurrentFood).catch(console.warn);
+      }
+    }, [selectedPet?.id])
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -1124,6 +1160,7 @@ export default function HomeScreen() {
               isEnabled={selectedPet != null}
               navigation={navigation}
               selectedPet={selectedPet}
+              currentFood={homeCurrentFood}
             />
           </StaggeredView>
 

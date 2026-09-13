@@ -17,6 +17,7 @@ export interface FoodSelection {
   productId?: string;
   productName: string;
   brand?: string;
+  imageUrl?: string | null;
 }
 
 interface Props {
@@ -58,7 +59,7 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
   const handleSelectProduct = (p: any) => {
     setText(p.name);
     setResults([]);
-    onSelect({ productId: p.id, productName: p.name, brand: p.brand || undefined });
+    onSelect({ productId: p.id, productName: p.name, brand: p.brand || undefined, imageUrl: p.imageUrl || p.image_url || null });
   };
 
   const handleFreeText = () => {

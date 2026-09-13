@@ -195,10 +195,7 @@ export default function CharacterScreen() {
               <Image
                 key={slot}
                 source={layer}
-                style={[styles.itemLayerImg, {
-                  top: equipped.positionY || 0,
-                  left: equipped.positionX || 0,
-                }]}
+                style={styles.itemLayerImg}
                 resizeMode="contain"
               />
             );
@@ -358,9 +355,8 @@ const styles = StyleSheet.create({
   characterContainer: {
     width: 220,
     height: 220,
-    alignItems: 'center',
-    justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
   },
   layerPlaceholder: {
     ...StyleSheet.absoluteFillObject,
@@ -377,13 +373,18 @@ const styles = StyleSheet.create({
   },
   equippedEmoji: { fontSize: 20 },
   baseCharacterImg: {
-    width: 200,
-    height: 200,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 220,
+    height: 220,
   },
   itemLayerImg: {
     position: 'absolute',
-    width: 200,
-    height: 200,
+    top: 0,
+    left: 0,
+    width: 220,
+    height: 220,
   },
   categoryBar: {
     flexGrow: 0,
