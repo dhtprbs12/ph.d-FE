@@ -48,6 +48,7 @@ export default function CheckInScreen() {
   const [itching, setItching] = useState(false);
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
 
   useFocusEffect(useCallback(() => {
     if (petId) {
@@ -55,6 +56,13 @@ export default function CheckInScreen() {
         if (food) {
           setCurrentFoodName(food.productName);
           setCurrentFoodImage(food.imageUrl || undefined);
+        }
+      }).catch(console.warn);
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      checkinService.getCheckins(petId, todayStr, todayStr).then(result => {
+        if (result.checkins && result.checkins.length > 0) {
+          setAlreadyCheckedIn(true);
         }
       }).catch(console.warn);
     }
@@ -74,6 +82,7 @@ export default function CheckInScreen() {
       setCurrentFoodName(food.productName);
       setCurrentFoodImage(food.imageUrl || undefined);
       setShowFoodChange(false);
+      Alert.alert('✅ Food Changed!', `Switched to ${toTitleCase(food.productName)}`);
     } catch (e) {
       console.warn('Failed to change food:', e);
       Alert.alert('Error', 'Failed to change food');
@@ -290,20 +299,27 @@ export default function CheckInScreen() {
 
       {/* Save button */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Pressable
-          onPress={handleSave}
-          disabled={isLoading}
-          style={[styles.saveBtn, isLoading && { opacity: 0.6 }]}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <>
-              <Text style={[typography.labelLarge, { color: colors.white }]}>Save Check-in</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>+🦴5</Text>
-            </>
-          )}
-        </Pressable>
+        {alreadyCheckedIn ? (
+          <View style={[styles.saveBtn, { opacity: 0.6 }]}>
+            <Text style={[typography.labelLarge, { color: colors.white }]}>Already Checked In ✅</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>Come back tomorrow!</Text>
+          </View>
+        ) : (
+          <Pressable
+            onPress={handleSave}
+            disabled={isLoading}
+            style={[styles.saveBtn, isLoading && { opacity: 0.6 }]}
+          >
+            {isLoading ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <>
+                <Text style={[typography.labelLarge, { color: colors.white }]}>Save Check-in</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>+🦴5</Text>
+              </>
+            )}
+          </Pressable>
+        )}
       </View>
     </View>
   );

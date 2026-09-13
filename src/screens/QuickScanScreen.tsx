@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, Modal } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -10,6 +10,7 @@ import { useApp } from '../context/AppContext';
 import { colors } from '../theme';
 import api from '../services/api';
 import petFoodService from '../services/petFoodService';
+import { toTitleCase } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -23,6 +24,7 @@ export function QuickScanScreen() {
   const scannedRef = useRef(false);
   const [looking, setLooking] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [foodSetInfo, setFoodSetInfo] = useState<{ name: string } | null>(null);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,9 +52,7 @@ export function QuickScanScreen() {
               productName: result.product.name,
               brand: result.product.brand || undefined,
             });
-            Alert.alert('✅ Food Set!', `${result.product.name} is now ${selectedPet?.name || 'your pet'}'s current food.`, [
-              { text: 'OK', onPress: () => navigation.goBack() },
-            ]);
+            setFoodSetInfo({ name: result.product.name });
           } catch {
             Alert.alert('Error', 'Failed to set current food.');
           }
@@ -123,13 +123,15 @@ export function QuickScanScreen() {
 
       {/* Camera */}
       <View style={s.cameraContainer}>
-        {!notFound && (
+        {!notFound && !looking && (
           <CameraView
             style={s.camera}
+            facing="back"
+            autofocus="on"
             barcodeScannerSettings={{
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'code93', 'itf14', 'qr'],
             }}
-            onBarcodeScanned={looking || notFound ? undefined : handleBarCodeScanned}
+            onBarcodeScanned={handleBarCodeScanned}
           />
         )}
         {!notFound && !looking && (
@@ -139,10 +141,14 @@ export function QuickScanScreen() {
           </View>
         )}
         {looking && (
-          <View style={s.loadingOverlay}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={s.loadingText}>Looking up product...</Text>
-          </View>
+          <Modal transparent animationType="fade">
+            <View style={s.loadingModal}>
+              <View style={s.loadingCard}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={s.loadingText}>Looking up product...</Text>
+              </View>
+            </View>
+          </Modal>
         )}
         {notFound && (
           <View style={s.notFoundOverlay}>
@@ -169,6 +175,26 @@ export function QuickScanScreen() {
           </View>
         )}
       </View>
+
+      {/* Food Set Success Modal */}
+      {foodSetInfo && (
+        <Modal transparent animationType="fade">
+          <View style={s.loadingModal}>
+            <View style={s.successCard}>
+              <Text style={{ fontSize: 48 }}>🎉</Text>
+              <Text style={s.successTitle}>Food Updated!</Text>
+              <Text style={s.successName}>{toTitleCase(foodSetInfo.name)}</Text>
+              <Text style={s.successSub}>is now {selectedPet?.name || 'your pet'}'s current food</Text>
+              <Pressable
+                onPress={() => { setFoodSetInfo(null); navigation.goBack(); }}
+                style={s.successBtn}
+              >
+                <Text style={s.successBtnText}>Done</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -194,12 +220,24 @@ const s = StyleSheet.create({
     borderRadius: 2,
   },
   hint: { color: '#fff', fontSize: 14, marginTop: 20, fontWeight: '500' },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+  loadingModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 40,
+    alignItems: 'center',
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   loadingText: { fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
   notFoundOverlay: {
@@ -248,6 +286,31 @@ const s = StyleSheet.create({
     paddingVertical: 1,
   },
   tokenBadgeText: { fontSize: 11, color: '#fff', fontWeight: '700' },
+  successCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  successTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  successName: { fontSize: 16, fontWeight: '600', color: colors.primary },
+  successSub: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
+  successBtn: {
+    marginTop: 12,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+  },
+  successBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   permText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginBottom: 16 },
   backBtn: { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.primary },
