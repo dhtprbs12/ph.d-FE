@@ -34,34 +34,39 @@ export default function CharacterScreen() {
   const { selectedPet } = useApp();
   const petName = selectedPet?.name;
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [character, setCharacter] = useState<CharacterState | null>(null);
+  const petId = selectedPet?.id;
+
+  const cachedChar = petId ? shopService.getCachedCharacter(petId) : null;
+  const cachedItems = shopService.getCachedItems('hat');
+
+  const [isLoading, setIsLoading] = useState(!cachedChar);
+  const [character, setCharacter] = useState<CharacterState | null>(cachedChar);
   const [tokenBalance, setTokenBalance] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<SlotName>('hat');
-  const [items, setItems] = useState<ShopItem[]>([]);
+  const [items, setItems] = useState<ShopItem[]>(shopService.getCachedItems('hat') || []);
   const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
-  const [localEquipped, setLocalEquipped] = useState<Record<SlotName, EquippedItem | null>>({
-    hat: null, glasses: null, accessory: null, clothes: null, background: null, effect: null,
-  });
+  const [localEquipped, setLocalEquipped] = useState<Record<SlotName, EquippedItem | null>>(
+    cachedChar?.equipped ?? { hat: null, glasses: null, accessory: null, clothes: null, background: null, effect: null },
+  );
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const loadData = useCallback(async () => {
+    if (!petId) return;
     try {
-      setIsLoading(true);
-      const [charData, tokenData] = await Promise.all([
-        shopService.getCharacter(),
-        gamificationService.getTokens(),
-      ]);
+      if (!cachedChar) setIsLoading(true);
+      const charData = await shopService.getCharacter(petId);
       setCharacter(charData);
       setLocalEquipped(charData.equipped);
-      setTokenBalance(tokenData.balance);
     } catch (e) {
       console.warn('Failed to load character data:', e);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+    gamificationService.getTokens()
+      .then(t => setTokenBalance(t.balance))
+      .catch(console.warn);
+  }, [petId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -70,8 +75,17 @@ export default function CharacterScreen() {
   }, [selectedCategory]);
 
   const handleItemPress = (item: ShopItem) => {
+    const owned = item.isOwned || character?.ownedItems.includes(item.id);
+    const isCurrentlyEquipped = localEquipped[item.category]?.id === item.id;
+
+    if (isCurrentlyEquipped) {
+      setLocalEquipped(prev => ({ ...prev, [item.category]: null }));
+      setSelectedItem(null);
+      return;
+    }
+
     setSelectedItem(item);
-    if (item.isOwned || character?.ownedItems.includes(item.id)) {
+    if (owned) {
       setLocalEquipped(prev => ({
         ...prev,
         [item.category]: {
@@ -119,6 +133,7 @@ export default function CharacterScreen() {
   };
 
   const handleSave = async () => {
+    if (!petId) return;
     setIsSaving(true);
     try {
       const slots: SlotName[] = ['hat', 'glasses', 'accessory', 'clothes', 'background', 'effect'];
@@ -126,13 +141,12 @@ export default function CharacterScreen() {
         const localItem = localEquipped[slot];
         const serverItem = character?.equipped[slot];
         if (localItem?.id !== serverItem?.id) {
-          await shopService.equipItem(slot, localItem?.id || null);
+          await shopService.equipItem(petId, slot, localItem?.id || null);
         }
       }
       setCharacter(prev => prev ? { ...prev, equipped: { ...localEquipped } } : prev);
-      Alert.alert('✅ Saved!', 'Your character look has been updated!', [
-        { text: 'OK' },
-      ]);
+      shopService.invalidateCharacterCache();
+      navigation.goBack();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save');
     } finally {
@@ -185,8 +199,8 @@ export default function CharacterScreen() {
             style={styles.baseCharacterImg}
             resizeMode="contain"
           />
-          {/* Accessory layers */}
-          {(['hat', 'glasses', 'accessory', 'clothes', 'effect'] as SlotName[]).map(slot => {
+          {/* Accessory layers — back to front */}
+          {(['clothes', 'accessory', 'hat', 'glasses', 'effect'] as SlotName[]).map(slot => {
             const equipped = localEquipped[slot];
             if (!equipped) return null;
             const layer = getItemLayer(equipped.assetKey);
@@ -216,27 +230,44 @@ export default function CharacterScreen() {
               onPress={() => { setSelectedCategory(cat.key); setSelectedItem(null); }}
               style={[styles.categoryTab, isActive && styles.categoryTabActive]}
             >
-              <Text style={{ fontSize: 18 }}>{cat.emoji}</Text>
-              <Text style={[typography.labelSmall, { color: isActive ? colors.white : colors.textSecondary }]}>{cat.label}</Text>
+              <Text style={{ fontSize: 22 }}>{cat.emoji}</Text>
             </Pressable>
           );
         })}
-        {localEquipped[selectedCategory] && (
-          <Pressable onPress={handleUnequip} style={[styles.categoryTab, { borderColor: '#E74C3C', borderWidth: 1 }]}>
-            <Ionicons name="close-circle-outline" size={18} color="#E74C3C" />
-            <Text style={[typography.labelSmall, { color: '#E74C3C' }]}>Remove</Text>
-          </Pressable>
-        )}
       </ScrollView>
+
+      {/* Selected Category Label */}
+      <Text style={styles.categoryLabel}>
+        {CATEGORIES.find(c => c.key === selectedCategory)?.label || ''}
+      </Text>
 
       {/* Item Grid */}
       <FlatList
-        data={items}
+        style={{ flex: 1 }}
+        data={[{ id: '__none__', category: selectedCategory, name: 'None', nameKo: '', price: 0, assetKey: '', asset_key: '', isOwned: true, layerType: '', positionX: 0, positionY: 0 } as ShopItem, ...items]}
         numColumns={4}
         keyExtractor={i => i.id}
-        contentContainerStyle={{ padding: spacing.md, gap: spacing.sm }}
+        contentContainerStyle={{ padding: spacing.md, gap: spacing.sm, paddingBottom: 100 }}
         columnWrapperStyle={{ gap: spacing.sm }}
         renderItem={({ item }) => {
+          if (item.id === '__none__') {
+            const isNoneActive = !localEquipped[selectedCategory];
+            return (
+              <Pressable
+                onPress={handleUnequip}
+                style={[
+                  styles.itemCard,
+                  isNoneActive && { borderColor: colors.primary, borderWidth: 2 },
+                ]}
+              >
+                <Ionicons name="close-circle-outline" size={28} color={isNoneActive ? colors.primary : colors.textSecondary} />
+                <Text style={[typography.labelSmall, { color: isNoneActive ? colors.primary : colors.textSecondary, textAlign: 'center' }]}>
+                  None
+                </Text>
+              </Pressable>
+            );
+          }
+
           const owned = isItemOwned(item);
           const isSelected = selectedItem?.id === item.id;
           const isEquipped = localEquipped[item.category]?.id === item.id;
@@ -263,7 +294,7 @@ export default function CharacterScreen() {
                 return <Text style={{ fontSize: 28 }}>{emoji}</Text>;
               })()}
               <Text style={[typography.labelSmall, { color: colors.textPrimary, textAlign: 'center' }]} numberOfLines={1}>
-                {item.nameKo || item.name}
+                {item.name || item.nameKo}
               </Text>
               {owned ? (
                 <Text style={[typography.labelSmall, { color: colors.primary, fontSize: 9 }]}>
@@ -372,6 +403,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   equippedEmoji: { fontSize: 20 },
+  categoryLabel: {
+    ...typography.labelMedium,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xs,
+  },
   baseCharacterImg: {
     position: 'absolute',
     top: 0,
@@ -393,11 +430,11 @@ const styles = StyleSheet.create({
   },
   categoryTab: {
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     backgroundColor: colors.lightGray,
-    gap: 2,
   },
   categoryTabActive: {
     backgroundColor: colors.primary,
@@ -406,6 +443,7 @@ const styles = StyleSheet.create({
     flex: 1,
     maxWidth: '23%',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: spacing.sm,
     borderRadius: radius.medium,
     backgroundColor: colors.white,

@@ -40,31 +40,68 @@ export interface PurchaseResult {
   newBalance: number;
 }
 
+let _characterCache: Record<string, CharacterState> = {};
+const _itemsCache: Record<string, ShopItem[]> = {};
+
 const shopService = {
   async getItems(category?: string): Promise<ShopItem[]> {
+    const key = category || '_all';
+    if (_itemsCache[key]) {
+      const cached = _itemsCache[key];
+      const params: Record<string, string> = {};
+      if (category) params.category = category;
+      api.get<{ items: ShopItem[] }>('/shop/items', { params })
+        .then(({ data }) => { _itemsCache[key] = data.items; })
+        .catch(() => {});
+      return cached;
+    }
     const params: Record<string, string> = {};
     if (category) params.category = category;
     const { data } = await api.get<{ items: ShopItem[] }>('/shop/items', { params });
+    _itemsCache[key] = data.items;
     return data.items;
+  },
+
+  getCachedItems(category?: string): ShopItem[] | null {
+    const key = category || '_all';
+    return _itemsCache[key] || null;
   },
 
   async purchaseItem(itemId: string): Promise<PurchaseResult> {
     const { data } = await api.post<PurchaseResult>(`/shop/items/${itemId}/purchase`);
+    _characterCache = {};
+    Object.keys(_itemsCache).forEach(k => delete _itemsCache[k]);
     return data;
   },
 
-  async getCharacter(): Promise<CharacterState> {
-    const { data } = await api.get<CharacterState>('/shop/character');
+  async getCharacter(petId: string): Promise<CharacterState> {
+    if (_characterCache[petId]) {
+      api.get<CharacterState>(`/shop/character/${petId}`)
+        .then(({ data }) => { _characterCache[petId] = data; })
+        .catch(() => {});
+      return _characterCache[petId];
+    }
+    const { data } = await api.get<CharacterState>(`/shop/character/${petId}`);
+    _characterCache[petId] = data;
     return data;
   },
 
-  async equipItem(slot: SlotName, itemId: string | null): Promise<{ success: boolean }> {
-    const { data } = await api.put<{ success: boolean }>('/shop/character/equip', { slot, itemId });
+  invalidateCharacterCache() {
+    _characterCache = {};
+  },
+
+  getCachedCharacter(petId: string): CharacterState | null {
+    return _characterCache[petId] || null;
+  },
+
+  async equipItem(petId: string, slot: SlotName, itemId: string | null): Promise<{ success: boolean }> {
+    const { data } = await api.put<{ success: boolean }>(`/shop/character/${petId}/equip`, { slot, itemId });
     return data;
   },
 
-  async switchCharacterType(characterType: 'dog' | 'cat'): Promise<{ success: boolean }> {
-    const { data } = await api.put<{ success: boolean }>('/shop/character/type', { characterType });
+  async switchCharacterType(petId: string, characterType: 'dog' | 'cat'): Promise<{ success: boolean }> {
+    const { data } = await api.put<{ success: boolean }>(`/shop/character/${petId}/type`, { characterType });
+    delete _characterCache[petId];
     return data;
   },
 };

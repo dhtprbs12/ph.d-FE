@@ -30,6 +30,8 @@ import api from '../services/api';
 import { toTitleCase } from '../utils/helpers';
 import { getBaseCharacter, getItemLayer } from '../utils/characterAssets';
 import shopService, { CharacterState } from '../services/shopService';
+import ZoomableImageModal from '../components/ZoomableImageModal';
+import NomNomNotesCard from '../components/NomNomNotesCard';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -126,14 +128,17 @@ function PetAvatar({ pet, size = 56 }: { pet: Pet; size?: number }) {
 
 /* ─── Gamification Header ──────────────────────────────────────── */
 
-function GamificationHeader({ onCharacterPress, petName }: { onCharacterPress: () => void; petName?: string }) {
+function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterPress: () => void; petName?: string; petId?: string }) {
   const [summary, setSummary] = useState<GamificationSummary | null>(null);
   const [equipped, setEquipped] = useState<CharacterState['equipped'] | null>(null);
 
   useFocusEffect(useCallback(() => {
     gamificationService.getSummary().then(setSummary).catch(console.warn);
-    shopService.getCharacter().then(c => setEquipped(c.equipped)).catch(console.warn);
-  }, []));
+    if (petId) {
+      shopService.getCharacter(petId).then(c => setEquipped(c.equipped)).catch(console.warn);
+    }
+    shopService.getItems('hat').catch(() => {});
+  }, [petId]));
 
   if (!summary) return null;
 
@@ -142,9 +147,9 @@ function GamificationHeader({ onCharacterPress, petName }: { onCharacterPress: (
   return (
     <Pressable onPress={onCharacterPress} style={styles.gamHeader}>
       <View style={styles.gamCharacterArea}>
-        <View style={{ width: 120, height: 120, position: 'relative' }}>
-          <Image source={baseImg} style={{ position: 'absolute', top: 0, left: 0, width: 120, height: 120 }} resizeMode="contain" />
-          {equipped && (['hat', 'glasses', 'accessory', 'clothes', 'effect'] as const).map(slot => {
+        <View style={{ width: 200, height: 200, position: 'relative' }}>
+          <Image source={baseImg} style={{ position: 'absolute', top: 0, left: 0, width: 200, height: 200 }} resizeMode="contain" />
+          {equipped && (['clothes', 'accessory', 'hat', 'glasses', 'effect'] as const).map(slot => {
             const item = equipped[slot];
             if (!item) return null;
             const layer = getItemLayer(item.assetKey);
@@ -153,7 +158,7 @@ function GamificationHeader({ onCharacterPress, petName }: { onCharacterPress: (
               <Image
                 key={slot}
                 source={layer}
-                style={{ position: 'absolute', top: 0, left: 0, width: 120, height: 120 }}
+                style={{ position: 'absolute', top: 0, left: 0, width: 200, height: 200 }}
                 resizeMode="contain"
               />
             );
@@ -197,33 +202,15 @@ function QuickActionRow({
   isEnabled,
   navigation,
   selectedPet,
-  currentFood,
 }: {
   isEnabled: boolean;
   navigation: Nav;
   selectedPet: Pet | null;
-  currentFood?: CurrentFood | null;
 }) {
   const actions = [
-    { icon: 'camera' as const, label: 'Scan', color: colors.primary, onPress: () => navigation.navigate('TwoStepScan') },
     { icon: 'barcode-outline' as const, label: 'Barcode', color: colors.accent, onPress: () => navigation.navigate('QuickScan') },
     { icon: 'search' as const, label: 'Search', color: colors.safe, onPress: () => navigation.navigate('ProductSearch') },
-    {
-      icon: 'clipboard-outline' as const,
-      label: 'Check-in',
-      color: '#E74C3C',
-      onPress: () => {
-        if (selectedPet) {
-          navigation.navigate('CheckIn', {
-            petId: selectedPet.id,
-            petName: selectedPet.name,
-            foodName: currentFood?.productName,
-            foodImage: currentFood?.imageUrl,
-            daysOnFood: currentFood?.daysOnFood,
-          });
-        }
-      },
-    },
+    { icon: 'help-circle-outline' as const, label: 'Safe?', color: '#E67E22', onPress: () => navigation.navigate('FoodCheck') },
   ];
 
   return (
@@ -252,6 +239,8 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const [showFoodInput, setShowFoodInput] = useState(false);
   const [foodNameInput, setFoodNameInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [pendingProduct, setPendingProduct] = useState<any>(null);
+  const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<NodeJS.Timeout | null>(null);
@@ -283,6 +272,14 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   };
 
   const handleSelectProduct = async (product: any) => {
+    if (currentFood) {
+      setPendingProduct(product);
+      return;
+    }
+    await doSetFood(product);
+  };
+
+  const doSetFood = async (product: any) => {
     setSaving(true);
     try {
       await petFoodService.setCurrentFood(pet.id, {
@@ -295,6 +292,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
       setShowFoodInput(false);
       setFoodNameInput('');
       setSearchResults([]);
+      setPendingProduct(null);
     } catch (e) {
       console.warn('Failed to save food:', e);
     } finally {
@@ -327,7 +325,9 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
         <View style={{ gap: spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             {currentFood.imageUrl ? (
-              <Image source={{ uri: currentFood.imageUrl }} style={styles.foodImage} />
+              <Pressable onPress={() => setZoomImageUri(currentFood.imageUrl)}>
+                <Image source={{ uri: currentFood.imageUrl }} style={styles.foodImage} />
+              </Pressable>
             ) : (
               <View style={[styles.foodImage, { backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }]}>
                 <Ionicons name="nutrition-outline" size={24} color={colors.primary} />
@@ -435,6 +435,38 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
           </View>
         </View>
       )}
+
+      {/* Switch Food Confirmation Modal */}
+      {pendingProduct && (
+        <Modal transparent animationType="fade">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: colors.white, borderRadius: 20, padding: 24, marginHorizontal: 32, alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 32 }}>🔄</Text>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary }}>Switch Food?</Text>
+              <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>Current</Text>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>{toTitleCase(currentFood?.productName || '')}</Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>Day {currentFood?.daysOnFood}</Text>
+              </View>
+              <Ionicons name="arrow-down" size={20} color={colors.textSecondary} />
+              <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>New</Text>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.primary }}>{toTitleCase(pendingProduct.name)}</Text>
+              </View>
+              <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginTop: 4 }}>This will end tracking for the current food and start a new period.</Text>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12, width: '100%' }}>
+                <Pressable onPress={() => setPendingProduct(null)} style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.lightGray, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={() => doSetFood(pendingProduct)} style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Switch</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+      <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
     </View>
   );
 }
@@ -1080,15 +1112,6 @@ export default function HomeScreen() {
     useState<CommunityStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [petModalVisible, setPetModalVisible] = useState(false);
-  const [homeCurrentFood, setHomeCurrentFood] = useState<CurrentFood | null>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (selectedPet?.id) {
-        petFoodService.getCurrentFood(selectedPet.id).then(setHomeCurrentFood).catch(console.warn);
-      }
-    }, [selectedPet?.id])
-  );
 
   useFocusEffect(
     useCallback(() => {
@@ -1138,13 +1161,8 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.vstack}>
-          {/* Gamification Header — replaces old UserBadgeCard */}
-          <StaggeredView index={0}>
-            <GamificationHeader onCharacterPress={() => navigation.navigate('Character')} petName={selectedPet?.name} />
-          </StaggeredView>
-
           {/* Pet Selector / No Pet */}
-          <StaggeredView index={1}>
+          <StaggeredView index={0}>
             {selectedPet ? (
               <PetSelectorCard pet={selectedPet} onPress={openPetPicker} />
             ) : (
@@ -1154,13 +1172,17 @@ export default function HomeScreen() {
             )}
           </StaggeredView>
 
+          {/* Gamification Header (Character) */}
+          <StaggeredView index={1}>
+            <GamificationHeader onCharacterPress={() => navigation.navigate('Character')} petName={selectedPet?.name} petId={selectedPet?.id} />
+          </StaggeredView>
+
           {/* Quick Action Row */}
           <StaggeredView index={2}>
             <QuickActionRow
               isEnabled={selectedPet != null}
               navigation={navigation}
               selectedPet={selectedPet}
-              currentFood={homeCurrentFood}
             />
           </StaggeredView>
 
@@ -1171,52 +1193,31 @@ export default function HomeScreen() {
             </StaggeredView>
           )}
 
+          {/* Nom Nom Notes */}
+          {selectedPet && (
+            <StaggeredView index={4}>
+              <NomNomNotesCard
+                petId={selectedPet.id}
+                onViewDetail={(date) =>
+                  navigation.navigate('NomNomDetail', {
+                    petId: selectedPet.id,
+                    date,
+                    petName: selectedPet.name,
+                  })
+                }
+              />
+            </StaggeredView>
+          )}
+
           {/* Community Trust Banner */}
-          <StaggeredView index={4}>
+          <StaggeredView index={5}>
             <CommunityTrustBanner stats={communityStats} activity={recentActivity} />
           </StaggeredView>
 
-          {/* Action Cards */}
-          <View style={{ gap: spacing.md, paddingBottom: spacing.lg }}>
-            <StaggeredView index={5}>
-              <LabelScanPromptCard
-                isEnabled={selectedPet != null}
-                onPress={() => navigation.navigate('TwoStepScan')}
-              />
-            </StaggeredView>
-
-            <StaggeredView index={6}>
-              <QuickScanCard
-                isEnabled={selectedPet != null}
-                onPress={() => navigation.navigate('QuickScan')}
-              />
-            </StaggeredView>
-
-            <StaggeredView index={7}>
-              <FindSafeFoodCard
-                pet={selectedPet}
-                onPress={() => navigation.navigate('ProductSearch')}
-              />
-            </StaggeredView>
-
-            <StaggeredView index={8}>
-              <FoodCheckCard
-                isEnabled={selectedPet != null}
-                onPress={() => navigation.navigate('FoodCheck')}
-              />
-            </StaggeredView>
-
-            <StaggeredView index={9}>
-              <IngredientManualCard
-                isEnabled={selectedPet != null}
-                onPress={() => navigation.navigate('ManualIngredients')}
-              />
-            </StaggeredView>
-
-            <StaggeredView index={10}>
-              <AafcoGuidelinesCallout />
-            </StaggeredView>
-          </View>
+          {/* AAFCO Guidelines */}
+          <StaggeredView index={6}>
+            <AafcoGuidelinesCallout />
+          </StaggeredView>
         </View>
       </ScrollView>
 

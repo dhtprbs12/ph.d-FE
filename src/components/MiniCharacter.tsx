@@ -5,19 +5,20 @@ import shopService, { CharacterState } from '../services/shopService';
 
 interface MiniCharacterProps {
   size?: number;
+  petId?: string;
   characterData?: CharacterState | null;
 }
 
-export default function MiniCharacter({ size = 60, characterData }: MiniCharacterProps) {
+export default function MiniCharacter({ size = 60, petId, characterData }: MiniCharacterProps) {
   const [character, setCharacter] = useState<CharacterState | null>(characterData || null);
 
   useEffect(() => {
-    if (!characterData) {
-      shopService.getCharacter().then(setCharacter).catch(() => {});
+    if (!characterData && petId) {
+      shopService.getCharacter(petId).then(setCharacter).catch(() => {});
     } else {
-      setCharacter(characterData);
+      setCharacter(characterData || null);
     }
-  }, [characterData]);
+  }, [characterData, petId]);
 
   const baseEmoji = character?.characterType === 'cat' ? '🐱' : '🐕';
   const equipped = character?.equipped;

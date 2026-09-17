@@ -195,7 +195,7 @@ const dividerStyles = StyleSheet.create({
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { pets, resetApp } = useApp();
+  const { pets, selectedPet, resetApp } = useApp();
   const fadeStyles = useStaggeredFade(6);
 
   const onReset = () => {
@@ -239,7 +239,7 @@ export default function SettingsScreen() {
         {/* My Character */}
         <Animated.View style={[styles.profileOuter, fadeStyles[1]]}>
           <View style={[styles.profileCard, shadows.card]}>
-            <MiniCharacter size={80} />
+            <MiniCharacter size={80} petId={selectedPet?.id} />
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>My Character</Text>
               <Text style={styles.profileSub}>{pets.length} pet{pets.length !== 1 ? 's' : ''} registered</Text>

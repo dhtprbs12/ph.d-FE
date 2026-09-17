@@ -58,6 +58,7 @@ export type HomeStackParamList = {
   Character: undefined;
   Passport: { petId: string; petName?: string };
   InsightDetail: { insight: any };
+  NomNomDetail: { petId: string; date: string; petName?: string };
 };
 
 export type HistoryStackParamList = {

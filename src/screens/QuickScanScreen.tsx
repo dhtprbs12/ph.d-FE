@@ -26,6 +26,7 @@ export function QuickScanScreen() {
   const [notFound, setNotFound] = useState(false);
   const [foodSetInfo, setFoodSetInfo] = useState<{ name: string } | null>(null);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
+  const [pendingSwitch, setPendingSwitch] = useState<{ name: string; productId: string; brand?: string; currentName?: string } | null>(null);
 
   useEffect(() => {
     if (!permission?.granted) requestPermission();
@@ -40,13 +41,24 @@ export function QuickScanScreen() {
 
     try {
       const res = await api.get<any>(`/scan/barcode-lookup`, {
-        params: { barcode: data, petType: selectedPet.pet_type },
+        params: { barcode: data, petType: selectedPet.pet_type, petName: selectedPet.name },
       });
       const result = res.data;
 
       if (result?.product && result?.analysis) {
         if (mode === 'selectFood' && foodPetId) {
           try {
+            const currentFood = await petFoodService.getCurrentFood(foodPetId);
+            if (currentFood) {
+              setPendingSwitch({
+                name: result.product.name,
+                productId: result.product.id,
+                brand: result.product.brand || undefined,
+                currentName: currentFood.productName,
+              });
+              setLooking(false);
+              return;
+            }
             await petFoodService.setCurrentFood(foodPetId, {
               productId: result.product.id,
               productName: result.product.name,
@@ -161,17 +173,16 @@ export function QuickScanScreen() {
               <Pressable onPress={retry} style={s.retryBtn}>
                 <Text style={s.retryBtnText}>Scan Again</Text>
               </Pressable>
-              <Pressable
-                onPress={() => navigation.replace('ProductRegister', { barcode: scannedBarcode ?? undefined })}
-                style={s.registerBtn}
-              >
-                <Ionicons name="camera" size={16} color={colors.white} />
-                <Text style={s.registerBtnText}>Register Product</Text>
-                <View style={s.tokenBadge}>
-                  <Text style={s.tokenBadgeText}>+🦴20</Text>
-                </View>
-              </Pressable>
             </View>
+            <Pressable
+              onPress={() => navigation.replace('ProductRegister', { barcode: scannedBarcode ?? undefined })}
+              style={s.registerBtn}
+            >
+              <Text style={s.registerBtnText}>Register Product</Text>
+              <View style={s.tokenBadge}>
+                <Text style={s.tokenBadgeText}>+🦴20</Text>
+              </View>
+            </Pressable>
           </View>
         )}
       </View>
@@ -191,6 +202,55 @@ export function QuickScanScreen() {
               >
                 <Text style={s.successBtnText}>Done</Text>
               </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Switch Food Confirmation Modal */}
+      {pendingSwitch && (
+        <Modal transparent animationType="fade">
+          <View style={s.loadingModal}>
+            <View style={s.successCard}>
+              <Text style={{ fontSize: 32 }}>🔄</Text>
+              <Text style={s.successTitle}>Switch Food?</Text>
+              <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>Current</Text>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>{toTitleCase(pendingSwitch.currentName || '')}</Text>
+              </View>
+              <Ionicons name="arrow-down" size={20} color={colors.textSecondary} />
+              <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>New</Text>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.primary }}>{toTitleCase(pendingSwitch.name)}</Text>
+              </View>
+              <Text style={s.successSub}>This will end tracking for the current food and start a new period.</Text>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12, width: '100%' }}>
+                <Pressable
+                  onPress={() => { setPendingSwitch(null); scannedRef.current = false; setLooking(false); }}
+                  style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#f0f0f0', alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    try {
+                      await petFoodService.setCurrentFood(foodPetId!, {
+                        productId: pendingSwitch.productId,
+                        productName: pendingSwitch.name,
+                        brand: pendingSwitch.brand,
+                      });
+                      setPendingSwitch(null);
+                      setFoodSetInfo({ name: pendingSwitch.name });
+                    } catch {
+                      Alert.alert('Error', 'Failed to switch food.');
+                      setPendingSwitch(null);
+                    }
+                  }}
+                  style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Switch</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </Modal>

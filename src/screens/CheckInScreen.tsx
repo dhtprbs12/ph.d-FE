@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -18,6 +19,7 @@ import checkinService from '../services/checkinService';
 import petFoodService from '../services/petFoodService';
 import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
 import { toTitleCase } from '../utils/helpers';
+import ZoomableImageModal from '../components/ZoomableImageModal';
 
 const STOOL_OPTIONS = [
   { score: 1, emoji: '😫', label: 'Very Bad' },
@@ -42,6 +44,7 @@ export default function CheckInScreen() {
   const [currentFoodName, setCurrentFoodName] = useState<string | undefined>(initialFoodName);
   const [currentFoodImage, setCurrentFoodImage] = useState<string | undefined>(foodImage);
   const [showFoodChange, setShowFoodChange] = useState(false);
+  const [pendingFood, setPendingFood] = useState<FoodSelection | null>(null);
   const [stoolScore, setStoolScore] = useState<number>(3);
   const [appetite, setAppetite] = useState<'low' | 'normal' | 'high'>('normal');
   const [vomiting, setVomiting] = useState(false);
@@ -49,6 +52,7 @@ export default function CheckInScreen() {
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
+  const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (petId) {
@@ -59,7 +63,8 @@ export default function CheckInScreen() {
         }
       }).catch(console.warn);
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       checkinService.getCheckins(petId, todayStr, todayStr).then(result => {
         if (result.checkins && result.checkins.length > 0) {
           setAlreadyCheckedIn(true);
@@ -70,9 +75,17 @@ export default function CheckInScreen() {
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const localDate = today.toISOString().split('T')[0];
+  const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  const handleFoodChange = useCallback(async (food: FoodSelection) => {
+  const handleFoodSelect = useCallback((food: FoodSelection) => {
+    if (currentFoodName) {
+      setPendingFood(food);
+    } else {
+      confirmFoodChange(food);
+    }
+  }, [currentFoodName]);
+
+  const confirmFoodChange = useCallback(async (food: FoodSelection) => {
     try {
       await petFoodService.changeFood(petId, {
         productId: food.productId,
@@ -82,7 +95,7 @@ export default function CheckInScreen() {
       setCurrentFoodName(food.productName);
       setCurrentFoodImage(food.imageUrl || undefined);
       setShowFoodChange(false);
-      Alert.alert('✅ Food Changed!', `Switched to ${toTitleCase(food.productName)}`);
+      setPendingFood(null);
     } catch (e) {
       console.warn('Failed to change food:', e);
       Alert.alert('Error', 'Failed to change food');
@@ -156,7 +169,9 @@ export default function CheckInScreen() {
             <View style={{ gap: spacing.sm }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 {currentFoodImage ? (
-                  <Image source={{ uri: currentFoodImage }} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="cover" />
+                  <Pressable onPress={() => setZoomImageUri(currentFoodImage)}>
+                    <Image source={{ uri: currentFoodImage }} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="cover" />
+                  </Pressable>
                 ) : (
                   <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.lightGray, alignItems: 'center', justifyContent: 'center' }}>
                     <Ionicons name="nutrition" size={22} color={colors.textSecondary} />
@@ -181,7 +196,7 @@ export default function CheckInScreen() {
             <View style={{ marginTop: spacing.sm }}>
               <FoodSearchInput
                 petType="dog"
-                onSelect={handleFoodChange}
+                onSelect={handleFoodSelect}
                 onScanBarcode={() => {
                   setShowFoodChange(false);
                   (navigation as any).navigate('QuickScan', { mode: 'selectFood', petId });
@@ -297,12 +312,42 @@ export default function CheckInScreen() {
         </View>
       </ScrollView>
 
+      {/* Switch Food Confirmation Modal */}
+      {pendingFood && (
+        <Modal transparent animationType="fade">
+          <View style={styles.modalBackdrop}>
+            <View style={styles.confirmCard}>
+              <Text style={{ fontSize: 32 }}>🔄</Text>
+              <Text style={styles.confirmTitle}>Switch Food?</Text>
+              <View style={styles.confirmFoodRow}>
+                <Text style={styles.confirmLabel}>Current</Text>
+                <Text style={styles.confirmFoodName}>{toTitleCase(currentFoodName || '')}</Text>
+                {daysOnFood != null && <Text style={styles.confirmDays}>Day {daysOnFood}</Text>}
+              </View>
+              <Ionicons name="arrow-down" size={20} color={colors.textSecondary} />
+              <View style={styles.confirmFoodRow}>
+                <Text style={styles.confirmLabel}>New</Text>
+                <Text style={[styles.confirmFoodName, { color: colors.primary }]}>{toTitleCase(pendingFood.productName)}</Text>
+              </View>
+              <Text style={styles.confirmSub}>This will end tracking for the current food and start a new period.</Text>
+              <View style={styles.confirmBtns}>
+                <Pressable onPress={() => { setPendingFood(null); setShowFoodChange(false); }} style={styles.confirmCancelBtn}>
+                  <Text style={styles.confirmCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={() => confirmFoodChange(pendingFood)} style={styles.confirmSwitchBtn}>
+                  <Text style={styles.confirmSwitchText}>Switch</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
       {/* Save button */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
         {alreadyCheckedIn ? (
           <View style={[styles.saveBtn, { opacity: 0.6 }]}>
-            <Text style={[typography.labelLarge, { color: colors.white }]}>Already Checked In ✅</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>Come back tomorrow!</Text>
+            <Text style={[typography.labelLarge, { color: colors.white }]}>Already Checked In</Text>
           </View>
         ) : (
           <Pressable
@@ -321,6 +366,7 @@ export default function CheckInScreen() {
           </Pressable>
         )}
       </View>
+      <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
     </View>
   );
 }
@@ -410,4 +456,29 @@ const styles = StyleSheet.create({
     borderRadius: radius.medium,
     backgroundColor: colors.primary,
   },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 32,
+    alignItems: 'center',
+    gap: 8,
+  },
+  confirmTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  confirmFoodRow: { alignItems: 'center', gap: 2, paddingVertical: 4 },
+  confirmLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  confirmFoodName: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  confirmDays: { fontSize: 12, color: colors.textSecondary },
+  confirmSub: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginTop: 4 },
+  confirmBtns: { flexDirection: 'row', gap: 12, marginTop: 12, width: '100%' },
+  confirmCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.lightGray, alignItems: 'center' },
+  confirmCancelText: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  confirmSwitchBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' },
+  confirmSwitchText: { fontSize: 15, fontWeight: '600', color: '#fff' },
 });

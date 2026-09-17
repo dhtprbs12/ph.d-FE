@@ -4,6 +4,7 @@ import {
   Text,
   Image,
   SectionList,
+  ScrollView,
   StyleSheet,
   Pressable,
   ActivityIndicator,
@@ -379,7 +380,12 @@ export default function HistoryScreen() {
           </Text>
         </View>
       ) : history.length === 0 ? (
-        <View style={styles.centered}>
+        <ScrollView
+          contentContainerStyle={styles.centered}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          }
+        >
           <Ionicons name="time-outline" size={60} color={colors.textSecondary + '80'} />
           <Text style={[typography.displaySmall, { color: colors.textPrimary, marginTop: spacing.lg }]}>
             No Scans Yet
@@ -387,7 +393,7 @@ export default function HistoryScreen() {
           <Text style={[typography.bodyMedium, { color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }]}>
             Your scan history will appear here
           </Text>
-        </View>
+        </ScrollView>
       ) : (
         <SectionList
           sections={sections}

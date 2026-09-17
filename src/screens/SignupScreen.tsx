@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, Alert, ActivityIndicator, Image, Platform, Pressable,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as authService from '../services/authService';
 import { usePetPhotoPicker } from '../hooks/usePetPhotoPicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,6 +36,8 @@ export default function SignupScreen({ navigation }: Props) {
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
 
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<'dog' | 'cat'>('dog');
@@ -58,6 +61,51 @@ export default function SignupScreen({ navigation }: Props) {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
   const [currentFoodSelection, setCurrentFoodSelection] = useState<FoodSelection | null>(null);
+
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanLooking, setScanLooking] = useState(false);
+  const scanRef = useRef(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  const handleBarcodeScan = useCallback(async ({ data }: { data: string }) => {
+    if (scanRef.current) return;
+    scanRef.current = true;
+    setScanLooking(true);
+    try {
+      const res = await api.get<any>('/scan/barcode-lookup', {
+        params: { barcode: data, petType },
+      });
+      const result = res.data;
+      if (result?.product && result.product.name && !result.product.name.toLowerCase().includes('unknown')) {
+        setCurrentFoodSelection({
+          productId: result.product.id,
+          productName: result.product.name,
+          brand: result.product.brand || undefined,
+        });
+        setScannerOpen(false);
+      } else {
+        setScannerOpen(false);
+        Alert.alert('Not Found', 'This product was not found in our database. Try searching by name instead.');
+      }
+    } catch {
+      setScannerOpen(false);
+      Alert.alert('Error', 'Failed to look up barcode. Try searching by name instead.');
+    } finally {
+      setScanLooking(false);
+    }
+  }, [petType]);
+
+  const openScanner = async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert('Camera Permission', 'Camera access is needed to scan barcodes.');
+        return;
+      }
+    }
+    scanRef.current = false;
+    setScannerOpen(true);
+  };
 
   const toggleCondition = useCallback((value: string) => {
     setSelectedConditions(prev => {
@@ -105,7 +153,8 @@ export default function SignupScreen({ navigation }: Props) {
 
   const pinValid = pin.length >= 4 && pin.length <= 6 && /^\d+$/.test(pin);
   const pinMatch = pin === pinConfirm;
-  const step1Ready = nicknameAvailable === true && pinValid && pinMatch;
+  const emailValid = email.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const step1Ready = nicknameAvailable === true && pinValid && pinMatch && emailValid;
   const step2Ready = petName.trim().length > 0;
 
   const { pickPhoto } = usePetPhotoPicker({
@@ -118,7 +167,7 @@ export default function SignupScreen({ navigation }: Props) {
     if (!step2Ready) return;
     setLoading(true);
     try {
-      const { token, user } = await authService.registerWithNickname(nickname, pin);
+      const { token, user } = await authService.registerWithNickname(nickname, pin, email.trim() || undefined);
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('userId', user.id);
       await AsyncStorage.setItem('userNickname', nickname.trim());
@@ -244,6 +293,27 @@ export default function SignupScreen({ navigation }: Props) {
               </TouchableOpacity>
             </View>
             {pinConfirm.length > 0 && !pinMatch && <Text style={styles.hint}>PINs do not match</Text>}
+
+            <Text style={styles.label}>Email (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                if (t.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.trim())) {
+                  setEmailError('Please enter a valid email address');
+                } else {
+                  setEmailError('');
+                }
+              }}
+              placeholder="e.g. name@email.com"
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+            />
+            <Text style={styles.helperHint}>Needed to reset your password if you forget it</Text>
+            {emailError.length > 0 && <Text style={styles.helperError}>{emailError}</Text>}
 
             <TouchableOpacity
               style={[styles.button, !step1Ready && styles.buttonDisabled]}
@@ -486,13 +556,12 @@ export default function SignupScreen({ navigation }: Props) {
 
             <Pressable
               style={styles.scanFoodBtn}
-              onPress={() => handleRegister()}
-              disabled={loading}
+              onPress={openScanner}
             >
               <Ionicons name="barcode-outline" size={22} color={colors.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Scan Food Barcode</Text>
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>You can scan after signup from the home screen</Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>Scan the barcode on your pet food bag</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
             </Pressable>
@@ -516,6 +585,31 @@ export default function SignupScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={scannerOpen} animationType="slide" presentationStyle="fullScreen">
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <CameraView
+            style={{ flex: 1 }}
+            barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+            onBarcodeScanned={scanLooking ? undefined : handleBarcodeScan}
+          />
+          {scanLooking && (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+              <ActivityIndicator size="large" color={colors.white} />
+              <Text style={{ color: colors.white, marginTop: 12, fontSize: 16 }}>Looking up product...</Text>
+            </View>
+          )}
+          <Pressable
+            onPress={() => setScannerOpen(false)}
+            style={{ position: 'absolute', top: 60, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="close" size={24} color={colors.white} />
+          </Pressable>
+          <View style={{ position: 'absolute', bottom: 80, left: 0, right: 0, alignItems: 'center' }}>
+            <Text style={{ color: colors.white, fontSize: 16, fontWeight: '600' }}>Point at the barcode on the food bag</Text>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -539,6 +633,7 @@ const styles = StyleSheet.create({
   helperLoader: { marginTop: spacing.xxs, alignSelf: 'flex-start' },
   helperSuccess: { ...typography.labelSmall, color: colors.safe, marginTop: spacing.xxs },
   helperError: { ...typography.labelSmall, color: colors.danger, marginTop: spacing.xxs },
+  helperHint: { ...typography.labelSmall, color: colors.textSecondary, marginTop: spacing.xxs },
   hint: { ...typography.labelSmall, color: colors.danger, marginTop: spacing.xxs },
   button: {
     backgroundColor: colors.primary,

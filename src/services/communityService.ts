@@ -81,15 +81,84 @@ export async function getMySaved(): Promise<SavedProduct[]> {
 }
 
 export interface RecentActivity {
+  nickname: string;
+  petName: string | null;
   productName: string;
   brand: string;
+  productImage: string | null;
   grade: string;
   score: number;
   petType: string;
   timeAgo: string;
 }
 
-export async function getRecentActivity(): Promise<RecentActivity[]> {
-  const { data } = await api.get<{ activity: RecentActivity[] }>('/community/recent-activity');
+export async function getRecentActivity(petType?: string): Promise<RecentActivity[]> {
+  const { data } = await api.get<{ activity: RecentActivity[] }>('/community/recent-activity', {
+    params: petType ? { petType } : undefined,
+  });
   return data.activity ?? [];
+}
+
+export interface PetOfTheWeekItem {
+  rank: number;
+  petId: string;
+  petName: string;
+  petType: string;
+  breed: string | null;
+  nickname: string;
+  characterType: string;
+  equipped: {
+    hat: string | null;
+    glasses: string | null;
+    accessory: string | null;
+    clothes: string | null;
+    background: string | null;
+    effect: string | null;
+  };
+  itemCount: number;
+}
+
+export async function getPetOfTheWeek(petType?: string): Promise<PetOfTheWeekItem[]> {
+  const { data } = await api.get<{ pets: PetOfTheWeekItem[] }>('/community/pet-of-the-week', {
+    params: petType ? { petType } : undefined,
+  });
+  return data.pets ?? [];
+}
+
+export interface BreedPopularResult {
+  breed: string;
+  petType: string;
+  parentCount: number;
+  foods: {
+    productId: string;
+    name: string;
+    brand: string;
+    imageUrl: string | null;
+    score: number | null;
+    userCount: number;
+  }[];
+}
+
+export async function getBreedPopular(petType: string, breed?: string): Promise<BreedPopularResult> {
+  const params: Record<string, string> = { petType };
+  if (breed) params.breed = breed;
+  const { data } = await api.get<BreedPopularResult>('/community/breed-popular', { params });
+  return data;
+}
+
+export interface TopScanner {
+  rank: number;
+  nickname: string;
+  weeklyScans: number;
+  streak: number;
+  level: number;
+  totalScans: number;
+  badge: string;
+}
+
+export async function getTopScanners(petType?: string): Promise<TopScanner[]> {
+  const { data } = await api.get<{ scanners: TopScanner[] }>('/community/top-scanners', {
+    params: petType ? { petType } : undefined,
+  });
+  return data.scanners ?? [];
 }

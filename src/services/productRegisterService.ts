@@ -1,14 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Platform } from 'react-native';
 
 const BASE_URL = 'https://phd-be-production.up.railway.app/api';
 const AUTH_TOKEN_KEY = 'authToken';
 
-function getUploadUri(uri: string): string {
-  if (Platform.OS === 'ios') return uri.replace('file://', '');
-  if (uri.startsWith('file://') || uri.startsWith('content://')) return uri;
-  return `file://${uri}`;
+async function fileToBlob(uri: string): Promise<Blob> {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return blob.slice(0, blob.size, 'image/jpeg');
 }
 
 async function optimizeImage(uri: string): Promise<string> {
@@ -63,22 +62,16 @@ export async function registerProduct(params: RegisterProductParams): Promise<Re
   const barcodeUri = params.barcodeImageUri ? await optimizeImage(params.barcodeImageUri) : null;
 
   const formData = new FormData();
-  formData.append('frontImage', {
-    uri: getUploadUri(frontUri),
-    type: 'image/jpeg',
-    name: 'front.jpg',
-  } as unknown as Blob);
-  formData.append('ingredientImage', {
-    uri: getUploadUri(ingredientUri),
-    type: 'image/jpeg',
-    name: 'ingredients.jpg',
-  } as unknown as Blob);
+
+  const frontBlob = await fileToBlob(frontUri);
+  formData.append('frontImage', frontBlob, 'front.jpg');
+
+  const ingredientBlob = await fileToBlob(ingredientUri);
+  formData.append('ingredientImage', ingredientBlob, 'ingredients.jpg');
+
   if (barcodeUri) {
-    formData.append('barcodeImage', {
-      uri: getUploadUri(barcodeUri),
-      type: 'image/jpeg',
-      name: 'barcode.jpg',
-    } as unknown as Blob);
+    const barcodeBlob = await fileToBlob(barcodeUri);
+    formData.append('barcodeImage', barcodeBlob, 'barcode.jpg');
   }
   if (params.barcode) formData.append('barcode', params.barcode);
   if (params.productName) formData.append('productName', params.productName);
