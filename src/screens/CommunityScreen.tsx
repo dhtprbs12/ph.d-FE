@@ -21,6 +21,7 @@ import type { TrendingProduct, FeedCard, PetOfTheWeekItem, TopScanner, RecentAct
 import type { CommunityStackParamList } from '../navigation/types';
 import { useApp } from '../context/AppContext';
 import MiniCharacter from '../components/MiniCharacter';
+import type { CharacterState } from '../services/shopService';
 import { buildImageUrl } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<CommunityStackParamList>;
@@ -50,6 +51,21 @@ function SectionHeader({ icon, iconColor, title, trailing }: { icon: string; ico
 }
 
 /* ═══════════ 1. PET OF THE WEEK (Podium) ═══════════ */
+function toCharacterData(pet: PetOfTheWeekItem): CharacterState {
+  return {
+    characterType: (pet.characterType as 'dog' | 'cat') || 'dog',
+    equipped: {
+      hat: pet.equipped.hat ? { ...pet.equipped.hat, nameKo: pet.equipped.hat.name } : null,
+      glasses: pet.equipped.glasses ? { ...pet.equipped.glasses, nameKo: pet.equipped.glasses.name } : null,
+      accessory: pet.equipped.accessory ? { ...pet.equipped.accessory, nameKo: pet.equipped.accessory.name } : null,
+      clothes: pet.equipped.clothes ? { ...pet.equipped.clothes, nameKo: pet.equipped.clothes.name } : null,
+      background: pet.equipped.background ? { ...pet.equipped.background, nameKo: pet.equipped.background.name } : null,
+      effect: pet.equipped.effect ? { ...pet.equipped.effect, nameKo: pet.equipped.effect.name } : null,
+    },
+    ownedItems: [],
+  };
+}
+
 function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; loading: boolean }) {
   if (loading) return <ActivityIndicator style={{ paddingVertical: 30 }} color={colors.primary} />;
   if (pets.length === 0) return (
@@ -76,7 +92,7 @@ function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; load
               </View>
             )}
             <View style={[s.podiumCharacter, { height: heights[i], backgroundColor: isFirst ? colors.primary + '12' : colors.lightGray }]}>
-              <MiniCharacter size={isFirst ? 56 : 44} petId={pet.petId} />
+              <MiniCharacter size={isFirst ? 56 : 44} characterData={toCharacterData(pet)} />
             </View>
             <View style={[s.podiumBar, {
               height: heights[i] * 0.35,

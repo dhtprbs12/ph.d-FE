@@ -99,6 +99,15 @@ export async function getRecentActivity(petType?: string): Promise<RecentActivit
   return data.activity ?? [];
 }
 
+export interface EquippedItemDetail {
+  id: string;
+  assetKey: string;
+  layerType: string;
+  positionX: number;
+  positionY: number;
+  name: string;
+}
+
 export interface PetOfTheWeekItem {
   rank: number;
   petId: string;
@@ -108,12 +117,12 @@ export interface PetOfTheWeekItem {
   nickname: string;
   characterType: string;
   equipped: {
-    hat: string | null;
-    glasses: string | null;
-    accessory: string | null;
-    clothes: string | null;
-    background: string | null;
-    effect: string | null;
+    hat: EquippedItemDetail | null;
+    glasses: EquippedItemDetail | null;
+    accessory: EquippedItemDetail | null;
+    clothes: EquippedItemDetail | null;
+    background: EquippedItemDetail | null;
+    effect: EquippedItemDetail | null;
   };
   itemCount: number;
 }
