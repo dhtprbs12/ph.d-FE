@@ -75,44 +75,50 @@ function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; load
     </View>
   );
 
-  const podiumOrder = pets.length >= 3
-    ? [pets[1], pets[0], pets[2]]
-    : pets;
-  const blockHeights = pets.length >= 3 ? [72, 100, 56] : pets.map(() => 80);
-  const charSizes = pets.length >= 3 ? [48, 64, 44] : pets.map(() => 52);
+  // Always show 3 slots — fill missing with placeholder
+  const defaultPet: PetOfTheWeekItem = {
+    rank: 0, petId: '', petName: '???', petType: 'dog', breed: null,
+    nickname: '', characterType: 'dog', equipped: { hat: null, glasses: null, accessory: null, clothes: null, background: null, effect: null }, itemCount: 0,
+  };
+  const filled = [
+    pets[0] || { ...defaultPet, rank: 1 },
+    pets[1] || { ...defaultPet, rank: 2, petId: '_2' },
+    pets[2] || { ...defaultPet, rank: 3, petId: '_3' },
+  ];
+  // Podium order: 2nd - 1st - 3rd
+  const podiumOrder = [filled[1], filled[0], filled[2]];
+  const blockHeights = [72, 100, 56];
+  const charSizes = [48, 64, 44];
+  const blockColors = [colors.primaryLight, colors.primary, colors.accent];
 
   return (
     <View>
-      {/* Characters floating above blocks */}
+      {/* Characters above blocks — aligned at bottom so they sit on top of blocks */}
       <View style={s.podiumCharRow}>
         {podiumOrder.map((pet, i) => {
-          const isFirst = pets.length >= 3 ? i === 1 : i === 0;
+          const isFirst = i === 1;
           return (
-            <View key={pet.petId} style={[s.podiumCharCol, { flex: 1 }]}>  
+            <View key={pet.petId || `slot-${i}`} style={[s.podiumCharCol, { flex: 1 }]}>  
               {isFirst && <Text style={{ fontSize: 18, textAlign: 'center', marginBottom: 2 }}>👑</Text>}
               <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} />
             </View>
           );
         })}
       </View>
-      {/* Podium blocks */}
+      {/* Podium blocks — aligned at bottom */}
       <View style={s.podiumBlockRow}>
-        {podiumOrder.map((pet, i) => {
-          const isFirst = pets.length >= 3 ? i === 1 : i === 0;
-          const blockColor = isFirst ? colors.primary : i === 0 ? colors.primaryLight : colors.accent;
-          return (
-            <View key={pet.petId} style={{ flex: 1, alignItems: 'center' }}>
-              <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColor }]}>
-                <Text style={s.podiumBlockNumber}>{pet.rank}</Text>
-              </View>
+        {podiumOrder.map((pet, i) => (
+          <View key={pet.petId || `block-${i}`} style={{ flex: 1, alignItems: 'center' }}>
+            <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColors[i] }]}>
+              <Text style={s.podiumBlockNumber}>{pet.rank}</Text>
             </View>
-          );
-        })}
+          </View>
+        ))}
       </View>
       {/* Names below podium */}
       <View style={s.podiumInfoRow}>
-        {podiumOrder.map((pet) => (
-          <View key={pet.petId} style={[s.podiumInfoCol, { flex: 1 }]}>
+        {podiumOrder.map((pet, i) => (
+          <View key={pet.petId || `name-${i}`} style={[s.podiumInfoCol, { flex: 1 }]}>
             <Text style={s.podiumPetName} numberOfLines={1}>{pet.petName}</Text>
           </View>
         ))}
@@ -276,8 +282,15 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
   const top3 = scanners.slice(0, 3);
   const rest = scanners.slice(3);
 
-  const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
-  const podiumHeights = top3.length >= 3 ? [70, 95, 55] : top3.map(() => 80);
+  const defaultScanner: TopScanner = { rank: 0, nickname: '???', weeklyScans: 0, streak: 0, level: 1, totalScans: 0, badge: 'Beginner' };
+  const filled = [
+    top3[0] || { ...defaultScanner, rank: 1 },
+    top3[1] || { ...defaultScanner, rank: 2, nickname: '???' },
+    top3[2] || { ...defaultScanner, rank: 3, nickname: '???' },
+  ];
+  // Podium order: 2nd - 1st - 3rd
+  const podiumOrder = [filled[1], filled[0], filled[2]];
+  const podiumHeights = [70, 95, 55];
   const podiumColors = [colors.primaryLight, colors.primary, colors.accent];
 
   return (
@@ -285,10 +298,10 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
       {/* Avatars above blocks */}
       <View style={s.podiumCharRow}>
         {podiumOrder.map((scanner, i) => {
-          const isFirst = top3.length >= 3 ? i === 1 : i === 0;
+          const isFirst = i === 1;
           const avatarSize = isFirst ? 48 : 38;
           return (
-            <View key={scanner.nickname} style={[s.podiumCharCol, { flex: 1 }]}>
+            <View key={`scanner-${scanner.rank}`} style={[s.podiumCharCol, { flex: 1 }]}>
               {isFirst && <Text style={{ fontSize: 18, textAlign: 'center', marginBottom: 2 }}>🏆</Text>}
               <View style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: podiumColors[i] + '20' }]}>
                 <Ionicons name="person" size={avatarSize * 0.45} color={podiumColors[i]} />
@@ -299,23 +312,20 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
       </View>
       {/* Podium blocks */}
       <View style={s.podiumBlockRow}>
-        {podiumOrder.map((scanner, i) => {
-          const isFirst = top3.length >= 3 ? i === 1 : i === 0;
-          return (
-            <View key={scanner.nickname} style={{ flex: 1, alignItems: 'center' }}>
-              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i] }]}>
-                <Text style={s.podiumBlockNumber}>{scanner.rank}</Text>
-              </View>
+        {podiumOrder.map((scanner, i) => (
+          <View key={`block-${scanner.rank}`} style={{ flex: 1, alignItems: 'center' }}>
+            <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i] }]}>
+              <Text style={s.podiumBlockNumber}>{scanner.rank}</Text>
             </View>
-          );
-        })}
+          </View>
+        ))}
       </View>
       {/* Name + scans below podium */}
       <View style={s.podiumInfoRow}>
         {podiumOrder.map((scanner) => (
-          <View key={scanner.nickname} style={[s.podiumInfoCol, { flex: 1 }]}>
+          <View key={`info-${scanner.rank}`} style={[s.podiumInfoCol, { flex: 1 }]}>
             <Text style={s.podiumPetName} numberOfLines={1}>{scanner.nickname}</Text>
-            <Text style={s.podiumInfoText}>{scanner.weeklyScans} scans</Text>
+            {scanner.weeklyScans > 0 && <Text style={s.podiumInfoText}>{scanner.weeklyScans} scans</Text>}
           </View>
         ))}
       </View>
@@ -600,7 +610,7 @@ const s = StyleSheet.create({
   emptyText: { ...typography.bodyMedium, color: colors.textSecondary, textAlign: 'center' },
 
   /* ─── Podium (shared by Pet of the Week & Top Scanners) ─── */
-  podiumCharRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: spacing.sm },
+  podiumCharRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: spacing.sm },
   podiumCharCol: { alignItems: 'center' },
   podiumPetName: { ...typography.labelLarge, color: colors.textPrimary, textAlign: 'center', fontSize: 12 },
   podiumBlockRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
