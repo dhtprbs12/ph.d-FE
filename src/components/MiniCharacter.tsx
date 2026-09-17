@@ -59,7 +59,6 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.lightGray,
     overflow: 'hidden',
     position: 'relative',
   },

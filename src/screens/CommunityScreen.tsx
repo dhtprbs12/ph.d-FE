@@ -90,9 +90,6 @@ function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; load
           return (
             <View key={pet.petId} style={[s.podiumCharCol, { flex: 1 }]}>  
               {isFirst && <Text style={{ fontSize: 18, textAlign: 'center', marginBottom: 2 }}>👑</Text>}
-              <Text style={s.podiumPetName} numberOfLines={1}>{pet.petName}</Text>
-              <Text style={s.podiumPetNick} numberOfLines={1}>@{pet.nickname}</Text>
-              <View style={{ height: 4 }} />
               <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} />
             </View>
           );
@@ -112,12 +109,11 @@ function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; load
           );
         })}
       </View>
-      {/* Item counts below */}
+      {/* Names below podium */}
       <View style={s.podiumInfoRow}>
         {podiumOrder.map((pet) => (
           <View key={pet.petId} style={[s.podiumInfoCol, { flex: 1 }]}>
-            <Ionicons name="shirt-outline" size={11} color={colors.textSecondary} />
-            <Text style={s.podiumInfoText}>{pet.itemCount} items</Text>
+            <Text style={s.podiumPetName} numberOfLines={1}>{pet.petName}</Text>
           </View>
         ))}
       </View>
@@ -286,7 +282,7 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
 
   return (
     <View>
-      {/* Avatars + names above blocks */}
+      {/* Avatars above blocks */}
       <View style={s.podiumCharRow}>
         {podiumOrder.map((scanner, i) => {
           const isFirst = top3.length >= 3 ? i === 1 : i === 0;
@@ -297,8 +293,6 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
               <View style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: podiumColors[i] + '20' }]}>
                 <Ionicons name="person" size={avatarSize * 0.45} color={podiumColors[i]} />
               </View>
-              <Text style={s.podiumPetName} numberOfLines={1}>{scanner.nickname}</Text>
-              <Text style={s.podiumPetNick}>{scanner.weeklyScans} scans</Text>
             </View>
           );
         })}
@@ -316,12 +310,12 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
           );
         })}
       </View>
-      {/* Streak info below */}
+      {/* Name + scans below podium */}
       <View style={s.podiumInfoRow}>
         {podiumOrder.map((scanner) => (
           <View key={scanner.nickname} style={[s.podiumInfoCol, { flex: 1 }]}>
-            <Ionicons name="flame" size={11} color={colors.accent} />
-            <Text style={[s.podiumInfoText, { color: colors.accent }]}>{scanner.streak}d streak</Text>
+            <Text style={s.podiumPetName} numberOfLines={1}>{scanner.nickname}</Text>
+            <Text style={s.podiumInfoText}>{scanner.weeklyScans} scans</Text>
           </View>
         ))}
       </View>
@@ -607,9 +601,8 @@ const s = StyleSheet.create({
 
   /* ─── Podium (shared by Pet of the Week & Top Scanners) ─── */
   podiumCharRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: spacing.sm },
-  podiumCharCol: { alignItems: 'center', gap: 2 },
+  podiumCharCol: { alignItems: 'center' },
   podiumPetName: { ...typography.labelLarge, color: colors.textPrimary, textAlign: 'center', fontSize: 12 },
-  podiumPetNick: { ...typography.caption, color: colors.textSecondary, fontSize: 10 },
   podiumBlockRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
   podiumBlock: {
     width: '90%',
