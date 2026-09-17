@@ -93,27 +93,20 @@ function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; load
 
   return (
     <View>
-      {/* Characters above blocks — aligned at bottom so they sit on top of blocks */}
-      <View style={s.podiumCharRow}>
+      {/* Each column: character on top + block below, aligned at bottom */}
+      <View style={s.podiumBlockRow}>
         {podiumOrder.map((pet, i) => {
           const isFirst = i === 1;
           return (
-            <View key={pet.petId || `slot-${i}`} style={[s.podiumCharCol, { flex: 1 }]}>  
-              {isFirst && <Text style={{ fontSize: 18, textAlign: 'center', marginBottom: 2 }}>👑</Text>}
+            <View key={pet.petId || `slot-${i}`} style={{ flex: 1, alignItems: 'center' }}>
+              {isFirst && <Text style={{ fontSize: 18, marginBottom: 2 }}>👑</Text>}
               <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} />
+              <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColors[i], marginTop: -4 }]}>
+                <Text style={s.podiumBlockNumber}>{pet.rank}</Text>
+              </View>
             </View>
           );
         })}
-      </View>
-      {/* Podium blocks — aligned at bottom */}
-      <View style={s.podiumBlockRow}>
-        {podiumOrder.map((pet, i) => (
-          <View key={pet.petId || `block-${i}`} style={{ flex: 1, alignItems: 'center' }}>
-            <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColors[i] }]}>
-              <Text style={s.podiumBlockNumber}>{pet.rank}</Text>
-            </View>
-          </View>
-        ))}
       </View>
       {/* Names below podium */}
       <View style={s.podiumInfoRow}>
@@ -295,30 +288,23 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
 
   return (
     <View>
-      {/* Avatars above blocks */}
-      <View style={s.podiumCharRow}>
+      {/* Each column: avatar + block, aligned at bottom */}
+      <View style={s.podiumBlockRow}>
         {podiumOrder.map((scanner, i) => {
           const isFirst = i === 1;
           const avatarSize = isFirst ? 48 : 38;
           return (
-            <View key={`scanner-${scanner.rank}`} style={[s.podiumCharCol, { flex: 1 }]}>
-              {isFirst && <Text style={{ fontSize: 18, textAlign: 'center', marginBottom: 2 }}>🏆</Text>}
+            <View key={`scanner-${scanner.rank}`} style={{ flex: 1, alignItems: 'center' }}>
+              {isFirst && <Text style={{ fontSize: 18, marginBottom: 2 }}>🏆</Text>}
               <View style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: podiumColors[i] + '20' }]}>
                 <Ionicons name="person" size={avatarSize * 0.45} color={podiumColors[i]} />
+              </View>
+              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i], marginTop: -4 }]}>
+                <Text style={s.podiumBlockNumber}>{scanner.rank}</Text>
               </View>
             </View>
           );
         })}
-      </View>
-      {/* Podium blocks */}
-      <View style={s.podiumBlockRow}>
-        {podiumOrder.map((scanner, i) => (
-          <View key={`block-${scanner.rank}`} style={{ flex: 1, alignItems: 'center' }}>
-            <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i] }]}>
-              <Text style={s.podiumBlockNumber}>{scanner.rank}</Text>
-            </View>
-          </View>
-        ))}
       </View>
       {/* Name + scans below podium */}
       <View style={s.podiumInfoRow}>
@@ -610,8 +596,6 @@ const s = StyleSheet.create({
   emptyText: { ...typography.bodyMedium, color: colors.textSecondary, textAlign: 'center' },
 
   /* ─── Podium (shared by Pet of the Week & Top Scanners) ─── */
-  podiumCharRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: spacing.sm, marginBottom: -12 },
-  podiumCharCol: { alignItems: 'center' },
   podiumPetName: { ...typography.labelLarge, color: colors.textPrimary, textAlign: 'center', fontSize: 12 },
   podiumBlockRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
   podiumBlock: {
