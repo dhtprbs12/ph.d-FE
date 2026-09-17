@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Image, Text, StyleSheet } from 'react-native';
 import { colors } from '../theme';
 import shopService, { CharacterState } from '../services/shopService';
+import { getBaseCharacter, getItemLayer } from '../utils/characterAssets';
 
 interface MiniCharacterProps {
   size?: number;
@@ -20,21 +21,36 @@ export default function MiniCharacter({ size = 60, petId, characterData }: MiniC
     }
   }, [characterData, petId]);
 
-  const baseEmoji = character?.characterType === 'cat' ? '🐱' : '🐕';
+  const charType = character?.characterType || 'dog';
+  const baseImg = getBaseCharacter(charType);
   const equipped = character?.equipped;
+
+  if (!baseImg) {
+    const baseEmoji = charType === 'cat' ? '🐱' : '🐕';
+    return (
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Text style={{ fontSize: size * 0.5 }}>{baseEmoji}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
-      {equipped?.background && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.accent + '15', borderRadius: size / 2 }]} />
-      )}
-      <Text style={{ fontSize: size * 0.5 }}>{baseEmoji}</Text>
-      {equipped && (
-        <View style={styles.badges}>
-          {equipped.hat && <Text style={{ fontSize: size * 0.15 }}>🎩</Text>}
-          {equipped.glasses && <Text style={{ fontSize: size * 0.15 }}>👓</Text>}
-        </View>
-      )}
+      <Image source={baseImg} style={{ width: size, height: size }} resizeMode="contain" />
+      {equipped && (['clothes', 'accessory', 'hat', 'glasses', 'effect'] as const).map(slot => {
+        const item = equipped[slot];
+        if (!item) return null;
+        const layer = getItemLayer(item.assetKey);
+        if (!layer) return null;
+        return (
+          <Image
+            key={slot}
+            source={layer}
+            style={{ position: 'absolute', top: 0, left: 0, width: size, height: size }}
+            resizeMode="contain"
+          />
+        );
+      })}
     </View>
   );
 }
@@ -45,12 +61,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.lightGray,
     overflow: 'hidden',
-  },
-  badges: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    flexDirection: 'row',
-    gap: 1,
+    position: 'relative',
   },
 });
