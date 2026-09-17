@@ -163,6 +163,7 @@ export interface TopScanner {
   level: number;
   totalScans: number;
   badge: string;
+  petPhotoUrl: string | null;
 }
 
 export async function getTopScanners(petType?: string): Promise<TopScanner[]> {

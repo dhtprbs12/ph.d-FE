@@ -6,22 +6,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius } from '../theme';
 
 interface Props {
-  uri: string | null;
+  uri?: string | null;
   visible: boolean;
   onClose: () => void;
+  children?: React.ReactNode;
 }
 
-export default function ZoomableImageModal({ uri, visible, onClose }: Props) {
-  if (!visible || !uri) return null;
+export default function ZoomableImageModal({ uri, visible, onClose, children }: Props) {
+  if (!visible || (!uri && !children)) return null;
 
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <ZoomableImageContent uri={uri} onClose={onClose} />
+      <ZoomableContent uri={uri} onClose={onClose}>{children}</ZoomableContent>
     </Modal>
   );
 }
 
-function ZoomableImageContent({ uri, onClose }: { uri: string; onClose: () => void }) {
+function ZoomableContent({ uri, onClose, children }: { uri?: string | null; onClose: () => void; children?: React.ReactNode }) {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -91,7 +92,7 @@ function ZoomableImageContent({ uri, onClose }: { uri: string; onClose: () => vo
       </View>
       <GestureDetector gesture={composed}>
         <Animated.View style={[{ width: imgSize, height: imgSize }, animatedStyle]}>
-          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+          {children || <Image source={{ uri: uri! }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />}
         </Animated.View>
       </GestureDetector>
     </GestureHandlerRootView>

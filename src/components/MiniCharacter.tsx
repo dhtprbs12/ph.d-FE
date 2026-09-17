@@ -8,9 +8,10 @@ interface MiniCharacterProps {
   size?: number;
   petId?: string;
   characterData?: CharacterState | null;
+  square?: boolean;
 }
 
-export default function MiniCharacter({ size = 60, petId, characterData }: MiniCharacterProps) {
+export default function MiniCharacter({ size = 60, petId, characterData, square }: MiniCharacterProps) {
   const [character, setCharacter] = useState<CharacterState | null>(characterData || null);
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function MiniCharacter({ size = 60, petId, characterData }: MiniC
   if (!baseImg) {
     const baseEmoji = charType === 'cat' ? '🐱' : '🐕';
     return (
-      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
+      <View style={[styles.container, { width: size, height: size, borderRadius: square ? 0 : size / 2 }]}>
         <Text style={{ fontSize: size * 0.5 }}>{baseEmoji}</Text>
       </View>
     );
@@ -38,7 +39,7 @@ export default function MiniCharacter({ size = 60, petId, characterData }: MiniC
   const containerSize = size * 1.15;
 
   return (
-    <View style={[styles.container, { width: containerSize, height: containerSize, borderRadius: containerSize / 2 }]}>
+    <View style={[styles.container, { width: containerSize, height: containerSize, borderRadius: square ? 0 : containerSize / 2 }]}>
       <Image source={baseImg} style={{ width: renderSize, height: renderSize }} resizeMode="contain" />
       {equipped && (['clothes', 'accessory', 'hat', 'glasses', 'effect'] as const).map(slot => {
         const item = equipped[slot];

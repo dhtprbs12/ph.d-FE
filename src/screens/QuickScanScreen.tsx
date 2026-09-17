@@ -41,7 +41,7 @@ export function QuickScanScreen() {
 
     try {
       const res = await api.get<any>(`/scan/barcode-lookup`, {
-        params: { barcode: data, petType: selectedPet.pet_type, petName: selectedPet.name },
+        params: { barcode: data, petType: selectedPet.pet_type, petName: selectedPet.name, petId: selectedPet.id },
       });
       const result = res.data;
 

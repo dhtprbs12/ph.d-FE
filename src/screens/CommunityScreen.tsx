@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Image,
   Pressable,
@@ -21,6 +22,7 @@ import type { TrendingProduct, FeedCard, PetOfTheWeekItem, TopScanner, RecentAct
 import type { CommunityStackParamList } from '../navigation/types';
 import { useApp } from '../context/AppContext';
 import MiniCharacter from '../components/MiniCharacter';
+import ZoomableImageModal from '../components/ZoomableImageModal';
 import type { CharacterState } from '../services/shopService';
 import { buildImageUrl } from '../utils/helpers';
 
@@ -66,7 +68,7 @@ function toCharacterData(pet: PetOfTheWeekItem): CharacterState {
   };
 }
 
-function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; loading: boolean }) {
+function PetOfTheWeekSection({ pets, loading, onCharacterPress }: { pets: PetOfTheWeekItem[]; loading: boolean; onCharacterPress: (data: CharacterState) => void }) {
   if (loading) return <ActivityIndicator style={{ paddingVertical: 30 }} color={colors.primary} />;
   if (pets.length === 0) return (
     <View style={s.emptySmall}>
@@ -100,7 +102,9 @@ function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; load
           return (
             <View key={pet.petId || `slot-${i}`} style={{ flex: 1, alignItems: 'center' }}>
               {isFirst && <Text style={{ fontSize: 18, marginBottom: 2 }}>👑</Text>}
-              <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} />
+              <Pressable onPress={() => (pet.petId && !pet.petId.startsWith('_')) ? onCharacterPress(toCharacterData(pet)) : undefined}>
+                <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} />
+              </Pressable>
               <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColors[i], marginTop: -2 }]}>
                 <Text style={s.podiumBlockNumber}>{pet.rank}</Text>
               </View>
@@ -263,7 +267,7 @@ function RecentActivitySection({ activity, loading }: { activity: RecentActivity
 }
 
 /* ═══════════ 5. TOP SCANNERS (Podium) ═══════════ */
-function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loading: boolean }) {
+function TopScannersSection({ scanners, loading, onPhotoPress }: { scanners: TopScanner[]; loading: boolean; onPhotoPress: (uri: string) => void }) {
   if (loading) return <ActivityIndicator style={{ paddingVertical: 30 }} color={colors.primary} />;
   if (scanners.length === 0) return (
     <View style={s.emptySmall}>
@@ -275,7 +279,7 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
   const top3 = scanners.slice(0, 3);
   const rest = scanners.slice(3);
 
-  const defaultScanner: TopScanner = { rank: 0, nickname: '???', weeklyScans: 0, streak: 0, level: 1, totalScans: 0, badge: 'Beginner' };
+  const defaultScanner: TopScanner = { rank: 0, nickname: '???', weeklyScans: 0, streak: 0, level: 1, totalScans: 0, badge: 'Beginner', petPhotoUrl: null };
   const filled = [
     top3[0] || { ...defaultScanner, rank: 1 },
     top3[1] || { ...defaultScanner, rank: 2, nickname: '???' },
@@ -293,13 +297,20 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
         {podiumOrder.map((scanner, i) => {
           const isFirst = i === 1;
           const avatarSize = isFirst ? 48 : 38;
+          const photoUri = scanner.petPhotoUrl ? (buildImageUrl(scanner.petPhotoUrl) ?? null) : null;
           return (
             <View key={`scanner-${scanner.rank}`} style={{ flex: 1, alignItems: 'center' }}>
               {isFirst && <Text style={{ fontSize: 18, marginBottom: 2 }}>🏆</Text>}
-              <View style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: podiumColors[i] + '20' }]}>
-                <Ionicons name="person" size={avatarSize * 0.45} color={podiumColors[i]} />
-              </View>
-              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i], marginTop: -8 }]}>
+              <Pressable onPress={() => photoUri ? onPhotoPress(photoUri) : undefined}>
+                {photoUri ? (
+                  <Image source={{ uri: photoUri }} style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]} />
+                ) : (
+                  <View style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: podiumColors[i] + '20' }]}>
+                    <Ionicons name="person" size={avatarSize * 0.45} color={podiumColors[i]} />
+                  </View>
+                )}
+              </Pressable>
+              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i], marginTop: 0 }]}>
                 <Text style={s.podiumBlockNumber}>{scanner.rank}</Text>
               </View>
             </View>
@@ -403,6 +414,8 @@ export default function CommunityScreen() {
   const breed = selectedPet?.breed ?? undefined;
 
   const [refreshing, setRefreshing] = useState(false);
+  const [zoomChar, setZoomChar] = useState<CharacterState | null>(null);
+  const [zoomUri, setZoomUri] = useState<string | null>(null);
 
   // Pet of the Week
   const [potw, setPotw] = useState<PetOfTheWeekItem[]>([]);
@@ -525,7 +538,7 @@ export default function CommunityScreen() {
         {/* 1. Pet of the Week */}
         <View style={s.section}>
           <SectionHeader icon="paw" iconColor={colors.primary} title="Pet of the Week" />
-          <PetOfTheWeekSection pets={potw} loading={potwLoading} />
+          <PetOfTheWeekSection pets={potw} loading={potwLoading} onCharacterPress={setZoomChar} />
         </View>
 
         {/* 2. What Are Others Feeding? */}
@@ -551,7 +564,7 @@ export default function CommunityScreen() {
           <SectionHeader icon="trophy" iconColor={colors.accent} title="Top Scanners"
             trailing={<View style={s.weekPill}><Text style={s.weekPillText}>This Week</Text></View>}
           />
-          <TopScannersSection scanners={scanners} loading={scannersLoading} />
+          <TopScannersSection scanners={scanners} loading={scannersLoading} onPhotoPress={setZoomUri} />
         </View>
 
         {/* 6. Saved by Pet Parents */}
@@ -560,6 +573,10 @@ export default function CommunityScreen() {
           <SavedFeedSection feed={feed} loading={feedLoading} hasMore={hasMore} onLoadMore={loadMoreFeed} onProductPress={navigateToProduct} />
         </View>
       </ScrollView>
+      <ZoomableImageModal visible={!!zoomChar} onClose={() => setZoomChar(null)}>
+        <MiniCharacter size={Dimensions.get('window').width * 0.7} characterData={zoomChar} square />
+      </ZoomableImageModal>
+      <ZoomableImageModal uri={zoomUri} visible={!!zoomUri} onClose={() => setZoomUri(null)} />
     </View>
   );
 }
@@ -625,7 +642,7 @@ const s = StyleSheet.create({
   /* ─── Breed Popular ─── */
   breedSection: { gap: 8 },
   breedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  breedLabel: { ...typography.titleSmall, color: colors.textPrimary },
+  breedLabel: { ...typography.labelLarge, color: colors.textPrimary },
   breedParents: { ...typography.caption, color: colors.textSecondary },
   breedFoodRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
