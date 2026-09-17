@@ -610,7 +610,7 @@ const s = StyleSheet.create({
   emptyText: { ...typography.bodyMedium, color: colors.textSecondary, textAlign: 'center' },
 
   /* ─── Podium (shared by Pet of the Week & Top Scanners) ─── */
-  podiumCharRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: spacing.sm },
+  podiumCharRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: spacing.sm, marginBottom: -12 },
   podiumCharCol: { alignItems: 'center' },
   podiumPetName: { ...typography.labelLarge, color: colors.textPrimary, textAlign: 'center', fontSize: 12 },
   podiumBlockRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
