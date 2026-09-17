@@ -101,7 +101,7 @@ function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; load
             <View key={pet.petId || `slot-${i}`} style={{ flex: 1, alignItems: 'center' }}>
               {isFirst && <Text style={{ fontSize: 18, marginBottom: 2 }}>👑</Text>}
               <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} />
-              <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColors[i], marginTop: -4 }]}>
+              <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColors[i], marginTop: -8 }]}>
                 <Text style={s.podiumBlockNumber}>{pet.rank}</Text>
               </View>
             </View>
@@ -299,7 +299,7 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
               <View style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: podiumColors[i] + '20' }]}>
                 <Ionicons name="person" size={avatarSize * 0.45} color={podiumColors[i]} />
               </View>
-              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i], marginTop: -4 }]}>
+              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i], marginTop: -8 }]}>
                 <Text style={s.podiumBlockNumber}>{scanner.rank}</Text>
               </View>
             </View>
