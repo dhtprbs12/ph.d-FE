@@ -34,9 +34,12 @@ export default function MiniCharacter({ size = 60, petId, characterData }: MiniC
     );
   }
 
+  const renderSize = size;
+  const containerSize = size * 1.15;
+
   return (
-    <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Image source={baseImg} style={{ width: size, height: size }} resizeMode="contain" />
+    <View style={[styles.container, { width: containerSize, height: containerSize, borderRadius: containerSize / 2 }]}>
+      <Image source={baseImg} style={{ width: renderSize, height: renderSize }} resizeMode="contain" />
       {equipped && (['clothes', 'accessory', 'hat', 'glasses', 'effect'] as const).map(slot => {
         const item = equipped[slot];
         if (!item) return null;
@@ -46,7 +49,7 @@ export default function MiniCharacter({ size = 60, petId, characterData }: MiniC
           <Image
             key={slot}
             source={layer}
-            style={{ position: 'absolute', top: 0, left: 0, width: size, height: size }}
+            style={{ position: 'absolute', top: (containerSize - renderSize) / 2, left: (containerSize - renderSize) / 2, width: renderSize, height: renderSize }}
             resizeMode="contain"
           />
         );
