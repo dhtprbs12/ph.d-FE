@@ -39,7 +39,7 @@ import type {
   ScanResult,
 } from '../types';
 import { ManualIngredientsFlow } from './ManualIngredientsScreen';
-import { buildImageUrl, formatLifeStage, formatProductTitleText, toIngredientTitleCase } from '../utils/helpers';
+import { buildImageUrl, buildThumbUrl, formatLifeStage, formatProductTitleText, toIngredientTitleCase } from '../utils/helpers';
 import { pollUntilComplete } from '../utils/analysisPoll';
 import {
   clearPendingAnalysisScan,
@@ -613,7 +613,7 @@ export function TwoStepScanScreen() {
             showsVerticalScrollIndicator
           >
             {candidates.map(c => {
-              const imgUri = buildImageUrl(c.imageUrl ?? c.image_url);
+              const imgUri = buildThumbUrl(c.imageUrl ?? c.image_url);
               const petType = c.targetPetType ?? c.target_pet_type;
               const lifeStage = c.lifeStage;
               const prodType = c.productType ?? c.product_type;

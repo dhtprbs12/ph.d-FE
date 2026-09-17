@@ -22,7 +22,7 @@ import { useApp } from '../context/AppContext';
 import { colors, getGradeColor, radius, shadows, spacing, typography } from '../theme';
 import type { CachedScore, Product, ProductFilterParams } from '../types';
 
-import { buildImageUrl, formatProductTitleText } from '../utils/helpers';
+import { buildImageUrl, buildThumbUrl, formatProductTitleText } from '../utils/helpers';
 
 const PAGE = 20;
 const DEBOUNCE_MS = 600;
@@ -165,11 +165,11 @@ const ProductCard = React.memo(function ProductCard({
   cachedImageUrl?: string | null;
   onImageLoaded?: (productId: string, url: string) => void;
 }) {
-  const initial = cachedImageUrl ?? buildImageUrl(product.image_url);
+  const initial = cachedImageUrl ?? buildThumbUrl(product.image_url);
   const [imgUrl, setImgUrl] = useState<string | null>(initial);
 
   useEffect(() => {
-    const fresh = cachedImageUrl ?? buildImageUrl(product.image_url);
+    const fresh = cachedImageUrl ?? buildThumbUrl(product.image_url);
     if (fresh && fresh !== imgUrl) setImgUrl(fresh);
   }, [cachedImageUrl, product.image_url]);
 
@@ -180,7 +180,7 @@ const ProductCard = React.memo(function ProductCard({
     const timer = setTimeout(() => {
       productService.getProductImage(product.id).then(res => {
         if (!cancelled && res.imageUrl) {
-          const url = buildImageUrl(res.imageUrl);
+          const url = buildThumbUrl(res.imageUrl);
           if (url) {
             setImgUrl(url);
             onImageLoaded?.(product.id, url);

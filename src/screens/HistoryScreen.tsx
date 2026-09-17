@@ -23,7 +23,7 @@ import type { ScanHistoryItem } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
 import * as communityService from '../services/communityService';
-import { buildImageUrl, formatDate, formatLifeStage, formatProductTitleText } from '../utils/helpers';
+import { buildImageUrl, buildThumbUrl, formatDate, formatLifeStage, formatProductTitleText } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<HistoryStackParamList>;
 
@@ -168,7 +168,7 @@ function HistoryCard({ item, onPress, isSaved, onToggleSave }: {
 }) {
   const isListFocused = useIsFocused();
   const gradeColor = getGradeColor(item.grade);
-  const productImageUrl = buildImageUrl(item.product_image);
+  const productImageUrl = buildThumbUrl(item.product_image);
 
   return (
     <Pressable

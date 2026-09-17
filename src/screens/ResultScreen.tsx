@@ -48,7 +48,7 @@ import {
 } from '../theme';
 import type { AlternativeProduct, ConditionWarning, IngredientAnalysis, ScanResult } from '../types';
 import { formatCommunityScans } from '../types';
-import { buildImageUrl, formatProductTitleText, productTypeLabel, toIngredientTitleCase } from '../utils/helpers';
+import { buildImageUrl, buildThumbUrl, formatProductTitleText, productTypeLabel, toIngredientTitleCase } from '../utils/helpers';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -1125,7 +1125,7 @@ function AlternativesSection({
 
 function AltCard({ alt, onPress }: { alt: AlternativeProduct; onPress: () => void }) {
   const p = alt.product;
-  const [lazyImg, setLazyImg] = useState<string | null>(buildImageUrl(p.image_url));
+  const [lazyImg, setLazyImg] = useState<string | null>(buildThumbUrl(p.image_url));
   const [imgFailed, setImgFailed] = useState(false);
   const gradeColor = getGradeColor(alt.grade);
 
@@ -1135,7 +1135,7 @@ function AltCard({ alt, onPress }: { alt: AlternativeProduct; onPress: () => voi
     productService.getProductImage(p.id).then(res => {
       if (cancelled) return;
       if (res.imageUrl) {
-        setLazyImg(buildImageUrl(res.imageUrl));
+        setLazyImg(buildThumbUrl(res.imageUrl));
       } else {
         setImgFailed(true);
       }

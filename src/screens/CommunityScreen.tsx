@@ -24,7 +24,7 @@ import { useApp } from '../context/AppContext';
 import MiniCharacter from '../components/MiniCharacter';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import type { CharacterState } from '../services/shopService';
-import { buildImageUrl } from '../utils/helpers';
+import { buildImageUrl, buildThumbUrl } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<CommunityStackParamList>;
 
@@ -147,7 +147,7 @@ function BreedPopularSection({ data, loading, onProductPress }: { data: BreedPop
           <Pressable key={food.productId} style={s.breedFoodRow} onPress={() => onProductPress(food.productId, food.name, food.brand, food.score, food.imageUrl)}>
             <Text style={s.breedFoodRank}>#{i + 1}</Text>
             {food.imageUrl ? (
-              <Image source={{ uri: buildImageUrl(food.imageUrl) || '' }} style={s.breedFoodImage} />
+              <Image source={{ uri: buildThumbUrl(food.imageUrl) || '' }} style={s.breedFoodImage} />
             ) : (
               <View style={[s.breedFoodImage, s.breedFoodImagePlaceholder]}>
                 <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
@@ -297,20 +297,23 @@ function TopScannersSection({ scanners, loading, onPhotoPress }: { scanners: Top
         {podiumOrder.map((scanner, i) => {
           const isFirst = i === 1;
           const avatarSize = isFirst ? 48 : 38;
-          const photoUri = scanner.petPhotoUrl ? (buildImageUrl(scanner.petPhotoUrl) ?? null) : null;
+          const avatarW = avatarSize;
+          const avatarH = avatarSize * 1.15;
+          const photoUri = scanner.petPhotoUrl ? (buildThumbUrl(scanner.petPhotoUrl) ?? null) : null;
+          const fullPhotoUri = scanner.petPhotoUrl ? (buildImageUrl(scanner.petPhotoUrl) ?? null) : null;
           return (
             <View key={`scanner-${scanner.rank}`} style={{ flex: 1, alignItems: 'center' }}>
               {isFirst && <Text style={{ fontSize: 18, marginBottom: 2 }}>🏆</Text>}
-              <Pressable onPress={() => photoUri ? onPhotoPress(photoUri) : undefined}>
+              <Pressable onPress={() => fullPhotoUri ? onPhotoPress(fullPhotoUri) : undefined}>
                 {photoUri ? (
-                  <Image source={{ uri: photoUri }} style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]} />
+                  <Image source={{ uri: photoUri }} style={[s.scannerAvatar, { width: avatarW, height: avatarH, borderRadius: 10 }]} />
                 ) : (
-                  <View style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: podiumColors[i] + '20' }]}>
+                  <View style={[s.scannerAvatar, { width: avatarW, height: avatarH, borderRadius: 10, backgroundColor: podiumColors[i] + '20' }]}>
                     <Ionicons name="person" size={avatarSize * 0.45} color={podiumColors[i]} />
                   </View>
                 )}
               </Pressable>
-              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i], marginTop: 0 }]}>
+              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i], marginTop: 6 }]}>
                 <Text style={s.podiumBlockNumber}>{scanner.rank}</Text>
               </View>
             </View>

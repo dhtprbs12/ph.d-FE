@@ -6,6 +6,15 @@ export function buildImageUrl(imageUrl?: string | null): string | null {
   return `${API_BASE}${imageUrl}`;
 }
 
+/** Build thumbnail URL by inserting _thumb before the file extension. */
+export function buildThumbUrl(imageUrl?: string | null): string | null {
+  const full = buildImageUrl(imageUrl);
+  if (!full) return null;
+  const dotIdx = full.lastIndexOf('.');
+  if (dotIdx === -1) return full;
+  return full.slice(0, dotIdx) + '_thumb' + full.slice(dotIdx);
+}
+
 export function toTitleCase(str?: string | null): string {
   if (!str) return '';
   return str
