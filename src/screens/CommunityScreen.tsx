@@ -205,7 +205,7 @@ function TrendingSection({ trending, loading, trendType, onTypeChange, onProduct
           renderItem={({ item }) => (
             <Pressable style={[s.trendCard, shadows.card]} onPress={() => onProductPress(item.id, item.name, item.brand, item.score, item.image_url)}>
               {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={s.trendImage} />
+                <Image source={{ uri: buildThumbUrl(item.image_url) || item.image_url }} style={s.trendImage} />
               ) : (
                 <View style={[s.trendImage, s.trendImagePlaceholder]}>
                   <Ionicons name="cube-outline" size={24} color={colors.textSecondary} />
@@ -371,7 +371,7 @@ function SavedFeedSection({ feed, loading, hasMore, onLoadMore, onProductPress }
         <Pressable key={item.save_id} style={[s.feedCard, shadows.card]} onPress={() => onProductPress(item.product_id, item.product_name, item.product_brand, item.score, item.product_image)}>
           <View style={s.feedLeft}>
             {item.pet_photo ? (
-              <Image source={{ uri: item.pet_photo }} style={s.feedAvatar} />
+              <Image source={{ uri: buildThumbUrl(item.pet_photo) || item.pet_photo }} style={s.feedAvatar} />
             ) : (
               <View style={[s.feedAvatar, s.feedAvatarPlaceholder]}>
                 <Ionicons name={item.pet_type === 'cat' ? 'logo-octocat' : 'paw'} size={18} color={colors.textSecondary} />
@@ -387,7 +387,7 @@ function SavedFeedSection({ feed, loading, hasMore, onLoadMore, onProductPress }
           </View>
           <View style={s.feedRight}>
             {item.product_image ? (
-              <Image source={{ uri: item.product_image }} style={s.feedProductImage} />
+              <Image source={{ uri: buildThumbUrl(item.product_image) || item.product_image }} style={s.feedProductImage} />
             ) : (
               <View style={[s.feedProductImage, s.feedProductPlaceholder]}>
                 <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />

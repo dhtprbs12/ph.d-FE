@@ -27,7 +27,7 @@ import type { RecentActivity } from '../services/communityService';
 import gamificationService, { GamificationSummary } from '../services/gamificationService';
 import petFoodService, { CurrentFood } from '../services/petFoodService';
 import api from '../services/api';
-import { toTitleCase } from '../utils/helpers';
+import { toTitleCase, buildThumbUrl } from '../utils/helpers';
 import { getBaseCharacter, getItemLayer } from '../utils/characterAssets';
 import shopService, { CharacterState } from '../services/shopService';
 import ZoomableImageModal from '../components/ZoomableImageModal';
@@ -326,7 +326,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             {currentFood.imageUrl ? (
               <Pressable onPress={() => setZoomImageUri(currentFood.imageUrl)}>
-                <Image source={{ uri: currentFood.imageUrl }} style={styles.foodImage} />
+                <Image source={{ uri: buildThumbUrl(currentFood.imageUrl) || currentFood.imageUrl }} style={styles.foodImage} />
               </Pressable>
             ) : (
               <View style={[styles.foodImage, { backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }]}>

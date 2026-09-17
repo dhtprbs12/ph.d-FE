@@ -18,7 +18,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import checkinService from '../services/checkinService';
 import petFoodService from '../services/petFoodService';
 import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
-import { toTitleCase } from '../utils/helpers';
+import { toTitleCase, buildThumbUrl } from '../utils/helpers';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 
 const STOOL_OPTIONS = [
@@ -170,7 +170,7 @@ export default function CheckInScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 {currentFoodImage ? (
                   <Pressable onPress={() => setZoomImageUri(currentFoodImage)}>
-                    <Image source={{ uri: currentFoodImage }} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="cover" />
+                    <Image source={{ uri: buildThumbUrl(currentFoodImage) || currentFoodImage }} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="cover" />
                   </Pressable>
                 ) : (
                   <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.lightGray, alignItems: 'center', justifyContent: 'center' }}>
