@@ -78,37 +78,49 @@ function PetOfTheWeekSection({ pets, loading }: { pets: PetOfTheWeekItem[]; load
   const podiumOrder = pets.length >= 3
     ? [pets[1], pets[0], pets[2]]
     : pets;
-  const heights = pets.length >= 3 ? [80, 110, 60] : pets.map(() => 90);
+  const blockHeights = pets.length >= 3 ? [72, 100, 56] : pets.map(() => 80);
+  const charSizes = pets.length >= 3 ? [48, 64, 44] : pets.map(() => 52);
 
   return (
-    <View style={s.podiumRow}>
-      {podiumOrder.map((pet, i) => {
-        const isFirst = pets.length >= 3 ? i === 1 : i === 0;
-        return (
-          <View key={pet.petId} style={[s.podiumItem, { flex: 1 }]}>
-            {isFirst && (
-              <View style={s.crownBadge}>
-                <Text style={{ fontSize: 16 }}>👑</Text>
+    <View>
+      {/* Characters floating above blocks */}
+      <View style={s.podiumCharRow}>
+        {podiumOrder.map((pet, i) => {
+          const isFirst = pets.length >= 3 ? i === 1 : i === 0;
+          return (
+            <View key={pet.petId} style={[s.podiumCharCol, { flex: 1 }]}>  
+              {isFirst && <Text style={{ fontSize: 18, textAlign: 'center', marginBottom: 2 }}>👑</Text>}
+              <Text style={s.podiumPetName} numberOfLines={1}>{pet.petName}</Text>
+              <Text style={s.podiumPetNick} numberOfLines={1}>@{pet.nickname}</Text>
+              <View style={{ height: 4 }} />
+              <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} />
+            </View>
+          );
+        })}
+      </View>
+      {/* Podium blocks */}
+      <View style={s.podiumBlockRow}>
+        {podiumOrder.map((pet, i) => {
+          const isFirst = pets.length >= 3 ? i === 1 : i === 0;
+          const blockColor = isFirst ? colors.primary : i === 0 ? colors.primaryLight : colors.accent;
+          return (
+            <View key={pet.petId} style={{ flex: 1, alignItems: 'center' }}>
+              <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColor }]}>
+                <Text style={s.podiumBlockNumber}>{pet.rank}</Text>
               </View>
-            )}
-            <View style={[s.podiumCharacter, { height: heights[i], backgroundColor: isFirst ? colors.primary + '12' : colors.lightGray }]}>
-              <MiniCharacter size={isFirst ? 56 : 44} characterData={toCharacterData(pet)} />
             </View>
-            <View style={[s.podiumBar, {
-              height: heights[i] * 0.35,
-              backgroundColor: isFirst ? colors.primary : i === 0 ? colors.primaryLight : colors.accent,
-            }]}>
-              <Text style={s.podiumRank}>#{pet.rank}</Text>
-            </View>
-            <Text style={s.podiumName} numberOfLines={1}>{pet.petName}</Text>
-            <Text style={s.podiumNickname} numberOfLines={1}>@{pet.nickname}</Text>
-            <View style={s.podiumItemCount}>
-              <Ionicons name="shirt-outline" size={10} color={colors.textSecondary} />
-              <Text style={s.podiumItemCountText}>{pet.itemCount} items</Text>
-            </View>
+          );
+        })}
+      </View>
+      {/* Item counts below */}
+      <View style={s.podiumInfoRow}>
+        {podiumOrder.map((pet) => (
+          <View key={pet.petId} style={[s.podiumInfoCol, { flex: 1 }]}>
+            <Ionicons name="shirt-outline" size={11} color={colors.textSecondary} />
+            <Text style={s.podiumInfoText}>{pet.itemCount} items</Text>
           </View>
-        );
-      })}
+        ))}
+      </View>
     </View>
   );
 }
@@ -274,34 +286,44 @@ function TopScannersSection({ scanners, loading }: { scanners: TopScanner[]; loa
 
   return (
     <View>
-      <View style={s.podiumRow}>
+      {/* Avatars + names above blocks */}
+      <View style={s.podiumCharRow}>
+        {podiumOrder.map((scanner, i) => {
+          const isFirst = top3.length >= 3 ? i === 1 : i === 0;
+          const avatarSize = isFirst ? 48 : 38;
+          return (
+            <View key={scanner.nickname} style={[s.podiumCharCol, { flex: 1 }]}>
+              {isFirst && <Text style={{ fontSize: 18, textAlign: 'center', marginBottom: 2 }}>🏆</Text>}
+              <View style={[s.scannerAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: podiumColors[i] + '20' }]}>
+                <Ionicons name="person" size={avatarSize * 0.45} color={podiumColors[i]} />
+              </View>
+              <Text style={s.podiumPetName} numberOfLines={1}>{scanner.nickname}</Text>
+              <Text style={s.podiumPetNick}>{scanner.weeklyScans} scans</Text>
+            </View>
+          );
+        })}
+      </View>
+      {/* Podium blocks */}
+      <View style={s.podiumBlockRow}>
         {podiumOrder.map((scanner, i) => {
           const isFirst = top3.length >= 3 ? i === 1 : i === 0;
           return (
-            <View key={scanner.nickname} style={[s.podiumItem, { flex: 1 }]}>
-              {isFirst && (
-                <View style={s.crownBadge}>
-                  <Text style={{ fontSize: 16 }}>🏆</Text>
-                </View>
-              )}
-              <View style={[s.scannerAvatar, { width: isFirst ? 52 : 40, height: isFirst ? 52 : 40, borderRadius: isFirst ? 26 : 20, backgroundColor: podiumColors[i] + '20' }]}>
-                <Ionicons name="person" size={isFirst ? 24 : 18} color={podiumColors[i]} />
-              </View>
-              <View style={[s.podiumBar, {
-                height: podiumHeights[i] * 0.35,
-                backgroundColor: podiumColors[i],
-              }]}>
-                <Text style={s.podiumRank}>#{scanner.rank}</Text>
-              </View>
-              <Text style={s.podiumName} numberOfLines={1}>{scanner.nickname}</Text>
-              <Text style={s.scannerStat}>{scanner.weeklyScans} scans</Text>
-              <View style={s.scannerStreak}>
-                <Ionicons name="flame" size={10} color={colors.accent} />
-                <Text style={s.scannerStreakText}>{scanner.streak}d</Text>
+            <View key={scanner.nickname} style={{ flex: 1, alignItems: 'center' }}>
+              <View style={[s.podiumBlock, { height: podiumHeights[i], backgroundColor: podiumColors[i] }]}>
+                <Text style={s.podiumBlockNumber}>{scanner.rank}</Text>
               </View>
             </View>
           );
         })}
+      </View>
+      {/* Streak info below */}
+      <View style={s.podiumInfoRow}>
+        {podiumOrder.map((scanner) => (
+          <View key={scanner.nickname} style={[s.podiumInfoCol, { flex: 1 }]}>
+            <Ionicons name="flame" size={11} color={colors.accent} />
+            <Text style={[s.podiumInfoText, { color: colors.accent }]}>{scanner.streak}d streak</Text>
+          </View>
+        ))}
       </View>
 
       {rest.length > 0 && (
@@ -584,22 +606,26 @@ const s = StyleSheet.create({
   emptyText: { ...typography.bodyMedium, color: colors.textSecondary, textAlign: 'center' },
 
   /* ─── Podium (shared by Pet of the Week & Top Scanners) ─── */
-  podiumRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8, marginTop: spacing.sm },
-  podiumItem: { alignItems: 'center', gap: 4 },
-  podiumCharacter: { width: '100%', borderRadius: radius.medium, alignItems: 'center', justifyContent: 'center' },
-  podiumBar: { width: '80%', borderTopLeftRadius: radius.small, borderTopRightRadius: radius.small, alignItems: 'center', justifyContent: 'center', paddingVertical: 4 },
-  podiumRank: { ...typography.labelSmall, color: colors.white, fontWeight: '700' },
-  podiumName: { ...typography.labelLarge, color: colors.textPrimary, textAlign: 'center' },
-  podiumNickname: { ...typography.caption, color: colors.textSecondary },
-  podiumItemCount: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  podiumItemCountText: { ...typography.caption, color: colors.textSecondary },
+  podiumCharRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: spacing.sm },
+  podiumCharCol: { alignItems: 'center', gap: 2 },
+  podiumPetName: { ...typography.labelLarge, color: colors.textPrimary, textAlign: 'center', fontSize: 12 },
+  podiumPetNick: { ...typography.caption, color: colors.textSecondary, fontSize: 10 },
+  podiumBlockRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
+  podiumBlock: {
+    width: '90%',
+    borderTopLeftRadius: radius.medium,
+    borderTopRightRadius: radius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  podiumBlockNumber: { fontSize: 24, fontWeight: '800', color: colors.white },
+  podiumInfoRow: { flexDirection: 'row', marginTop: 6 },
+  podiumInfoCol: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  podiumInfoText: { ...typography.caption, color: colors.textSecondary, fontSize: 10 },
   crownBadge: { marginBottom: 2 },
 
   /* ─── Scanner Podium extras ─── */
   scannerAvatar: { alignItems: 'center', justifyContent: 'center' },
-  scannerStat: { ...typography.caption, color: colors.textSecondary },
-  scannerStreak: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  scannerStreakText: { ...typography.caption, color: colors.accent, fontWeight: '600' },
   restList: { marginTop: spacing.sm, gap: 4 },
   restRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 4, gap: 8 },
   restRank: { ...typography.labelLarge, color: colors.textSecondary, width: 28, textAlign: 'center' },
