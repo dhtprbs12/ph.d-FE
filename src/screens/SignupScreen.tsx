@@ -20,6 +20,9 @@ import type { PetSex } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 import { DOG_BREEDS, CAT_BREEDS } from '../data/breeds';
 import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
+import { useToast } from '../components/common/Toast';
+import ZoomableImageModal from '../components/ZoomableImageModal';
+import { buildThumbUrl, buildImageUrl } from '../utils/helpers';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 
@@ -27,6 +30,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Signup'>;
 
 export default function SignupScreen({ navigation }: Props) {
   const { authenticateAndSync } = useApp();
+  const toast = useToast();
   const [step, setStep] = useState(0);
 
   const [nickname, setNickname] = useState('');
@@ -65,6 +69,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanLooking, setScanLooking] = useState(false);
   const scanRef = useRef(false);
+  const [zoomUri, setZoomUri] = useState<string | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const handleBarcodeScan = useCallback(async ({ data }: { data: string }) => {
@@ -81,15 +86,16 @@ export default function SignupScreen({ navigation }: Props) {
           productId: result.product.id,
           productName: result.product.name,
           brand: result.product.brand || undefined,
+          imageUrl: result.product.imageUrl || result.product.image_url || null,
         });
         setScannerOpen(false);
       } else {
         setScannerOpen(false);
-        Alert.alert('Not Found', 'This product was not found in our database. Try searching by name instead.');
+        toast.show({ message: 'Product not found. Try searching by name instead.', type: 'info' });
       }
     } catch {
       setScannerOpen(false);
-      Alert.alert('Error', 'Failed to look up barcode. Try searching by name instead.');
+      toast.show({ message: 'Failed to look up barcode', type: 'error' });
     } finally {
       setScanLooking(false);
     }
@@ -157,6 +163,23 @@ export default function SignupScreen({ navigation }: Props) {
   const step1Ready = nicknameAvailable === true && pinValid && pinMatch && emailValid;
   const step2Ready = petName.trim().length > 0;
 
+  const handleStep0Next = async () => {
+    if (!step1Ready) return;
+    if (email.trim()) {
+      try {
+        const result = await authService.checkEmail(email.trim());
+        if (!result.available) {
+          setEmailError(result.reason || 'This email is already registered');
+          return;
+        }
+      } catch {
+        // If check fails, proceed and let registration handle it
+      }
+    }
+    setEmailError('');
+    setStep(1);
+  };
+
   const { pickPhoto } = usePetPhotoPicker({
     currentPhotoUri: photoUri,
     onPhotoSelected: setPhotoUri,
@@ -221,7 +244,7 @@ export default function SignupScreen({ navigation }: Props) {
       navigation.reset({ index: 0, routes: [{ name: 'Disclaimer' }] });
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.response?.data?.error || 'Registration failed';
-      Alert.alert('Error', msg);
+      toast.show({ message: msg, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -230,11 +253,17 @@ export default function SignupScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
 
   return (
+    <>
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.logoRow}>
+          <Image source={require('../../logo.png')} style={styles.logoImg} />
+          <Text style={styles.logoText}>PHD</Text>
+        </View>
+
         {step === 0 ? (
           <View key="step-auth" style={styles.form}>
             <Text style={styles.title}>Create Account</Text>
@@ -317,7 +346,7 @@ export default function SignupScreen({ navigation }: Props) {
 
             <TouchableOpacity
               style={[styles.button, !step1Ready && styles.buttonDisabled]}
-              onPress={() => setStep(1)}
+              onPress={handleStep0Next}
               disabled={!step1Ready}
             >
               <Text style={styles.buttonText}>Next</Text>
@@ -447,25 +476,43 @@ export default function SignupScreen({ navigation }: Props) {
             />
 
             <Text style={styles.label}>Sex</Text>
-            <View style={styles.row}>
-              {PET_SEX_OPTIONS.map((opt) => (
-                <TouchableOpacity key={opt.value} style={[styles.chip, sex === opt.value && styles.chipActive]} onPress={() => setSex(opt.value)}>
-                  <Text style={[styles.chipText, sex === opt.value && styles.chipTextActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+              {PET_SEX_OPTIONS.map((opt) => {
+                const isSelected = sex === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => setSex(opt.value)}
+                    style={[
+                      styles.sexBtn,
+                      { backgroundColor: isSelected ? colors.primary + '26' : colors.lightGray },
+                      isSelected && { borderColor: colors.primary, borderWidth: 1 },
+                    ]}
+                  >
+                    <Text style={[typography.labelMedium, { color: isSelected ? colors.primary : colors.textPrimary }]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <Text style={styles.label}>Activity Level</Text>
-            <View style={styles.segmentedRow}>
-              {(['low', 'moderate', 'high'] as const).map((a) => (
-                <TouchableOpacity key={a} style={[styles.segment, activityLevel === a && styles.segmentActive]} onPress={() => setActivityLevel(a)}>
-                  <Text style={[styles.segmentText, activityLevel === a && styles.segmentTextActive]}>
-                    {a.charAt(0).toUpperCase() + a.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.segmentedControl}>
+              {(['low', 'moderate', 'high'] as const).map((a) => {
+                const isActive = activityLevel === a;
+                return (
+                  <Pressable
+                    key={a}
+                    onPress={() => setActivityLevel(a)}
+                    style={[styles.segmentPill, isActive && styles.segmentPillActive]}
+                  >
+                    <Text style={[typography.labelMedium, { color: isActive ? colors.white : colors.textPrimary }]}>
+                      {a.charAt(0).toUpperCase() + a.slice(1)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <View style={styles.conditionSection}>
@@ -529,6 +576,22 @@ export default function SignupScreen({ navigation }: Props) {
 
             {currentFoodSelection ? (
               <View style={styles.selectedFood}>
+                {(() => {
+                  const thumbUri = currentFoodSelection.imageUrl ? buildThumbUrl(currentFoodSelection.imageUrl) : null;
+                  const fullUri = currentFoodSelection.imageUrl ? buildImageUrl(currentFoodSelection.imageUrl) : null;
+                  return (
+                    <Pressable onPress={() => fullUri ? setZoomUri(fullUri) : undefined}>
+                      {thumbUri ? (
+                        <Image source={{ uri: thumbUri }} style={{ width: 44, height: 44, borderRadius: radius.small, backgroundColor: colors.lightGray }} />
+                      ) : (
+                        <View style={{ width: 44, height: 44, borderRadius: radius.small, backgroundColor: colors.lightGray, alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary }}>No image</Text>
+                          <Text style={{ fontSize: 10, marginTop: 1 }}>🐾</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })()}
                 <Ionicons name="checkmark-circle" size={20} color={colors.safe} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{currentFoodSelection.productName}</Text>
@@ -611,12 +674,22 @@ export default function SignupScreen({ navigation }: Props) {
         </View>
       </Modal>
     </KeyboardAvoidingView>
+
+      <ZoomableImageModal
+        visible={!!zoomUri}
+        uri={zoomUri}
+        onClose={() => setZoomUri(null)}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
+  logoRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, marginBottom: spacing.lg },
+  logoImg: { width: 36, height: 36, borderRadius: 8 },
+  logoText: { fontSize: 22, fontWeight: '700' as const, color: colors.textPrimary },
   form: { width: '100%' },
   title: { ...typography.displayLarge, color: colors.textPrimary, marginBottom: spacing.xxs },
   subtitle: { ...typography.bodyMedium, color: colors.textSecondary, marginBottom: spacing.lg },
@@ -662,31 +735,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   petTypeBtnActive: { backgroundColor: colors.primary + '1A', borderColor: colors.primary },
-  segmentedRow: {
+  segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
+    backgroundColor: colors.lightGray,
     borderRadius: radius.medium,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.divider,
   },
-  segment: {
+  segmentPill: {
     flex: 1,
     paddingVertical: spacing.sm + 2,
     alignItems: 'center',
+    borderRadius: radius.medium,
   },
-  segmentActive: { backgroundColor: colors.primary },
-  segmentText: { ...typography.labelMedium, color: colors.textPrimary },
-  segmentTextActive: { color: colors.white },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.lightGray,
+  segmentPillActive: { backgroundColor: colors.primary },
+  sexBtn: {
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: radius.medium,
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { ...typography.bodySmall, color: colors.textPrimary },
   chipTextActive: { color: colors.white },
   photoWrapper: { alignSelf: 'center', alignItems: 'center', marginBottom: spacing.md },
@@ -709,18 +777,18 @@ const styles = StyleSheet.create({
   },
   breedDropdown: {
     position: 'absolute',
-    top: '100%',
+    bottom: '100%',
     left: 0,
     right: 0,
-    zIndex: 999,
+    zIndex: 100,
     backgroundColor: colors.white,
     borderRadius: radius.medium,
-    marginTop: 4,
+    marginBottom: 4,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.12,
         shadowRadius: 12,
       },
       android: {

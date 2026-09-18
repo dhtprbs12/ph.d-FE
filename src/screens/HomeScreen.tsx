@@ -26,6 +26,7 @@ import * as communityService from '../services/communityService';
 import type { RecentActivity } from '../services/communityService';
 import gamificationService, { GamificationSummary } from '../services/gamificationService';
 import petFoodService, { CurrentFood } from '../services/petFoodService';
+import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 import api from '../services/api';
 import { toTitleCase, buildThumbUrl } from '../utils/helpers';
 import { getBaseCharacter, getItemLayer } from '../utils/characterAssets';
@@ -920,6 +921,105 @@ function FoodCheckCard({
   );
 }
 
+/* ─── Food Journey Card ────────────────────────────────────────── */
+
+function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petName?: string; navigation: Nav }) {
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [insights, setInsights] = useState<InsightData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!petId) return;
+      setLoading(true);
+      Promise.all([
+        passportService.getPassport(petId),
+        passportService.getInsights(petId),
+      ])
+        .then(([p, i]) => {
+          setTimeline(p.timeline);
+          setInsights(i.insights);
+        })
+        .catch(console.warn)
+        .finally(() => setLoading(false));
+    }, [petId])
+  );
+
+  if (loading) return null;
+  if (timeline.length === 0) return null;
+
+  const filtered = timeline.filter(e => e.daysOnFood > 0);
+  if (filtered.length === 0) return null;
+  const top3 = filtered.slice(0, 3);
+  const firstInsight = insights.length > 0 ? insights[0] : null;
+
+  return (
+    <View style={[styles.card, shadows.card]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+        <Text style={[typography.titleLarge, { color: colors.textPrimary }]}>
+          🍽 {petName ? `${petName}'s` : ''} Food Journey
+        </Text>
+      </View>
+
+      <View style={{ gap: spacing.xs }}>
+        {top3.map((entry, i) => {
+          const dateStr = entry.startedAt.includes('T') ? entry.startedAt : entry.startedAt + 'T12:00:00';
+          const startLabel = new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return (
+            <View key={entry.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.labelMedium, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {entry.productName}
+                </Text>
+              </View>
+              <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                {entry.daysOnFood}d · {startLabel}
+              </Text>
+              {entry.stats.checkinCount > 0 && entry.stats.avgStoolScore !== null && (
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                  {entry.stats.avgStoolScore >= 3.5 ? '🙂' : entry.stats.avgStoolScore >= 2.5 ? '😐' : '😕'} {entry.stats.avgStoolScore >= 3.5 ? 'Good' : entry.stats.avgStoolScore >= 2.5 ? 'Okay' : 'Poor'}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+
+      {firstInsight && (
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.xs,
+          marginTop: spacing.sm,
+          backgroundColor: colors.accent + '15',
+          padding: spacing.xs,
+          paddingHorizontal: spacing.sm,
+          borderRadius: radius.small,
+        }}>
+          <Text style={{ fontSize: 14 }}>💡</Text>
+          <Text style={[typography.caption, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>
+            {firstInsight.summary}
+          </Text>
+        </View>
+      )}
+
+      {timeline.length === 1 && (
+        <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs }]}>
+          Keep checking in to unlock insights!
+        </Text>
+      )}
+
+      <Pressable
+        onPress={() => navigation.navigate('Passport', { petId, petName })}
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: spacing.sm }}
+      >
+        <Text style={[typography.labelMedium, { color: colors.primary }]}>View Full Report</Text>
+        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+      </Pressable>
+    </View>
+  );
+}
+
 /* ─── Find Safe Food Card ──────────────────────────────────────── */
 
 function FindSafeFoodCard({
@@ -1193,9 +1293,16 @@ export default function HomeScreen() {
             </StaggeredView>
           )}
 
-          {/* Nom Nom Notes */}
+          {/* Food Journey Card */}
           {selectedPet && (
             <StaggeredView index={4}>
+              <FoodJourneyCard petId={selectedPet.id} petName={selectedPet.name} navigation={navigation} />
+            </StaggeredView>
+          )}
+
+          {/* Nom Nom Notes */}
+          {selectedPet && (
+            <StaggeredView index={5}>
               <NomNomNotesCard
                 petId={selectedPet.id}
                 onViewDetail={(date) =>
@@ -1210,12 +1317,12 @@ export default function HomeScreen() {
           )}
 
           {/* Community Trust Banner */}
-          <StaggeredView index={5}>
+          <StaggeredView index={6}>
             <CommunityTrustBanner stats={communityStats} activity={recentActivity} />
           </StaggeredView>
 
           {/* AAFCO Guidelines */}
-          <StaggeredView index={6}>
+          <StaggeredView index={7}>
             <AafcoGuidelinesCallout />
           </StaggeredView>
         </View>

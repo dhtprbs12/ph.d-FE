@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Image,
@@ -49,6 +48,8 @@ import {
 import type { AlternativeProduct, ConditionWarning, IngredientAnalysis, ScanResult } from '../types';
 import { formatCommunityScans } from '../types';
 import { buildImageUrl, buildThumbUrl, formatProductTitleText, productTypeLabel, toIngredientTitleCase } from '../utils/helpers';
+import { useToast } from '../components/common/Toast';
+import { ConfirmModal } from '../components/common/ConfirmModal';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -1218,41 +1219,28 @@ function DevDeleteButton({
   productLabel: string;
   onDeleted: () => void;
 }) {
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const onPress = useCallback(() => {
     if (busy) return;
-    Alert.alert(
-      'Delete from DB?',
-      `This permanently removes "${productLabel}" and its cached AI review from the database. Use only for testing wrong scans.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            try {
-              const res = await productService.deleteProduct(productId);
-              const cacheCount = res.deleted.reviewCacheRowsDeleted;
-              Alert.alert(
-                'Deleted',
-                `Product purged.${cacheCount > 0 ? `\n${cacheCount} cached AI review${cacheCount === 1 ? '' : 's'} cleared.` : ''}`,
-                [{ text: 'OK', onPress: onDeleted }],
-              );
-            } catch (e) {
-              console.warn('[DevDelete]', e);
-              Alert.alert(
-                'Delete failed',
-                'Could not remove product. See console for details.',
-              );
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
-  }, [busy, productId, productLabel, onDeleted]);
+    setShowConfirm(true);
+  }, [busy]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    setShowConfirm(false);
+    setBusy(true);
+    try {
+      await productService.deleteProduct(productId);
+      toast.show({ message: 'Product purged', type: 'success' });
+      onDeleted();
+    } catch (e) {
+      console.warn('[DevDelete]', e);
+      toast.show({ message: 'Could not remove product', type: 'error' });
+      setBusy(false);
+    }
+  }, [productId, onDeleted, toast]);
 
   return (
     <View style={{ paddingHorizontal: spacing.md }}>
@@ -1274,6 +1262,16 @@ function DevDeleteButton({
           </>
         )}
       </Pressable>
+      <ConfirmModal
+        visible={showConfirm}
+        icon="⚠️"
+        title="Delete from DB?"
+        message={`This permanently removes "${productLabel}" and its cached AI review. Use only for testing wrong scans.`}
+        confirmLabel="Delete"
+        confirmColor={colors.danger}
+        onCancel={() => setShowConfirm(false)}
+        onConfirm={handleConfirmDelete}
+      />
     </View>
   );
 }

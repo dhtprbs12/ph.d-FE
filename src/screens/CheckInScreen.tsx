@@ -5,11 +5,12 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  Alert,
   ScrollView,
   ActivityIndicator,
   Image,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -20,6 +21,7 @@ import petFoodService from '../services/petFoodService';
 import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
 import { toTitleCase, buildThumbUrl } from '../utils/helpers';
 import ZoomableImageModal from '../components/ZoomableImageModal';
+import { useToast } from '../components/common/Toast';
 
 const STOOL_OPTIONS = [
   { score: 1, emoji: '😫', label: 'Very Bad' },
@@ -40,6 +42,7 @@ export default function CheckInScreen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
   const { petId, petName, foodName: initialFoodName, foodImage, daysOnFood } = route.params || {};
+  const toast = useToast();
 
   const [currentFoodName, setCurrentFoodName] = useState<string | undefined>(initialFoodName);
   const [currentFoodImage, setCurrentFoodImage] = useState<string | undefined>(foodImage);
@@ -98,13 +101,13 @@ export default function CheckInScreen() {
       setPendingFood(null);
     } catch (e) {
       console.warn('Failed to change food:', e);
-      Alert.alert('Error', 'Failed to change food');
+      toast.show({ message: 'Failed to change food', type: 'error' });
     }
   }, [petId]);
 
   const handleSave = async () => {
     if (!petId) {
-      Alert.alert('Error', 'No pet selected');
+      toast.show({ message: 'No pet selected', type: 'error' });
       return;
     }
 
@@ -130,14 +133,13 @@ export default function CheckInScreen() {
         message += `\n🔥 ${result.streakInfo.currentStreak}-day streak!`;
       }
 
-      Alert.alert('✅ Check-in Complete!', message, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      toast.show({ message, type: 'success' });
+      setTimeout(() => navigation.goBack(), 800);
     } catch (e: any) {
       if (e.response?.status === 409 || e.status === 409) {
-        Alert.alert('Already Done', 'You already checked in today! Come back tomorrow 🐾');
+        toast.show({ message: 'You already checked in today! Come back tomorrow 🐾', type: 'info' });
       } else {
-        Alert.alert('Error', e.message || 'Failed to save check-in');
+        toast.show({ message: e.message || 'Failed to save check-in', type: 'error' });
       }
     } finally {
       setIsLoading(false);
@@ -155,6 +157,10 @@ export default function CheckInScreen() {
         <View style={{ width: 24 }} />
       </View>
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <ScrollView
         contentContainerStyle={{ padding: spacing.md, gap: spacing.md, paddingBottom: insets.bottom + 100 }}
         keyboardShouldPersistTaps="handled"
@@ -311,6 +317,7 @@ export default function CheckInScreen() {
           />
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Switch Food Confirmation Modal */}
       {pendingFood && (

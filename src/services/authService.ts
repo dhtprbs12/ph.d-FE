@@ -16,6 +16,11 @@ export async function checkNickname(nickname: string): Promise<{ available: bool
   return res.data;
 }
 
+export async function checkEmail(email: string): Promise<{ available: boolean; reason?: string }> {
+  const res = await api.get(`/auth/check-email?email=${encodeURIComponent(email)}`);
+  return res.data;
+}
+
 export async function registerWithNickname(nickname: string, pin: string, email?: string): Promise<{ user: { id: string; nickname: string; name: string }; token: string; isNewUser: boolean }> {
   const res = await api.post('/auth/register-nickname', { nickname, pin, email });
   return res.data;

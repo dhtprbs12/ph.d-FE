@@ -6,9 +6,10 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  Alert,
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -22,12 +23,16 @@ import type { PetSex, ActivityLevel } from '../types';
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 import type { PetsStackParamList } from '../navigation/types';
 import { useApp } from '../context/AppContext';
+import { useToast } from '../components/common/Toast';
+import { ConfirmModal } from '../components/common/ConfirmModal';
 
 export default function EditPetScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<PetsStackParamList, 'EditPet'>>();
   const { pets, updatePet, deletePet } = useApp();
+  const toast = useToast();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const pet = pets.find(p => p.id === route.params.petId);
 
@@ -99,28 +104,20 @@ export default function EditPetScreen() {
       });
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save');
+      toast.show({ message: e.message || 'Failed to save', type: 'error' });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Pet?',
-      `This will delete ${pet.name} and all associated scan history. This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deletePet(pet);
-            navigation.goBack();
-          },
-        },
-      ],
-    );
+    setShowDeleteConfirm(true);
+  };
+
+  const actualDeleteHandler = async () => {
+    setShowDeleteConfirm(false);
+    await deletePet(pet);
+    navigation.goBack();
   };
 
   return (
@@ -134,6 +131,10 @@ export default function EditPetScreen() {
         <View style={{ width: 60 }} />
       </View>
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
         keyboardShouldPersistTaps="handled"
@@ -308,6 +309,17 @@ export default function EditPetScreen() {
           <Text style={[typography.labelMedium, { color: colors.danger }]}>Delete Pet</Text>
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
+      <ConfirmModal
+        visible={showDeleteConfirm}
+        icon="⚠️"
+        title={'Delete ' + pet.name + '?'}
+        message="This will permanently remove all scan history and data for this pet."
+        confirmLabel="Delete"
+        confirmColor={colors.danger}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={actualDeleteHandler}
+      />
     </View>
   );
 }

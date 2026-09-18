@@ -31,6 +31,7 @@ import * as scanService from '../services/scanService';
 import { ApiUploadError } from '../services/api';
 import { useApp } from '../context/AppContext';
 import { colors, radius, shadows, spacing, typography } from '../theme';
+import { useToast } from '../components/common/Toast';
 import type {
   Pet,
   PackageShape,
@@ -139,6 +140,7 @@ export function TwoStepScanScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList, 'TwoStepScan'>>();
   const { selectedPet } = useApp();
   const pet = selectedPet;
+  const toast = useToast();
 
   const packageShapeRef = useRef<PackageShape | null>(null);
   const manualReturnStepRef = useRef<'front' | 'selectCandidate'>('front');
@@ -309,7 +311,7 @@ export function TwoStepScanScreen() {
       } catch (e) {
         console.warn('[SCAN] quickAnalyze failed:', e);
         setProcessing(false);
-        Alert.alert('Analysis Failed', 'Could not analyze this product. Please try again.');
+        toast.show({ message: 'Could not analyze this product. Please try again.', type: 'error' });
       }
     },
     [pet, runPoll, finishWithResult]
@@ -369,7 +371,7 @@ export function TwoStepScanScreen() {
       if (e instanceof ApiUploadError && e.code === 'incomplete_front_scan') {
         const msg = buildFrontRescanMessage(e.missingFields);
         setFrontRescanMessage(msg);
-        Alert.alert('Rescan needed', msg, [{ text: 'OK' }]);
+        toast.show({ message: msg, type: 'info' });
         return;
       }
       if (e instanceof ApiUploadError && e.code === 'back_label_detected') {
@@ -390,13 +392,10 @@ export function TwoStepScanScreen() {
         return;
       }
       if (e instanceof ApiUploadError) {
-        Alert.alert(
-          'Scan Failed',
-          e.suggestion ? `${e.message}\n\n${e.suggestion}` : e.message,
-        );
+        toast.show({ message: e.message, type: 'error' });
         return;
       }
-      Alert.alert('Scan Failed', 'Could not read the label. Please try again.');
+      toast.show({ message: 'Could not read the label. Please try again.', type: 'error' });
     } finally {
       setProcessing(false);
     }

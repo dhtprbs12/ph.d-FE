@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -18,7 +18,9 @@ import { colors, spacing, radius, typography, shadows } from '../theme';
 import type { HomeStackParamList } from '../navigation/types';
 import checkinService, { CheckinEntry } from '../services/checkinService';
 import notesService from '../services/notesService';
-import { toTitleCase } from '../utils/helpers';
+import { toTitleCase, buildThumbUrl, buildImageUrl } from '../utils/helpers';
+import { useToast } from '../components/common/Toast';
+import ZoomableImageModal from '../components/ZoomableImageModal';
 
 type ScreenRoute = RouteProp<HomeStackParamList, 'NomNomDetail'>;
 
@@ -27,6 +29,7 @@ export default function NomNomDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<ScreenRoute>();
   const { petId, date, petName } = route.params;
+  const toast = useToast();
 
   const scrollRef = useRef<ScrollView>(null);
   const noteInputRef = useRef<View>(null);
@@ -35,6 +38,7 @@ export default function NomNomDetailScreen() {
   const [originalNote, setOriginalNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
 
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
@@ -77,7 +81,7 @@ export default function NomNomDetailScreen() {
       navigation.goBack();
     } catch (e) {
       console.warn('[NomNomDetail] saveNote error:', e);
-      Alert.alert('Error', 'Failed to save note. Please try again.');
+      toast.show({ message: 'Failed to save note', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -85,18 +89,19 @@ export default function NomNomDetailScreen() {
 
   const getStoolLabel = (score: number) => {
     switch (score) {
-      case 1: return 'Very Hard';
-      case 2: return 'Firm';
-      case 3: return 'Ideal';
-      case 4: return 'Soft';
-      case 5: return 'Watery';
+      case 1: return 'Very Bad';
+      case 2: return 'Bad';
+      case 3: return 'Normal';
+      case 4: return 'Good';
+      case 5: return 'Great';
       default: return `${score}`;
     }
   };
 
   const getStoolColor = (score: number) => {
-    if (score <= 2) return colors.caution;
-    if (score === 3) return colors.safe;
+    if (score >= 4) return colors.safe;
+    if (score === 3) return colors.primaryLight;
+    if (score === 2) return colors.caution;
     return colors.danger;
   };
 
@@ -193,7 +198,20 @@ export default function NomNomDetailScreen() {
                         <Text style={styles.checkinEmoji}>🍽️</Text>
                         <Text style={styles.checkinCardLabel}>Food</Text>
                       </View>
-                      <Text style={styles.checkinCardValue}>{toTitleCase(checkin.foodName)}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                        {checkin.foodImageUrl ? (
+                          <Pressable onPress={() => {
+                            const full = buildImageUrl(checkin.foodImageUrl);
+                            if (full) setZoomImageUri(full);
+                          }}>
+                            <Image
+                              source={{ uri: buildThumbUrl(checkin.foodImageUrl) ?? undefined }}
+                              style={{ width: 44, height: 44, borderRadius: radius.small, backgroundColor: colors.lightGray }}
+                            />
+                          </Pressable>
+                        ) : null}
+                        <Text style={[styles.checkinCardValue, { flex: 1 }]}>{toTitleCase(checkin.foodName)}</Text>
+                      </View>
                     </View>
                   )}
                   {/* Checkin Notes */}
@@ -256,6 +274,11 @@ export default function NomNomDetailScreen() {
           </>
         )}
       </ScrollView>
+      <ZoomableImageModal
+        uri={zoomImageUri}
+        visible={!!zoomImageUri}
+        onClose={() => setZoomImageUri(null)}
+      />
     </KeyboardAvoidingView>
   );
 }

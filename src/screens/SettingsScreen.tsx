@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Pressable,
   Linking,
-  Alert,
   Platform,
   Animated,
   Image,
@@ -17,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import { useApp } from '../context/AppContext';
 import MiniCharacter from '../components/MiniCharacter';
+import { useToast } from '../components/common/Toast';
+import { ConfirmModal } from '../components/common/ConfirmModal';
 
 /** Mirrors `expo.version` from app.json; falls back after native build */
 const APP_VERSION =
@@ -38,16 +39,13 @@ function openUrl(url: string) {
   Linking.openURL(url).catch(() => {});
 }
 
-function rateApp() {
+function rateApp(toast?: { show: (opts: { message: string; type: string }) => void }) {
   const url =
     Platform.OS === 'ios'
       ? `https://apps.apple.com/app/id${IOS_APP_STORE_ID}`
       : `https://play.google.com/store/apps/details?id=${ANDROID_PLAY_PACKAGE}`;
   if (Platform.OS === 'ios' && IOS_APP_STORE_ID === '0000000000') {
-    Alert.alert(
-      'App Store ID',
-      'App Store Connect에서 앱을 새로 만들면(심사·출시 전에도) Apple ID 숫자가 생깁니다. 해당 앱 → 앱 정보에 나오는 숫자를 IOS_APP_STORE_ID에 넣으면 됩니다. 첫 출시 후에만 아는 값이 아닙니다.',
-    );
+    toast?.show({ message: 'App Store ID not configured yet', type: 'info' });
     return;
   }
   openUrl(url);
@@ -197,22 +195,16 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { pets, selectedPet, resetApp } = useApp();
   const fadeStyles = useStaggeredFade(6);
+  const toast = useToast();
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const onReset = () => {
-    Alert.alert(
-      'Reset App',
-      'This will delete all your pets and reset the app to its initial state. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: () => {
-            resetApp();
-          },
-        },
-      ],
-    );
+    setShowResetConfirm(true);
+  };
+
+  const actualResetHandler = () => {
+    setShowResetConfirm(false);
+    resetApp();
   };
 
   return (
@@ -277,7 +269,7 @@ export default function SettingsScreen() {
             iconColor={colors.accent}
             title="Rate App"
             showChevron
-            onPress={rateApp}
+            onPress={() => rateApp(toast)}
           />
         </SettingsSection>
 
@@ -299,6 +291,16 @@ export default function SettingsScreen() {
           <Text style={styles.footerText}>Made with ❤️ for pet lovers</Text>
         </Animated.View>
       </ScrollView>
+      <ConfirmModal
+        visible={showResetConfirm}
+        icon="⚠️"
+        title="Reset App?"
+        message="This will delete all your pets and reset the app. This action cannot be undone."
+        confirmLabel="Reset"
+        confirmColor={colors.danger}
+        onCancel={() => setShowResetConfirm(false)}
+        onConfirm={actualResetHandler}
+      />
     </View>
   );
 }

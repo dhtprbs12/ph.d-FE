@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../context/AppContext';
 import { colors, spacing, radius, typography } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
+import { useToast } from '../components/common/Toast';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -19,6 +20,7 @@ export default function LoginScreen({ navigation }: Props) {
   const [nickname, setNickname] = useState('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     AsyncStorage.getItem('userNickname').then((saved) => {
@@ -41,9 +43,9 @@ export default function LoginScreen({ navigation }: Props) {
     } catch (e: any) {
       const data = e?.response?.data;
       if (data?.error === 'too_many_attempts') {
-        Alert.alert('Locked Out', data.message);
+        toast.show({ message: data.message, type: 'error' });
       } else {
-        Alert.alert('Login Failed', data?.message || 'Invalid ID or PIN');
+        toast.show({ message: data?.message || 'Invalid ID or PIN', type: 'error' });
       }
     } finally {
       setLoading(false);
@@ -60,6 +62,11 @@ export default function LoginScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
         bounces={false}
       >
+        <View style={styles.logoRow}>
+          <Image source={require('../../logo.png')} style={styles.logoImg} />
+          <Text style={styles.logoText}>PHD</Text>
+        </View>
+
         <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Log in with your ID and PIN</Text>
 
@@ -105,6 +112,9 @@ export default function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   inner: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
+  logoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: spacing.lg },
+  logoImg: { width: 36, height: 36, borderRadius: 8 },
+  logoText: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
   title: { ...typography.displayLarge, color: colors.textPrimary, marginBottom: spacing.xxs },
   subtitle: { ...typography.bodyMedium, color: colors.textSecondary, marginBottom: spacing.lg },
   label: { ...typography.labelLarge, color: colors.textPrimary, marginTop: spacing.md, marginBottom: spacing.xxs + 2 },

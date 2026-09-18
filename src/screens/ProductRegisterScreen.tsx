@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../theme';
 import { registerProduct } from '../services/productRegisterService';
+import { useToast } from '../components/common/Toast';
 
 type Step = 'front' | 'ingredients' | 'barcode' | 'review';
 
@@ -32,6 +33,7 @@ export default function ProductRegisterScreen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
   const barcode = route.params?.barcode;
+  const toast = useToast();
 
   const [currentStep, setCurrentStep] = useState<Step>('front');
   const [photos, setPhotos] = useState<{ front?: string; ingredients?: string; barcode?: string }>({});
@@ -73,7 +75,7 @@ export default function ProductRegisterScreen() {
 
   const handleSubmit = async () => {
     if (!photos.front || !photos.ingredients) {
-      Alert.alert('Missing Photos', 'Please take photos of the front label and ingredients list.');
+      toast.show({ message: 'Please take photos of the front label and ingredients list.', type: 'error' });
       return;
     }
 
@@ -87,13 +89,10 @@ export default function ProductRegisterScreen() {
         petType: 'dog',
       });
 
-      Alert.alert(
-        '🎉 Product Registered!',
-        `Thank you for contributing! You earned 🦴×${result.tokensAwarded} tokens!\n\nNew balance: 🦴 ${result.tokenBalance}`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }],
-      );
+      toast.show({ message: 'Product registered! You earned 🦴×' + result.tokensAwarded, type: 'reward' });
+      setTimeout(() => navigation.goBack(), 800);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to register product. Please try again.');
+      toast.show({ message: e.message || 'Failed to register product', type: 'error' });
     } finally {
       setIsSubmitting(false);
     }

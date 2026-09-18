@@ -31,9 +31,9 @@ function normalizeDate(d: string): string {
 }
 
 export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
-  const today = useMemo(() => new Date(), []);
+  const [today, setToday] = useState(() => new Date());
   const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth()); // 0-indexed
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [checkins, setCheckins] = useState<CheckinEntry[]>([]);
   const [notes, setNotes] = useState<NoteEntry[]>([]);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
@@ -70,6 +70,7 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
 
   useFocusEffect(
     useCallback(() => {
+      setToday(new Date());
       loadData();
     }, [loadData])
   );

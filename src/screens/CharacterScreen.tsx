@@ -6,7 +6,6 @@ import {
   Pressable,
   FlatList,
   ActivityIndicator,
-  Alert,
   ScrollView,
   Image,
 } from 'react-native';
@@ -18,6 +17,7 @@ import shopService, { ShopItem, SlotName, CharacterState, EquippedItem } from '.
 import gamificationService from '../services/gamificationService';
 import { getBaseCharacter, getItemLayer, getItemThumb } from '../utils/characterAssets';
 import { useApp } from '../context/AppContext';
+import { useToast } from '../components/common/Toast';
 
 const CATEGORIES: { key: SlotName; label: string; emoji: string }[] = [
   { key: 'hat', label: 'Hats', emoji: '🎩' },
@@ -33,6 +33,7 @@ export default function CharacterScreen() {
   const navigation = useNavigation();
   const { selectedPet } = useApp();
   const petName = selectedPet?.name;
+  const toast = useToast();
 
   const petId = selectedPet?.id;
 
@@ -121,12 +122,12 @@ export default function CharacterScreen() {
           nameKo: selectedItem.nameKo,
         },
       }));
-      Alert.alert('🎉 Purchased!', `${selectedItem.name} is now yours!`);
+      toast.show({ message: selectedItem.name + ' is now yours!', type: 'reward' });
     } catch (e: any) {
       const msg = e.response?.data?.error === 'insufficient_tokens'
         ? 'Not enough tokens! Keep checking in to earn more 🦴'
         : e.message || 'Purchase failed';
-      Alert.alert('Oops', msg);
+      toast.show({ message: msg, type: 'error' });
     } finally {
       setIsPurchasing(false);
     }
@@ -148,7 +149,7 @@ export default function CharacterScreen() {
       shopService.invalidateCharacterCache();
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save');
+      toast.show({ message: e.message || 'Failed to save', type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -460,7 +461,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     borderRadius: radius.medium,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
   },
   saveBtn: {
     alignItems: 'center',

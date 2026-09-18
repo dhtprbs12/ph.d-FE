@@ -37,6 +37,7 @@ export interface CheckinEntry {
   itching: boolean;
   notes: string | null;
   foodName: string | null;
+  foodImageUrl: string | null;
 }
 
 export interface CheckinSummary {

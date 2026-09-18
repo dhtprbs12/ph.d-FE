@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -11,6 +11,7 @@ import { colors } from '../theme';
 import api from '../services/api';
 import petFoodService from '../services/petFoodService';
 import { toTitleCase } from '../utils/helpers';
+import { useToast } from '../components/common/Toast';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -19,6 +20,7 @@ export function QuickScanScreen() {
   const route = useRoute<any>();
   const { selectedPet } = useApp();
   const mode = route.params?.mode || 'analyze';
+  const toast = useToast();
   const foodPetId = route.params?.petId;
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
@@ -66,7 +68,7 @@ export function QuickScanScreen() {
             });
             setFoodSetInfo({ name: result.product.name });
           } catch {
-            Alert.alert('Error', 'Failed to set current food.');
+            toast.show({ message: 'Failed to set current food', type: 'error' });
           }
           setLooking(false);
           return;
@@ -97,7 +99,7 @@ export function QuickScanScreen() {
       if (e?.response?.status === 404) {
         setNotFound(true);
       } else {
-        Alert.alert('Error', 'Something went wrong. Try again.');
+        toast.show({ message: 'Something went wrong. Try again.', type: 'error' });
       }
       setLooking(false);
     }
@@ -242,7 +244,7 @@ export function QuickScanScreen() {
                       setPendingSwitch(null);
                       setFoodSetInfo({ name: pendingSwitch.name });
                     } catch {
-                      Alert.alert('Error', 'Failed to switch food.');
+                      toast.show({ message: 'Failed to switch food', type: 'error' });
                       setPendingSwitch(null);
                     }
                   }}

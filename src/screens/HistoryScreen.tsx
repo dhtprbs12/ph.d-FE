@@ -259,7 +259,7 @@ function HistoryCard({ item, onPress, isSaved, onToggleSave }: {
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const { pets } = useApp();
+  const { pets, selectedPet } = useApp();
 
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -267,6 +267,15 @@ export default function HistoryScreen() {
   const [filterPetId, setFilterPetId] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+
+  // Auto-sync with global selectedPet (user can still override via filter modal)
+  useEffect(() => {
+    if (selectedPet) {
+      setFilterPetId(selectedPet.id);
+    } else {
+      setFilterPetId(null);
+    }
+  }, [selectedPet?.id]);
 
   const filterPet = filterPetId ? pets.find(p => p.id === filterPetId) : null;
 

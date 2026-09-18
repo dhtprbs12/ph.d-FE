@@ -137,12 +137,10 @@ function BreedPopularSection({ data, loading, onProductPress }: { data: BreedPop
   return (
     <View style={s.breedSection}>
       <View style={s.breedHeader}>
-        <Text style={s.breedLabel}>{data.breed}</Text>
+        <Text style={s.breedLabel}>{data.petType === 'cat' ? '🐱' : '🐶'} {data.breed}</Text>
         <Text style={s.breedParents}>{data.parentCount} pet parents</Text>
       </View>
       {data.foods.map((food, i) => {
-        const scoreColor = (food.score ?? 0) >= 80 ? colors.safe : (food.score ?? 0) >= 60 ? colors.caution : colors.danger;
-        const barWidth = Math.max(((food.score ?? 0) / 100) * 100, 10);
         return (
           <Pressable key={food.productId} style={s.breedFoodRow} onPress={() => onProductPress(food.productId, food.name, food.brand, food.score, food.imageUrl)}>
             <Text style={s.breedFoodRank}>#{i + 1}</Text>
@@ -156,9 +154,6 @@ function BreedPopularSection({ data, loading, onProductPress }: { data: BreedPop
             <View style={s.breedFoodInfo}>
               <Text style={s.breedFoodName} numberOfLines={1}>{food.name}</Text>
               {food.brand ? <Text style={s.breedFoodBrand} numberOfLines={1}>{food.brand}</Text> : null}
-              <View style={s.breedScoreBar}>
-                <View style={[s.breedScoreBarFill, { width: `${barWidth}%`, backgroundColor: scoreColor }]} />
-              </View>
             </View>
             <View style={s.breedFoodRight}>
               <ScoreBadge score={food.score} size={32} />
@@ -599,9 +594,9 @@ const s = StyleSheet.create({
   section: { marginBottom: spacing.xl, paddingHorizontal: spacing.lg },
 
   /* Section Header */
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  sectionTitle: { ...typography.titleMedium, color: colors.textPrimary },
+  sectionTitle: { ...typography.titleLarge, color: colors.textPrimary },
 
   /* Score Badge */
   scoreBadge: { borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
@@ -645,7 +640,7 @@ const s = StyleSheet.create({
   /* ─── Breed Popular ─── */
   breedSection: { gap: 8 },
   breedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  breedLabel: { ...typography.labelLarge, color: colors.textPrimary },
+  breedLabel: { ...typography.titleMedium, color: colors.textPrimary },
   breedParents: { ...typography.caption, color: colors.textSecondary },
   breedFoodRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -658,8 +653,6 @@ const s = StyleSheet.create({
   breedFoodInfo: { flex: 1, minWidth: 0, gap: 2 },
   breedFoodName: { ...typography.labelLarge, color: colors.textPrimary },
   breedFoodBrand: { ...typography.caption, color: colors.textSecondary },
-  breedScoreBar: { height: 4, borderRadius: 2, backgroundColor: colors.lightGray, marginTop: 3 },
-  breedScoreBarFill: { height: 4, borderRadius: 2 },
   breedFoodRight: { alignItems: 'center', gap: 2 },
   breedFoodUsers: { ...typography.caption, color: colors.textSecondary, fontSize: 10 },
 

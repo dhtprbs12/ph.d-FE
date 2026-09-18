@@ -70,6 +70,8 @@ export function PetPhotoCropEditor({
   const savedUserScale = useSharedValue(1);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  const pinchFocalX = useSharedValue(0);
+  const pinchFocalY = useSharedValue(0);
 
   const transformRef = useRef({
     userScale: 1,
@@ -198,11 +200,17 @@ export function PetPhotoCropEditor({
       });
 
     const pinchGesture = Gesture.Pinch()
-      .onBegin(() => {
+      .onBegin((e) => {
         savedUserScale.value = userScale.value;
+        pinchFocalX.value = e.focalX;
+        pinchFocalY.value = e.focalY;
       })
       .onUpdate((e) => {
-        userScale.value = Math.max(1, Math.min(savedUserScale.value * e.scale, 4));
+        const newScale = Math.max(1, Math.min(savedUserScale.value * e.scale, 4));
+        const ratio = newScale / userScale.value;
+        translateX.value = pinchFocalX.value - ratio * (pinchFocalX.value - translateX.value);
+        translateY.value = pinchFocalY.value - ratio * (pinchFocalY.value - translateY.value);
+        userScale.value = newScale;
       })
       .onEnd(() => {
         savedUserScale.value = userScale.value;
@@ -226,6 +234,8 @@ export function PetPhotoCropEditor({
     baseScale,
     imgH,
     imgW,
+    pinchFocalX,
+    pinchFocalY,
     savedTranslateX,
     savedTranslateY,
     savedUserScale,

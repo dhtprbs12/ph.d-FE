@@ -7,11 +7,12 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius } from '../theme';
 import api from '../services/api';
-import { toTitleCase } from '../utils/helpers';
+import { toTitleCase, buildThumbUrl } from '../utils/helpers';
 
 export interface FoodSelection {
   productId?: string;
@@ -85,7 +86,14 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
         <View style={styles.dropdown}>
           {results.map((p: any) => (
             <Pressable key={p.id} onPress={() => handleSelectProduct(p)} style={styles.dropdownItem}>
-              <Ionicons name="nutrition-outline" size={16} color={colors.primary} />
+              {(() => {
+                const thumb = buildThumbUrl(p.image_url || p.imageUrl);
+                return thumb ? (
+                  <Image source={{ uri: thumb }} style={{ width: 28, height: 28, borderRadius: 4, backgroundColor: colors.lightGray }} />
+                ) : (
+                  <Ionicons name="nutrition-outline" size={16} color={colors.primary} />
+                );
+              })()}
               <View style={{ flex: 1 }}>
                     <Text style={styles.itemName} numberOfLines={1}>{toTitleCase(p.name)}</Text>
                 {p.brand && <Text style={styles.itemBrand}>{toTitleCase(p.brand)}</Text>}

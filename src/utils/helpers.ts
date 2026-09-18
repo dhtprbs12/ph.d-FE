@@ -55,7 +55,8 @@ export function scanTypeLabel(type: string): string {
 
 export function formatDate(dateString: string): string {
   try {
-    const date = new Date(dateString);
+    const safe = dateString.includes('T') ? dateString : dateString + 'T12:00:00';
+    const date = new Date(safe);
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',

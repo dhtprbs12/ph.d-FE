@@ -13,6 +13,7 @@ import {
   Keyboard,
   FlatList,
   Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -25,6 +26,7 @@ import type { PetType, ActivityLevel, PetSex } from '../types';
 import { useApp } from '../context/AppContext';
 import { DOG_BREEDS, CAT_BREEDS } from '../data/breeds';
 import api from '../services/api';
+import { useToast } from '../components/common/Toast';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 
@@ -32,6 +34,7 @@ export default function AddPetScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { addPet, pets } = useApp();
+  const toast = useToast();
 
   const scrollRef = useRef<ScrollView>(null);
   const [currentStep, setCurrentStep] = useState(0);
@@ -129,7 +132,7 @@ export default function AddPetScreen() {
       await savePetCore();
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to add pet');
+      toast.show({ message: e.message || 'Failed to add pet', type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -159,11 +162,11 @@ export default function AddPetScreen() {
         setScannerOpen(false);
       } else {
         setScannerOpen(false);
-        Alert.alert('Not Found', 'This product was not found in our database. You can register it from the home screen to earn 🦴×20!');
+        toast.show({ message: 'Product not found. You can register it from the home screen!', type: 'info' });
       }
     } catch {
       setScannerOpen(false);
-      Alert.alert('Not Found', 'This product was not found in our database. You can register it from the home screen to earn 🦴×20!');
+      toast.show({ message: 'Product not found. You can register it from the home screen!', type: 'info' });
     } finally {
       setScanLooking(false);
     }
@@ -198,7 +201,7 @@ export default function AddPetScreen() {
       }
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to add pet');
+      toast.show({ message: e.message || 'Failed to add pet', type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -228,6 +231,10 @@ export default function AddPetScreen() {
         ))}
       </View>
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
@@ -520,6 +527,7 @@ export default function AddPetScreen() {
           </View>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Bottom buttons */}
       {!keyboardVisible && (
@@ -730,18 +738,18 @@ const styles = StyleSheet.create({
   },
   breedDropdown: {
     position: 'absolute',
-    top: '100%',
+    bottom: '100%',
     left: 0,
     right: 0,
-    zIndex: 999,
+    zIndex: 100,
     backgroundColor: colors.white,
     borderRadius: radius.medium,
-    marginTop: 4,
+    marginBottom: 4,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.12,
         shadowRadius: 12,
       },
       android: {

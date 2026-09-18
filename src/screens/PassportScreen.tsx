@@ -13,50 +13,102 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../theme';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 
-function StoolScoreEmoji(score: number | null) {
-  if (score === null) return '—';
-  if (score >= 4.5) return '😊';
-  if (score >= 3.5) return '🙂';
-  if (score >= 2.5) return '😐';
-  if (score >= 1.5) return '😕';
-  return '😫';
+function StoolScoreLabel(score: number | null): { label: string; emoji: string; color: string } {
+  if (score === null) return { label: 'No data', emoji: '—', color: colors.textSecondary };
+  if (score >= 4.5) return { label: 'Excellent', emoji: '😊', color: colors.safe };
+  if (score >= 3.5) return { label: 'Good', emoji: '🙂', color: colors.primaryLight };
+  if (score >= 2.5) return { label: 'Okay', emoji: '😐', color: colors.caution };
+  if (score >= 1.5) return { label: 'Poor', emoji: '😕', color: colors.warning };
+  return { label: 'Bad', emoji: '😫', color: colors.danger };
 }
 
-function TimelineCard({ entry }: { entry: TimelineEntry }) {
-  const startMonth = new Date(entry.startedAt).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+function TimelineCard({ entry, prevEntry }: { entry: TimelineEntry; prevEntry?: TimelineEntry }) {
+  const dateStr = entry.startedAt.includes('T') ? entry.startedAt : entry.startedAt + 'T12:00:00';
+  const startMonth = new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const stool = StoolScoreLabel(entry.stats.avgStoolScore);
+  const hasSymptoms = entry.stats.itchCount > 0 || entry.stats.vomitCount > 0;
+  const hasCheckins = entry.stats.checkinCount > 0;
+
+  const prevStool = prevEntry?.stats.avgStoolScore ?? null;
+  const stoolDiff = (hasCheckins && prevStool !== null && entry.stats.avgStoolScore !== null)
+    ? +(entry.stats.avgStoolScore - prevStool).toFixed(1)
+    : null;
 
   return (
     <View style={styles.timelineCard}>
-      <View style={styles.timelineDot}>
-        <View style={[styles.timelineDotInner, entry.isCurrent && { backgroundColor: colors.primary }]} />
-      </View>
       <View style={styles.timelineContent}>
+        {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
-            <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>{entry.productName}</Text>
+            <Text style={[typography.labelLarge, { color: colors.textPrimary }]} numberOfLines={2}>{entry.productName}</Text>
             {entry.brand && <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>{entry.brand}</Text>}
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
+          <View style={{ alignItems: 'flex-end', marginLeft: spacing.sm }}>
             <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>{startMonth}</Text>
-            <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>{entry.daysOnFood}d</Text>
+            <Text style={[typography.labelMedium, { color: colors.textPrimary }]}>{entry.daysOnFood} days</Text>
           </View>
         </View>
-        {entry.stats.checkinCount > 0 && (
-          <View style={styles.timelineStats}>
-            <Text style={styles.timelineStat}>
-              💩 {entry.stats.avgStoolScore ?? '—'} {StoolScoreEmoji(entry.stats.avgStoolScore)}
-            </Text>
-            {entry.stats.itchCount > 0 && (
-              <Text style={styles.timelineStat}>🐾 {entry.stats.itchCount}x itch</Text>
-            )}
-            {entry.stats.vomitCount > 0 && (
-              <Text style={styles.timelineStat}>🤮 {entry.stats.vomitCount}x</Text>
+
+        {/* Stats */}
+        {hasCheckins ? (
+          <View style={{ gap: 6, marginTop: spacing.xs }}>
+            {/* Stool summary */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              <Text style={{ fontSize: 16 }}>{stool.emoji}</Text>
+              <Text style={[typography.bodySmall, { color: stool.color, fontWeight: '600' }]}>
+                Stool: {stool.label}
+              </Text>
+              {stoolDiff !== null && stoolDiff !== 0 && (
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: stoolDiff > 0 ? colors.safe + '15' : colors.danger + '15',
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: radius.small,
+                }}>
+                  <Ionicons
+                    name={stoolDiff > 0 ? 'arrow-up' : 'arrow-down'}
+                    size={10}
+                    color={stoolDiff > 0 ? colors.safe : colors.danger}
+                  />
+                  <Text style={[typography.caption, { color: stoolDiff > 0 ? colors.safe : colors.danger, fontWeight: '600' }]}>
+                    {Math.abs(stoolDiff)}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Symptoms */}
+            {hasSymptoms ? (
+              <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+                {entry.stats.itchCount > 0 && (
+                  <View style={styles.symptomTag}>
+                    <Text style={styles.symptomTagText}>🐾 Itching {entry.stats.itchCount}x</Text>
+                  </View>
+                )}
+                {entry.stats.vomitCount > 0 && (
+                  <View style={[styles.symptomTag, { backgroundColor: colors.danger + '12' }]}>
+                    <Text style={[styles.symptomTagText, { color: colors.danger }]}>🤮 Vomiting {entry.stats.vomitCount}x</Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ fontSize: 12 }}>✨</Text>
+                <Text style={[typography.caption, { color: colors.safe }]}>No symptoms reported</Text>
+              </View>
             )}
           </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs }}>
+            <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
+            <Text style={[typography.bodySmall, { color: colors.textSecondary, fontStyle: 'italic' }]}>
+              {entry.daysOnFood <= 3 ? 'Keep checking in to see stats!' : 'No check-in data for this period'}
+            </Text>
+          </View>
         )}
-        {entry.stats.checkinCount === 0 && (
-          <Text style={[typography.bodySmall, { color: colors.textSecondary, fontStyle: 'italic' }]}>No check-in data</Text>
-        )}
+
         {entry.isCurrent && (
           <View style={styles.currentBadge}>
             <Text style={[typography.labelSmall, { color: colors.primary }]}>Current</Text>
@@ -120,6 +172,8 @@ export default function PassportScreen() {
     }, [petId])
   );
 
+  const filteredTimeline = timeline.filter(e => e.daysOnFood > 0);
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -145,13 +199,51 @@ export default function PassportScreen() {
           </Text>
 
           {/* Timeline */}
-          {timeline.length > 0 ? (
+          {filteredTimeline.length > 0 ? (
             <View style={{ gap: 0 }}>
               <Text style={[typography.labelLarge, { color: colors.textSecondary, marginBottom: spacing.md }]}>
                 Food Timeline
               </Text>
-              {timeline.map((entry, i) => (
-                <TimelineCard key={entry.id} entry={entry} />
+
+              {/* Comparison banner if 2+ foods with checkin data */}
+              {filteredTimeline.length >= 2 && filteredTimeline[0].stats.checkinCount > 0 && filteredTimeline[1].stats.checkinCount > 0 && (
+                (() => {
+                  const curr = filteredTimeline[0];
+                  const prev = filteredTimeline[1];
+                  const currStool = curr.stats.avgStoolScore;
+                  const prevStool = prev.stats.avgStoolScore;
+                  const stoolImproved = currStool !== null && prevStool !== null && currStool > prevStool;
+                  const stoolWorsened = currStool !== null && prevStool !== null && currStool < prevStool;
+                  const itchImproved = curr.stats.itchCount < prev.stats.itchCount;
+                  const itchWorsened = curr.stats.itchCount > prev.stats.itchCount;
+
+                  const changes: string[] = [];
+                  if (stoolImproved) changes.push('Stool improved');
+                  if (stoolWorsened) changes.push('Stool worsened');
+                  if (itchImproved) changes.push('Less itching');
+                  if (itchWorsened) changes.push('More itching');
+
+                  if (changes.length === 0) return null;
+                  const isPositive = stoolImproved || itchImproved;
+
+                  return (
+                    <View style={[styles.comparisonBanner, { backgroundColor: isPositive ? colors.safe + '10' : colors.warning + '10', borderColor: isPositive ? colors.safe + '30' : colors.warning + '30' }]}>
+                      <Text style={{ fontSize: 16 }}>{isPositive ? '📈' : '📉'}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[typography.labelMedium, { color: isPositive ? colors.safe : colors.warning }]}>
+                          Since switching to {curr.productName.split(' ').slice(0, 3).join(' ')}
+                        </Text>
+                        <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                          {changes.join(' · ')}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()
+              )}
+
+              {filteredTimeline.map((entry, i) => (
+                <TimelineCard key={entry.id} entry={entry} prevEntry={i < filteredTimeline.length - 1 ? filteredTimeline[i + 1] : undefined} />
               ))}
             </View>
           ) : (
@@ -198,22 +290,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   timelineCard: {
-    flexDirection: 'row',
-    gap: spacing.md,
     paddingBottom: spacing.md,
-  },
-  timelineDot: {
-    width: 20,
-    alignItems: 'center',
-    paddingTop: 4,
-  },
-  timelineDotInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.lightGray,
-    borderWidth: 2,
-    borderColor: colors.divider,
   },
   timelineContent: {
     flex: 1,
@@ -235,6 +312,28 @@ const styles = StyleSheet.create({
   timelineStat: {
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  symptomTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.caution + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.small,
+  },
+  symptomTagText: {
+    ...typography.caption,
+    fontWeight: '500',
+    color: '#B8860B',
+  },
+  comparisonBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    marginBottom: spacing.md,
   },
   currentBadge: {
     alignSelf: 'flex-start',
