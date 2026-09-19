@@ -19,6 +19,7 @@ import MiniCharacter from '../components/MiniCharacter';
 import { useToast } from '../components/common/Toast';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import * as authService from '../services/authService';
+import { resetToLogin } from '../navigation/navigationRef';
 
 /** Mirrors `expo.version` from app.json; falls back after native build */
 const APP_VERSION =
@@ -201,9 +202,10 @@ export default function SettingsScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutConfirm(false);
-    resetApp();
+    await resetApp();
+    resetToLogin();
   };
 
   const handleDeleteAccount = async () => {
@@ -212,7 +214,7 @@ export default function SettingsScreen() {
       await authService.deleteAccount();
       setShowDeleteConfirm(false);
       await resetApp();
-      toast.show({ message: 'Account deleted', type: 'success' });
+      resetToLogin();
     } catch (e: any) {
       setDeleting(false);
       toast.show({ message: 'Failed to delete account. Please try again.', type: 'error' });
