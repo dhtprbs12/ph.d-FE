@@ -40,6 +40,10 @@ const ITEM_LAYERS: Record<string, ImageSourcePropType> = {
   accessory_snow_white_band: require('../../assets/character/items/snow_white_band.png'),
   clothes_snow_white_dress: require('../../assets/character/items/snow_white_dress.png'),
   clothes_suit: require('../../assets/character/items/suit.png'),
+  bg_trail: require('../../assets/character/items/trail.jpg'),
+  bg_yosemite: require('../../assets/character/items/yosemite.jpg'),
+  bg_harvard: require('../../assets/character/items/harvard_campus.jpg'),
+  bg_dodgers: require('../../assets/character/items/dodgers_stadium.jpg'),
 };
 
 const ITEM_THUMBS: Record<string, ImageSourcePropType> = {
@@ -78,6 +82,10 @@ const ITEM_THUMBS: Record<string, ImageSourcePropType> = {
   accessory_snow_white_band: require('../../assets/character/thumbs/snow_white_band_thumb.png'),
   clothes_snow_white_dress: require('../../assets/character/thumbs/snow_white_dress_thumb.png'),
   clothes_suit: require('../../assets/character/thumbs/suit_thumb.png'),
+  bg_trail: require('../../assets/character/thumbs/trail_thumb.png'),
+  bg_yosemite: require('../../assets/character/thumbs/yosemite_thumb.png'),
+  bg_harvard: require('../../assets/character/thumbs/harvard_campus_thumb.png'),
+  bg_dodgers: require('../../assets/character/thumbs/dodgers_stadium_thumb.png'),
 };
 
 export function getBaseCharacter(type: string): ImageSourcePropType {

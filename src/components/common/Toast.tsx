@@ -8,11 +8,13 @@ import React, {
   useState,
 } from 'react';
 import {
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { FullWindowOverlay } from 'react-native-screens';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -122,29 +124,33 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const accentColor = ACCENT_COLORS[type];
   const icon = current?.icon ?? DEFAULT_ICONS[type];
 
+  const toastNode = current ? (
+    <GestureDetector gesture={swipeGesture}>
+      <Animated.View
+        style={[
+          styles.container,
+          { top: insets.top + 8 },
+          animatedStyle,
+        ]}
+        pointerEvents="box-none"
+      >
+        <Pressable onPress={dismiss} style={styles.pressable}>
+          <View style={[styles.toast, shadows.elevated]}>
+            <View style={[styles.accentLine, { backgroundColor: accentColor }]} />
+            <Text style={styles.icon}>{icon}</Text>
+            <Text style={styles.message} numberOfLines={3}>{current.message}</Text>
+          </View>
+        </Pressable>
+      </Animated.View>
+    </GestureDetector>
+  ) : null;
+
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      {current && (
-        <GestureDetector gesture={swipeGesture}>
-          <Animated.View
-            style={[
-              styles.container,
-              { top: insets.top + 8 },
-              animatedStyle,
-            ]}
-            pointerEvents="box-none"
-          >
-            <Pressable onPress={dismiss} style={styles.pressable}>
-              <View style={[styles.toast, shadows.elevated]}>
-                <View style={[styles.accentLine, { backgroundColor: accentColor }]} />
-                <Text style={styles.icon}>{icon}</Text>
-                <Text style={styles.message} numberOfLines={3}>{current.message}</Text>
-              </View>
-            </Pressable>
-          </Animated.View>
-        </GestureDetector>
-      )}
+      {toastNode && Platform.OS === 'ios' ? (
+        <FullWindowOverlay>{toastNode}</FullWindowOverlay>
+      ) : toastNode}
     </ToastContext.Provider>
   );
 }

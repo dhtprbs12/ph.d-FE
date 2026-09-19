@@ -43,7 +43,13 @@ export function QuickScanScreen() {
 
     try {
       const res = await api.get<any>(`/scan/barcode-lookup`, {
-        params: { barcode: data, petType: selectedPet.pet_type, petName: selectedPet.name, petId: selectedPet.id },
+        params: {
+          barcode: data,
+          petType: selectedPet.pet_type,
+          petName: selectedPet.name,
+          petId: selectedPet.id,
+          ...(mode === 'analyze' ? { recordHistory: '1' } : {}),
+        },
       });
       const result = res.data;
 
@@ -103,7 +109,7 @@ export function QuickScanScreen() {
       }
       setLooking(false);
     }
-  }, [selectedPet, navigation]);
+  }, [selectedPet, navigation, mode, foodPetId, toast]);
 
   const retry = () => {
     scannedRef.current = false;

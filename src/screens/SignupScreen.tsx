@@ -258,6 +258,8 @@ export default function SignupScreen({ navigation }: Props) {
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
       >
         <View style={styles.logoRow}>
           <Image source={require('../../logo.png')} style={styles.logoImg} />

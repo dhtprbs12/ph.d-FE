@@ -567,7 +567,7 @@ export default function CommunityScreen() {
 
         {/* 6. Saved by Pet Parents */}
         <View style={s.section}>
-          <SectionHeader icon="heart" iconColor={colors.danger} title="Saved by Pet Parents" />
+          <SectionHeader icon="heart" iconColor={colors.danger} title="Saved by others" />
           <SavedFeedSection feed={feed} loading={feedLoading} hasMore={hasMore} onLoadMore={loadMoreFeed} onProductPress={navigateToProduct} />
         </View>
       </ScrollView>

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { File, UploadType } from 'expo-file-system';
 
 const BASE_URL = 'https://phd-be-production.up.railway.app/api';
 const AUTH_TOKEN_KEY = 'authToken';
@@ -140,73 +141,53 @@ export class ApiUploadError extends Error {
   }
 }
 
-function getUploadUri(uri: string): string {
-  if (Platform.OS === 'ios') return uri.replace('file://', '');
-  if (uri.startsWith('file://') || uri.startsWith('content://')) return uri;
-  return `file://${uri}`;
-}
-
 export async function uploadImage<T>(
   endpoint: string,
   imageUri: string,
   additionalFields?: Record<string, string>,
   fieldName: string = 'image'
 ): Promise<T> {
-  let probedWidth: number | undefined;
-  let probedHeight: number | undefined;
   try {
-    const probe = await ImageManipulator.manipulateAsync(imageUri, [], {});
-    probedWidth = probe.width;
-    probedHeight = probe.height;
-  } catch {}
+    let probedWidth: number | undefined;
+    let probedHeight: number | undefined;
+    try {
+      const probe = await ImageManipulator.manipulateAsync(imageUri, [], {});
+      probedWidth = probe.width;
+      probedHeight = probe.height;
+    } catch {}
 
-  const resizeAction: ImageManipulator.Action[] = [];
-  if (probedWidth && probedHeight) {
-    const longest = Math.max(probedWidth, probedHeight);
-    if (longest > UPLOAD_MAX_DIMENSION) {
-      resizeAction.push(
-        probedWidth >= probedHeight
-          ? { resize: { width: UPLOAD_MAX_DIMENSION } }
-          : { resize: { height: UPLOAD_MAX_DIMENSION } }
-      );
-    }
-  }
-
-  const manipulated = await ImageManipulator.manipulateAsync(
-    imageUri,
-    resizeAction,
-    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
-  );
-  const jpegUri = manipulated.uri;
-
-  const formData = new FormData();
-
-  formData.append(fieldName, {
-    uri: jpegUri,
-    name: `${fieldName}.jpg`,
-    type: 'image/jpeg',
-  } as any);
-
-  if (additionalFields) {
-    for (const [key, value] of Object.entries(additionalFields)) {
-      if (value !== undefined && value !== null) {
-        formData.append(key, String(value));
+    const resizeAction: ImageManipulator.Action[] = [];
+    if (probedWidth && probedHeight) {
+      const longest = Math.max(probedWidth, probedHeight);
+      if (longest > UPLOAD_MAX_DIMENSION) {
+        resizeAction.push(
+          probedWidth >= probedHeight
+            ? { resize: { width: UPLOAD_MAX_DIMENSION } }
+            : { resize: { height: UPLOAD_MAX_DIMENSION } }
+        );
       }
     }
-  }
 
-  try {
+    const manipulated = await ImageManipulator.manipulateAsync(
+      imageUri,
+      resizeAction,
+      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+    );
+
     const headers = await getAuthHeaders();
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'POST',
+    const uploadResult = await new File(manipulated.uri).upload(`${BASE_URL}${endpoint}`, {
+      httpMethod: 'POST',
+      uploadType: UploadType.MULTIPART,
+      fieldName,
+      mimeType: 'image/jpeg',
       headers: { Accept: 'application/json', ...headers },
-      body: formData,
+      parameters: additionalFields || undefined,
     });
 
-    const data = await response.json().catch(() => ({}));
-    if (response.status === 401) handle401();
-    if (!response.ok) {
-      throw new ApiUploadError(response.status, data as {
+    if (uploadResult.status === 401) handle401();
+    const data = JSON.parse(uploadResult.body || '{}');
+    if (uploadResult.status < 200 || uploadResult.status >= 300) {
+      throw new ApiUploadError(uploadResult.status, data as {
         error?: string; message?: string; suggestion?: string; missingFields?: string[];
       });
     }

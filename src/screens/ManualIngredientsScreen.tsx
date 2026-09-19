@@ -187,6 +187,7 @@ export function ManualIngredientsFlow({
         contentContainerStyle={st.scroll}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         nestedScrollEnabled
       >
           {hideNavBar && entryExplainer ? (

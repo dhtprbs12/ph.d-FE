@@ -726,7 +726,7 @@ export function TwoStepScanScreen() {
           onSkip={() => startAnalysis(null)}
         />
       ) : (
-      <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets>
         {!pet && (
           <Text style={s.noPet}>Add a pet profile in the Pets tab to run a personalized scan.</Text>
         )}

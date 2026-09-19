@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -30,6 +31,7 @@ const CATEGORIES: { key: SlotName; label: string; emoji: string }[] = [
 
 export default function CharacterScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const navigation = useNavigation();
   const { selectedPet } = useApp();
   const petName = selectedPet?.name;
@@ -76,7 +78,6 @@ export default function CharacterScreen() {
   }, [selectedCategory]);
 
   const handleItemPress = (item: ShopItem) => {
-    const owned = item.isOwned || character?.ownedItems.includes(item.id);
     const isCurrentlyEquipped = localEquipped[item.category]?.id === item.id;
 
     if (isCurrentlyEquipped) {
@@ -86,20 +87,18 @@ export default function CharacterScreen() {
     }
 
     setSelectedItem(item);
-    if (owned) {
-      setLocalEquipped(prev => ({
-        ...prev,
-        [item.category]: {
-          id: item.id,
-          assetKey: item.assetKey,
-          layerType: item.layerType,
-          positionX: item.positionX,
-          positionY: item.positionY,
-          name: item.name,
-          nameKo: item.nameKo,
-        },
-      }));
-    }
+    setLocalEquipped(prev => ({
+      ...prev,
+      [item.category]: {
+        id: item.id,
+        assetKey: item.assetKey,
+        layerType: item.layerType,
+        positionX: item.positionX,
+        positionY: item.positionY,
+        name: item.name,
+        nameKo: item.nameKo,
+      },
+    }));
   };
 
   const handlePurchase = async () => {
@@ -134,18 +133,21 @@ export default function CharacterScreen() {
   };
 
   const handleSave = async () => {
-    if (!petId) return;
+    if (!petId || !character) return;
     setIsSaving(true);
     try {
       const slots: SlotName[] = ['hat', 'glasses', 'accessory', 'clothes', 'background', 'effect'];
+      const ownedIds = new Set(character.ownedItems);
+      const nextEquipped = { ...character.equipped };
       for (const slot of slots) {
         const localItem = localEquipped[slot];
-        const serverItem = character?.equipped[slot];
-        if (localItem?.id !== serverItem?.id) {
-          await shopService.equipItem(petId, slot, localItem?.id || null);
+        const persistable = !localItem || ownedIds.has(localItem.id) ? localItem : character.equipped[slot];
+        if (persistable?.id !== character.equipped[slot]?.id) {
+          await shopService.equipItem(petId, slot, persistable?.id || null);
         }
+        nextEquipped[slot] = persistable;
       }
-      setCharacter(prev => prev ? { ...prev, equipped: { ...localEquipped } } : prev);
+      setCharacter(prev => prev ? { ...prev, equipped: nextEquipped } : prev);
       shopService.invalidateCharacterCache();
       navigation.goBack();
     } catch (e: any) {
@@ -161,7 +163,15 @@ export default function CharacterScreen() {
   };
 
   const isItemOwned = (item: ShopItem) => item.isOwned || character?.ownedItems.includes(item.id);
-  const hasUnsavedChanges = character && JSON.stringify(localEquipped) !== JSON.stringify(character.equipped);
+  const ownedIdSet = new Set(character?.ownedItems ?? []);
+  const persistableEquipped = character
+    ? (['hat', 'glasses', 'accessory', 'clothes', 'background', 'effect'] as SlotName[]).reduce((acc, slot) => {
+        const local = localEquipped[slot];
+        acc[slot] = local && !ownedIdSet.has(local.id) ? character.equipped[slot] : local;
+        return acc;
+      }, { ...character.equipped })
+    : localEquipped;
+  const hasUnsavedChanges = character && JSON.stringify(persistableEquipped) !== JSON.stringify(character.equipped);
 
   if (isLoading) {
     return (
@@ -177,45 +187,67 @@ export default function CharacterScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </Pressable>
+        <View style={styles.headerSide}>
+          <Pressable onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </Pressable>
+        </View>
         <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>Character</Text>
-        <View style={styles.tokenDisplay}>
-          <Text style={{ fontSize: 14 }}>🦴</Text>
-          <Text style={[typography.labelLarge, { color: colors.accent }]}>{tokenBalance}</Text>
+        <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>
+          <View style={styles.tokenDisplay}>
+            <Text style={{ fontSize: 14 }}>🦴</Text>
+            <Text style={[typography.labelLarge, { color: colors.accent }]}>{tokenBalance}</Text>
+          </View>
         </View>
       </View>
 
       {/* Character Preview */}
       <View style={styles.previewArea}>
-        <View style={styles.characterContainer}>
-          {localEquipped.background && (
-            <View style={[styles.layerPlaceholder, { backgroundColor: colors.accent + '22' }]}>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>{localEquipped.background.nameKo || localEquipped.background.name}</Text>
+        {(() => {
+          const bgLayer = localEquipped.background ? getItemLayer(localEquipped.background.assetKey) : null;
+          const hasBg = !!bgLayer;
+          const sceneW = hasBg ? windowWidth - spacing.md * 4 : 220;
+          const sceneH = hasBg ? 240 : 220;
+          const charSize = hasBg ? Math.round(sceneH * 0.58) : 220;
+          return (
+            <View style={[styles.characterContainer, { width: sceneW, height: sceneH, borderRadius: hasBg ? radius.large : 0 }]}>
+              {bgLayer && (
+                <Image
+                  source={bgLayer}
+                  style={{ position: 'absolute', left: 0, bottom: 0, width: sceneW, height: sceneW }}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={{
+                position: 'absolute',
+                left: (sceneW - charSize) / 2,
+                bottom: hasBg ? 2 : 0,
+                width: charSize,
+                height: charSize,
+              }}>
+                <Image
+                  source={getBaseCharacter(character?.characterType || 'dog')}
+                  style={{ width: charSize, height: charSize }}
+                  resizeMode="contain"
+                />
+                {(['clothes', 'accessory', 'hat', 'glasses', 'effect'] as SlotName[]).map(slot => {
+                  const equipped = localEquipped[slot];
+                  if (!equipped) return null;
+                  const layer = getItemLayer(equipped.assetKey);
+                  if (!layer) return null;
+                  return (
+                    <Image
+                      key={slot}
+                      source={layer}
+                      style={{ position: 'absolute', top: 0, left: 0, width: charSize, height: charSize }}
+                      resizeMode="contain"
+                    />
+                  );
+                })}
+              </View>
             </View>
-          )}
-          <Image
-            source={getBaseCharacter(character?.characterType || 'dog')}
-            style={styles.baseCharacterImg}
-            resizeMode="contain"
-          />
-          {/* Accessory layers — back to front */}
-          {(['clothes', 'accessory', 'hat', 'glasses', 'effect'] as SlotName[]).map(slot => {
-            const equipped = localEquipped[slot];
-            if (!equipped) return null;
-            const layer = getItemLayer(equipped.assetKey);
-            if (!layer) return null;
-            return (
-              <Image
-                key={slot}
-                source={layer}
-                style={styles.itemLayerImg}
-                resizeMode="contain"
-              />
-            );
-          })}
-        </View>
+          );
+        })()}
         <Text style={[typography.labelLarge, { color: colors.textPrimary, marginTop: spacing.sm }]}>
           Lil {petName || 'Buddy'}
         </Text>
@@ -321,7 +353,7 @@ export default function CharacterScreen() {
 
       {/* Bottom Action Bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
-        {selectedItem && !isItemOwned(selectedItem) ? (
+        {selectedItem && !isItemOwned(selectedItem) && (
           <Pressable
             onPress={handlePurchase}
             disabled={isPurchasing}
@@ -335,7 +367,8 @@ export default function CharacterScreen() {
               </Text>
             )}
           </Pressable>
-        ) : hasUnsavedChanges ? (
+        )}
+        {hasUnsavedChanges && (
           <Pressable
             onPress={handleSave}
             disabled={isSaving}
@@ -347,7 +380,7 @@ export default function CharacterScreen() {
               <Text style={[typography.labelLarge, { color: colors.white }]}>Save Changes</Text>
             )}
           </Pressable>
-        ) : null}
+        )}
       </View>
     </View>
   );
@@ -363,6 +396,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
+  headerSide: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },,
   tokenDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -375,8 +412,10 @@ const styles = StyleSheet.create({
   previewArea: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.white,
     marginHorizontal: spacing.md,
+    overflow: 'hidden',
     borderRadius: radius.large,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -390,11 +429,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  layerPlaceholder: {
+  backgroundLayerImg: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: radius.large,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   equippedBadges: {
     position: 'absolute',
@@ -456,6 +493,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     backgroundColor: colors.background,
+    gap: spacing.sm,
   },
   purchaseBtn: {
     alignItems: 'center',

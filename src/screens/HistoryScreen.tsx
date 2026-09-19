@@ -4,6 +4,7 @@ import {
   Text,
   Image,
   SectionList,
+  FlatList,
   ScrollView,
   StyleSheet,
   Pressable,
@@ -13,7 +14,7 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { HistoryStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import type { ScanHistoryItem } from '../types';
 import { useApp } from '../context/AppContext';
 import * as scanService from '../services/scanService';
 import * as communityService from '../services/communityService';
+import type { SavedProduct } from '../services/communityService';
 import { buildImageUrl, buildThumbUrl, formatDate, formatLifeStage, formatProductTitleText } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<HistoryStackParamList>;
@@ -256,17 +258,82 @@ function HistoryCard({ item, onPress, isSaved, onToggleSave }: {
   );
 }
 
+function SavedCard({ item, onPress, onUnsave }: {
+  item: SavedProduct;
+  onPress: () => void;
+  onUnsave: () => void;
+}) {
+  const isListFocused = useIsFocused();
+  const productImageUrl = buildThumbUrl(item.product_image);
+  const scoreColor = item.score != null ? colors.primary : colors.textSecondary;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [pressed && { opacity: 0.95 }]}
+      accessibilityRole="button"
+      accessibilityLabel={formatProductTitleText(item.product_name)}
+    >
+      <View style={[styles.card, shadows.card]}>
+        <View style={styles.cardTop}>
+          <ProductThumb
+            imageUrl={productImageUrl}
+            brandHint={item.product_brand ? formatProductTitleText(item.product_brand) : null}
+            isListFocused={isListFocused}
+          />
+          <View style={styles.cardMiddle}>
+            <View style={styles.titleRow}>
+              <View style={styles.titleBlock}>
+                <Text style={[typography.bodyLarge, { fontWeight: '500', color: colors.textPrimary }]}>
+                  {formatProductTitleText(item.product_name)}
+                </Text>
+                {item.product_brand ? (
+                  <Text style={[typography.labelSmall, { color: colors.textSecondary, marginTop: 2 }]}>
+                    {formatProductTitleText(item.product_brand)}
+                  </Text>
+                ) : null}
+              </View>
+              {item.score != null && (
+                <View style={[styles.scoreCircle, { backgroundColor: scoreColor + '26' }]}>
+                  <Text style={[typography.numericLarge, { color: scoreColor, fontSize: 18, lineHeight: 22 }]}>
+                    {item.score}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+        <View style={styles.cardDivider} />
+        <View style={styles.dateStrip}>
+          <View style={styles.timeRow}>
+            <Ionicons name="bookmark" size={12} color={colors.primary} />
+            <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>
+              Saved {formatDate(item.saved_at)}
+            </Text>
+          </View>
+          <Pressable onPress={(e) => { e.stopPropagation(); onUnsave(); }} hitSlop={8}>
+            <Ionicons name="bookmark" size={16} color={colors.primary} />
+          </Pressable>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const { pets, selectedPet } = useApp();
 
+  const [tab, setTab] = useState<'all' | 'saved'>('all');
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterPetId, setFilterPetId] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([]);
+  const [savedLoading, setSavedLoading] = useState(true);
 
   // Auto-sync with global selectedPet (user can still override via filter modal)
   useEffect(() => {
@@ -306,36 +373,42 @@ export default function HistoryScreen() {
     void loadHistory();
   }, [loadHistory]);
 
+  const loadSaved = useCallback(async () => {
+    try {
+      const saved = await communityService.getMySaved();
+      setSavedProducts(saved);
+      setSavedIds(new Set(saved.map(s => s.product_id)));
+    } catch {
+      console.warn('Saved list load failed');
+    } finally {
+      setSavedLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    void loadSaved();
+  }, [loadSaved]));
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadHistory();
+    await Promise.all([loadHistory(), loadSaved()]);
     setRefreshing(false);
-  }, [loadHistory]);
-
-  useEffect(() => {
-    if (history.length === 0) return;
-    const productIds = [...new Set(history.filter(h => h.product_id).map(h => h.product_id!))];
-    const loadSaved = async () => {
-      try {
-        const saved = await communityService.getMySaved();
-        const ids = new Set(saved.map(s => s.product_id));
-        setSavedIds(ids);
-      } catch {}
-    };
-    loadSaved();
-  }, [history]);
+  }, [loadHistory, loadSaved]);
 
   const toggleSave = useCallback(async (productId: string) => {
     const wasSaved = savedIds.has(productId);
+    const removed = wasSaved ? savedProducts.find(p => p.product_id === productId) : undefined;
     setSavedIds(prev => {
       const next = new Set(prev);
       if (wasSaved) next.delete(productId);
       else next.add(productId);
       return next;
     });
+    if (wasSaved) setSavedProducts(prev => prev.filter(p => p.product_id !== productId));
     try {
       if (wasSaved) await communityService.unsaveProduct(productId);
       else await communityService.saveProduct(productId);
+      if (!wasSaved) await loadSaved();
     } catch {
       setSavedIds(prev => {
         const next = new Set(prev);
@@ -343,8 +416,9 @@ export default function HistoryScreen() {
         else next.delete(productId);
         return next;
       });
+      if (wasSaved && removed) setSavedProducts(prev => [removed, ...prev]);
     }
-  }, [savedIds]);
+  }, [savedIds, savedProducts, loadSaved]);
 
   const onCardPress = (item: ScanHistoryItem) => {
     navigation.navigate('Result', {
@@ -373,15 +447,84 @@ export default function HistoryScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={[typography.displayLarge, { color: colors.textPrimary }]}>History</Text>
-        <Pressable onPress={() => setShowFilter(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="filter" size={20} color={colors.primary} />
-          {filterPet && (
-            <Text style={{ fontSize: 14, fontWeight: '500', color: colors.primary }}>{filterPet.name}</Text>
-          )}
+        {tab === 'all' ? (
+          <Pressable onPress={() => setShowFilter(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="filter" size={20} color={colors.primary} />
+            {filterPet && (
+              <Text style={{ fontSize: 14, fontWeight: '500', color: colors.primary }}>{filterPet.name}</Text>
+            )}
+          </Pressable>
+        ) : (
+          <View style={{ width: 20 }} />
+        )}
+      </View>
+
+      <View style={styles.tabRow}>
+        <Pressable
+          onPress={() => setTab('all')}
+          style={[styles.tab, tab === 'all' && styles.tabActive]}
+        >
+          <Text style={[styles.tabText, tab === 'all' && styles.tabTextActive]}>All</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setTab('saved')}
+          style={[styles.tab, tab === 'saved' && styles.tabActive]}
+        >
+          <Text style={[styles.tabText, tab === 'saved' && styles.tabTextActive]}>Saved</Text>
         </Pressable>
       </View>
 
-      {isLoading ? (
+      {tab === 'saved' ? (
+        savedLoading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : savedProducts.length === 0 ? (
+          <ScrollView
+            contentContainerStyle={styles.centered}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+            }
+          >
+            <Ionicons name="bookmark-outline" size={60} color={colors.textSecondary + '80'} />
+            <Text style={[typography.displaySmall, { color: colors.textPrimary, marginTop: spacing.lg }]}>
+              Nothing saved yet
+            </Text>
+            <Text style={[typography.bodyMedium, { color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }]}>
+              Tap Add to My List on a product to see it here
+            </Text>
+          </ScrollView>
+        ) : (
+          <FlatList
+            data={savedProducts}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24, gap: spacing.sm }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+            }
+            renderItem={({ item }) => (
+              <SavedCard
+                item={item}
+                onPress={() => {
+                  navigation.navigate('Result', {
+                    productId: item.product_id,
+                    product: {
+                      id: item.product_id,
+                      name: item.product_name,
+                      ...(item.product_brand ? { brand: item.product_brand } : {}),
+                      ...(item.product_image ? { image_url: item.product_image } : {}),
+                    } as any,
+                    preloadedScore: { score: item.score ?? 0 },
+                    ...(item.product_image ? { historyImageUrl: item.product_image } : {}),
+                  });
+                }}
+                onUnsave={() => toggleSave(item.product_id)}
+              />
+            )}
+          />
+        )
+      ) : isLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[typography.bodyMedium, { color: colors.textSecondary, marginTop: spacing.sm }]}>
@@ -481,6 +624,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.lightGray,
+    borderRadius: radius.full,
+    padding: 3,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    alignItems: 'center',
+  },
+  tabActive: {
+    backgroundColor: colors.white,
+  },
+  tabText: {
+    ...typography.labelLarge,
+    color: colors.textSecondary,
+  },
+  tabTextActive: {
+    color: colors.textPrimary,
+    fontWeight: '700',
   },
   centered: {
     flex: 1,

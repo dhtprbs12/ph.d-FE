@@ -5,12 +5,9 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  ScrollView,
   ActivityIndicator,
   Image,
   Modal,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -22,6 +19,7 @@ import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
 import { toTitleCase, buildThumbUrl } from '../utils/helpers';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { useToast } from '../components/common/Toast';
+import KeyboardSafe from '../components/KeyboardSafe';
 
 const STOOL_OPTIONS = [
   { score: 1, emoji: '😫', label: 'Very Bad' },
@@ -157,14 +155,32 @@ export default function CheckInScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-      <ScrollView
-        contentContainerStyle={{ padding: spacing.md, gap: spacing.md, paddingBottom: insets.bottom + 100 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardSafe
+        contentContainerStyle={{ padding: spacing.md, gap: spacing.md, paddingBottom: 24 }}
+        footer={
+          <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
+            {alreadyCheckedIn ? (
+              <View style={[styles.saveBtn, { opacity: 0.6 }]}>
+                <Text style={[typography.labelLarge, { color: colors.white }]}>Already Checked In</Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={handleSave}
+                disabled={isLoading}
+                style={[styles.saveBtn, isLoading && { opacity: 0.6 }]}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <>
+                    <Text style={[typography.labelLarge, { color: colors.white }]}>Save Check-in</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>+🦴5</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
+          </View>
+        }
       >
         {/* Date + Food info */}
         <View style={styles.card}>
@@ -314,10 +330,10 @@ export default function CheckInScreen() {
             multiline
             numberOfLines={3}
             textAlignVertical="top"
+            blurOnSubmit
           />
         </View>
-      </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardSafe>
 
       {/* Switch Food Confirmation Modal */}
       {pendingFood && (
@@ -350,29 +366,6 @@ export default function CheckInScreen() {
         </Modal>
       )}
 
-      {/* Save button */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
-        {alreadyCheckedIn ? (
-          <View style={[styles.saveBtn, { opacity: 0.6 }]}>
-            <Text style={[typography.labelLarge, { color: colors.white }]}>Already Checked In</Text>
-          </View>
-        ) : (
-          <Pressable
-            onPress={handleSave}
-            disabled={isLoading}
-            style={[styles.saveBtn, isLoading && { opacity: 0.6 }]}
-          >
-            {isLoading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <>
-                <Text style={[typography.labelLarge, { color: colors.white }]}>Save Check-in</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>+🦴5</Text>
-              </>
-            )}
-          </Pressable>
-        )}
-      </View>
       <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
     </View>
   );

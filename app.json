@@ -28,6 +28,7 @@
         "backgroundColor": "#2D6A4F"
       },
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.petfoodanalyzer.app",
       "permissions": [
         "android.permission.CAMERA",

@@ -239,6 +239,7 @@ export default function AddPetScreen() {
         ref={scrollRef}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
       >

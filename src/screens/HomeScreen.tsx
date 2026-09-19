@@ -9,6 +9,7 @@ import {
   Modal,
   Animated,
   Dimensions,
+  useWindowDimensions,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
@@ -130,6 +131,7 @@ function PetAvatar({ pet, size = 56 }: { pet: Pet; size?: number }) {
 /* ─── Gamification Header ──────────────────────────────────────── */
 
 function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterPress: () => void; petName?: string; petId?: string }) {
+  const { width: windowWidth } = useWindowDimensions();
   const [summary, setSummary] = useState<GamificationSummary | null>(null);
   const [equipped, setEquipped] = useState<CharacterState['equipped'] | null>(null);
 
@@ -148,23 +150,46 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
   return (
     <Pressable onPress={onCharacterPress} style={styles.gamHeader}>
       <View style={styles.gamCharacterArea}>
-        <View style={{ width: 200, height: 200, position: 'relative' }}>
-          <Image source={baseImg} style={{ position: 'absolute', top: 0, left: 0, width: 200, height: 200 }} resizeMode="contain" />
-          {equipped && (['clothes', 'accessory', 'hat', 'glasses', 'effect'] as const).map(slot => {
-            const item = equipped[slot];
-            if (!item) return null;
-            const layer = getItemLayer(item.assetKey);
-            if (!layer) return null;
-            return (
-              <Image
-                key={slot}
-                source={layer}
-                style={{ position: 'absolute', top: 0, left: 0, width: 200, height: 200 }}
-                resizeMode="contain"
-              />
-            );
-          })}
-        </View>
+        {(() => {
+          const hasBg = !!equipped?.background && !!getItemLayer(equipped.background.assetKey);
+          const sceneW = hasBg ? windowWidth - spacing.md * 4 : 200;
+          const sceneH = hasBg ? 240 : 200;
+          const charSize = hasBg ? Math.round(sceneH * 0.58) : 200;
+          return (
+            <View style={{ width: sceneW, height: sceneH, position: 'relative', borderRadius: 16, overflow: 'hidden' }}>
+              {hasBg && (
+                <Image
+                  source={getItemLayer(equipped!.background!.assetKey)!}
+                  style={{ position: 'absolute', left: 0, bottom: 0, width: sceneW, height: sceneW }}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={{
+                position: 'absolute',
+                left: (sceneW - charSize) / 2,
+                bottom: hasBg ? 2 : 0,
+                width: charSize,
+                height: charSize,
+              }}>
+                <Image source={baseImg} style={{ width: charSize, height: charSize }} resizeMode="contain" />
+                {equipped && (['clothes', 'accessory', 'hat', 'glasses', 'effect'] as const).map(slot => {
+                  const item = equipped[slot];
+                  if (!item) return null;
+                  const layer = getItemLayer(item.assetKey);
+                  if (!layer) return null;
+                  return (
+                    <Image
+                      key={slot}
+                      source={layer}
+                      style={{ position: 'absolute', top: 0, left: 0, width: charSize, height: charSize }}
+                      resizeMode="contain"
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })()}
         <Text style={[typography.titleMedium, { color: colors.textPrimary, marginTop: -4 }]}>Lil {petName || 'Buddy'}</Text>
         {summary.scanLevel.nextLevel && (
           <View style={styles.gamProgressBar}>
@@ -638,7 +663,7 @@ function CommunityTrustBanner({
         </View>
         <Text style={[styles.communityBannerText, { flex: 1, minWidth: 0 }]}>
           <Text style={styles.communityCount}>{formatCommunityScans(stats.totalScans)}</Text>
-          {' scans by pet parents'}
+          {' scans by others'}
         </Text>
       </View>
       {current && (
@@ -1259,6 +1284,9 @@ export default function HomeScreen() {
           { paddingBottom: insets.bottom + spacing.xl },
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
       >
         <View style={styles.vstack}>
           {/* Pet Selector / No Pet */}

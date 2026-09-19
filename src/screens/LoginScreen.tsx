@@ -60,6 +60,8 @@ export default function LoginScreen({ navigation }: Props) {
       <ScrollView
         contentContainerStyle={[styles.inner, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         bounces={false}
       >
         <View style={styles.logoRow}>

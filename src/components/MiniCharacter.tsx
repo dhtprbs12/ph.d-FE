@@ -40,6 +40,16 @@ export default function MiniCharacter({ size = 60, petId, characterData, square 
 
   return (
     <View style={[styles.container, { width: containerSize, height: containerSize, borderRadius: square ? 0 : containerSize / 2 }]}>
+      {equipped?.background && (() => {
+        const bg = getItemLayer(equipped.background.assetKey);
+        return bg ? (
+          <Image
+            source={bg}
+            style={{ position: 'absolute', top: 0, left: 0, width: containerSize, height: containerSize }}
+            resizeMode="cover"
+          />
+        ) : null;
+      })()}
       <Image source={baseImg} style={{ width: renderSize, height: renderSize }} resizeMode="contain" />
       {equipped && (['clothes', 'accessory', 'hat', 'glasses', 'effect'] as const).map(slot => {
         const item = equipped[slot];
