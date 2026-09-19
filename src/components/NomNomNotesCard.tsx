@@ -82,14 +82,22 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
     return m;
   }, [notes]);
 
-  const calendarDays = useMemo(() => {
+  const calendarRows = useMemo(() => {
     const first = new Date(viewYear, viewMonth, 1);
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
     const startDay = first.getDay();
-    const cells: (number | null)[] = [];
-    for (let i = 0; i < startDay; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-    return cells;
+    const rows: (number | null)[][] = [];
+    let row: (number | null)[] = [];
+    for (let i = 0; i < startDay; i++) row.push(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      row.push(d);
+      if (row.length === 7) { rows.push(row); row = []; }
+    }
+    if (row.length > 0) {
+      while (row.length < 7) row.push(null);
+      rows.push(row);
+    }
+    return rows;
   }, [viewYear, viewMonth]);
 
   const goPrevMonth = useCallback(() => {
@@ -159,39 +167,42 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
           </View>
 
           {/* Calendar Grid */}
-          <View style={styles.calGrid}>
-            {calendarDays.map((day, i) => {
-              if (day === null) {
-                return <View key={`e-${i}`} style={styles.dayCell} />;
-              }
-              const dateStr = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
-              const isToday = dateStr === todayStr;
-              const isSelected = dateStr === selectedDate;
-              const hadCheckin = checkinDates.has(dateStr);
-              const hasNote = !!noteMap[dateStr];
-
-              return (
-                <Pressable
-                  key={dateStr}
-                  style={[
-                    styles.dayCell,
-                    isToday && styles.todayCell,
-                    isSelected && styles.selectedCell,
-                  ]}
-                  onPress={() => onDayPress(day)}
-                >
-                  <Text style={[
-                    styles.dayText,
-                    isToday && styles.todayText,
-                    isSelected && styles.selectedText,
-                  ]}>{day}</Text>
-                  <View style={styles.dotRow}>
-                    {hadCheckin && <View style={[styles.dot, { backgroundColor: isSelected ? colors.white : colors.primary }]} />}
-                    {hasNote && <View style={[styles.dot, { backgroundColor: isSelected ? 'rgba(255,255,255,0.7)' : colors.accent }]} />}
-                  </View>
-                </Pressable>
-              );
-            })}
+          <View>
+            {calendarRows.map((row, ri) => (
+              <View key={`row-${ri}`} style={styles.calRow}>
+                {row.map((day, ci) => {
+                  if (day === null) {
+                    return <View key={`e-${ri}-${ci}`} style={styles.dayCell} />;
+                  }
+                  const dateStr = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
+                  const isToday = dateStr === todayStr;
+                  const isSelected = dateStr === selectedDate;
+                  const hadCheckin = checkinDates.has(dateStr);
+                  const hasNote = !!noteMap[dateStr];
+                  return (
+                    <Pressable
+                      key={dateStr}
+                      style={[
+                        styles.dayCell,
+                        isToday && styles.todayCell,
+                        isSelected && styles.selectedCell,
+                      ]}
+                      onPress={() => onDayPress(day)}
+                    >
+                      <Text style={[
+                        styles.dayText,
+                        isToday && styles.todayText,
+                        isSelected && styles.selectedText,
+                      ]}>{day}</Text>
+                      <View style={styles.dotRow}>
+                        {hadCheckin && <View style={[styles.dot, { backgroundColor: isSelected ? colors.white : colors.primary }]} />}
+                        {hasNote && <View style={[styles.dot, { backgroundColor: isSelected ? 'rgba(255,255,255,0.7)' : colors.accent }]} />}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
           </View>
 
           {/* Legend */}
@@ -319,12 +330,11 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
   },
-  calGrid: {
+  calRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
   },
   dayCell: {
-    width: `${100 / 7}%`,
+    flex: 1,
     alignItems: 'center',
     paddingVertical: 6,
     borderRadius: radius.small,

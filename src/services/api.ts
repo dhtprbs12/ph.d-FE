@@ -181,9 +181,11 @@ export async function uploadImage<T>(
 
   const formData = new FormData();
 
-  const fileResponse = await fetch(jpegUri);
-  const blob = await fileResponse.blob();
-  formData.append(fieldName, blob, `${fieldName}.jpg`);
+  formData.append(fieldName, {
+    uri: jpegUri,
+    name: `${fieldName}.jpg`,
+    type: 'image/jpeg',
+  } as any);
 
   if (additionalFields) {
     for (const [key, value] of Object.entries(additionalFields)) {

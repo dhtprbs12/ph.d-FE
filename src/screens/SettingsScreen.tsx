@@ -18,6 +18,7 @@ import { useApp } from '../context/AppContext';
 import MiniCharacter from '../components/MiniCharacter';
 import { useToast } from '../components/common/Toast';
 import { ConfirmModal } from '../components/common/ConfirmModal';
+import * as authService from '../services/authService';
 
 /** Mirrors `expo.version` from app.json; falls back after native build */
 const APP_VERSION =
@@ -196,15 +197,26 @@ export default function SettingsScreen() {
   const { pets, selectedPet, resetApp } = useApp();
   const fadeStyles = useStaggeredFade(6);
   const toast = useToast();
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const onReset = () => {
-    setShowResetConfirm(true);
+  const handleLogout = () => {
+    setShowLogoutConfirm(false);
+    resetApp();
   };
 
-  const actualResetHandler = () => {
-    setShowResetConfirm(false);
-    resetApp();
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await authService.deleteAccount();
+      setShowDeleteConfirm(false);
+      await resetApp();
+      toast.show({ message: 'Account deleted', type: 'success' });
+    } catch (e: any) {
+      setDeleting(false);
+      toast.show({ message: 'Failed to delete account. Please try again.', type: 'error' });
+    }
   };
 
   return (
@@ -275,14 +287,21 @@ export default function SettingsScreen() {
 
         <View style={styles.sectionGap} />
 
-        {/* Data */}
-        <SettingsSection title="Data" style={fadeStyles[4]}>
+        {/* Account */}
+        <SettingsSection title="Account" style={fadeStyles[4]}>
           <SettingsRow
-            icon="refresh"
+            icon="log-out-outline"
+            iconColor={colors.textSecondary}
+            title="Log Out"
+            onPress={() => setShowLogoutConfirm(true)}
+          />
+          <SectionDivider />
+          <SettingsRow
+            icon="trash-outline"
             iconColor={colors.danger}
-            title="Reset App"
+            title="Delete Account"
             titleColor={colors.danger}
-            onPress={onReset}
+            onPress={() => setShowDeleteConfirm(true)}
           />
         </SettingsSection>
 
@@ -292,14 +311,24 @@ export default function SettingsScreen() {
         </Animated.View>
       </ScrollView>
       <ConfirmModal
-        visible={showResetConfirm}
+        visible={showLogoutConfirm}
+        icon="👋"
+        title="Log Out?"
+        message="You can always log back in with your ID and PIN."
+        confirmLabel="Log Out"
+        confirmColor={colors.primary}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogout}
+      />
+      <ConfirmModal
+        visible={showDeleteConfirm}
         icon="⚠️"
-        title="Reset App?"
-        message="This will delete all your pets and reset the app. This action cannot be undone."
-        confirmLabel="Reset"
+        title="Delete Account?"
+        message="This will permanently delete your account, all pets, check-in history, and scan data. This cannot be undone."
+        confirmLabel={deleting ? 'Deleting...' : 'Delete Forever'}
         confirmColor={colors.danger}
-        onCancel={() => setShowResetConfirm(false)}
-        onConfirm={actualResetHandler}
+        onCancel={() => !deleting && setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteAccount}
       />
     </View>
   );

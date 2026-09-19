@@ -30,3 +30,7 @@ export async function loginWithNickname(nickname: string, pin: string): Promise<
   const res = await api.post('/auth/login-nickname', { nickname, pin });
   return res.data;
 }
+
+export async function deleteAccount(): Promise<void> {
+  await api.delete('/auth/me');
+}

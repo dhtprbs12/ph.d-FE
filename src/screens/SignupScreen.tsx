@@ -592,7 +592,6 @@ export default function SignupScreen({ navigation }: Props) {
                     </Pressable>
                   );
                 })()}
-                <Ionicons name="checkmark-circle" size={20} color={colors.safe} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{currentFoodSelection.productName}</Text>
                   {currentFoodSelection.brand && (
