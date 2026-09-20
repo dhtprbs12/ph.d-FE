@@ -99,13 +99,14 @@ function PetOfTheWeekSection({ pets, loading, onCharacterPress }: { pets: PetOfT
       <View style={s.podiumBlockRow}>
         {podiumOrder.map((pet, i) => {
           const isFirst = i === 1;
+          const hasBg = !!pet.equipped.background;
           return (
             <View key={pet.petId || `slot-${i}`} style={{ flex: 1, alignItems: 'center' }}>
               {isFirst && <Text style={{ fontSize: 18, marginBottom: 2 }}>👑</Text>}
               <Pressable onPress={() => (pet.petId && !pet.petId.startsWith('_')) ? onCharacterPress(toCharacterData(pet)) : undefined}>
-                <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} />
+                <MiniCharacter size={charSizes[i]} characterData={toCharacterData(pet)} square cornerRadius={radius.medium} />
               </Pressable>
-              <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColors[i], marginTop: -2 }]}>
+              <View style={[s.podiumBlock, { height: blockHeights[i], backgroundColor: blockColors[i], marginTop: hasBg ? 8 : -2 }]}>
                 <Text style={s.podiumBlockNumber}>{pet.rank}</Text>
               </View>
             </View>
@@ -572,7 +573,7 @@ export default function CommunityScreen() {
         </View>
       </ScrollView>
       <ZoomableImageModal visible={!!zoomChar} onClose={() => setZoomChar(null)}>
-        <MiniCharacter size={Dimensions.get('window').width * 0.7} characterData={zoomChar} square />
+        <MiniCharacter size={Dimensions.get('window').width * 0.7} characterData={zoomChar} square cornerRadius={radius.xl} />
       </ZoomableImageModal>
       <ZoomableImageModal uri={zoomUri} visible={!!zoomUri} onClose={() => setZoomUri(null)} />
     </View>

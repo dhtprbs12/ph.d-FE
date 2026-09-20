@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -41,6 +42,7 @@ export default function CheckInScreen() {
   const route = useRoute<any>();
   const { petId, petName, foodName: initialFoodName, foodImage, daysOnFood } = route.params || {};
   const toast = useToast();
+  const scrollRef = useRef<ScrollView>(null);
 
   const [currentFoodName, setCurrentFoodName] = useState<string | undefined>(initialFoodName);
   const [currentFoodImage, setCurrentFoodImage] = useState<string | undefined>(foodImage);
@@ -67,8 +69,16 @@ export default function CheckInScreen() {
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       checkinService.getCheckins(petId, todayStr, todayStr).then(result => {
-        if (result.checkins && result.checkins.length > 0) {
+        const existing = result.checkins?.[0];
+        if (existing) {
           setAlreadyCheckedIn(true);
+          setStoolScore(existing.stoolScore);
+          if (existing.appetite === 'low' || existing.appetite === 'normal' || existing.appetite === 'high') {
+            setAppetite(existing.appetite);
+          }
+          setVomiting(!!existing.vomiting);
+          setItching(!!existing.itching);
+          setNotes(existing.notes || '');
         }
       }).catch(console.warn);
     }
@@ -120,25 +130,23 @@ export default function CheckInScreen() {
         localDate,
       });
 
-      let message = `Check-in saved for ${petName || 'your pet'}!`;
+      let message = result.updated
+        ? `Check-in updated for ${petName || 'your pet'}!`
+        : `Check-in saved for ${petName || 'your pet'}!`;
       if (result.tokensAwarded > 0) {
         message += `\n🦴 +${result.tokensAwarded} tokens earned!`;
       }
       if (result.streakInfo.streakBonus > 0) {
         message += `\n🔥 Streak bonus: +${result.streakInfo.streakBonus} tokens!`;
       }
-      if (result.streakInfo.currentStreak > 1) {
+      if (!result.updated && result.streakInfo.currentStreak > 1) {
         message += `\n🔥 ${result.streakInfo.currentStreak}-day streak!`;
       }
 
       toast.show({ message, type: 'success' });
       setTimeout(() => navigation.goBack(), 800);
     } catch (e: any) {
-      if (e.response?.status === 409 || e.status === 409) {
-        toast.show({ message: 'You already checked in today! Come back tomorrow 🐾', type: 'info' });
-      } else {
-        toast.show({ message: e.message || 'Failed to save check-in', type: 'error' });
-      }
+      toast.show({ message: e.message || 'Failed to save check-in', type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -156,29 +164,26 @@ export default function CheckInScreen() {
       </View>
 
       <KeyboardSafe
+        scrollRef={scrollRef}
         contentContainerStyle={{ padding: spacing.md, gap: spacing.md, paddingBottom: 24 }}
         footer={
           <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
-            {alreadyCheckedIn ? (
-              <View style={[styles.saveBtn, { opacity: 0.6 }]}>
-                <Text style={[typography.labelLarge, { color: colors.white }]}>Already Checked In</Text>
-              </View>
-            ) : (
-              <Pressable
-                onPress={handleSave}
-                disabled={isLoading}
-                style={[styles.saveBtn, isLoading && { opacity: 0.6 }]}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <>
-                    <Text style={[typography.labelLarge, { color: colors.white }]}>Save Check-in</Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>+🦴5</Text>
-                  </>
-                )}
-              </Pressable>
-            )}
+            <Pressable
+              onPress={handleSave}
+              disabled={isLoading}
+              style={[styles.saveBtn, isLoading && { opacity: 0.6 }]}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : alreadyCheckedIn ? (
+                <Text style={[typography.labelLarge, { color: colors.white }]}>Update Check-in</Text>
+              ) : (
+                <>
+                  <Text style={[typography.labelLarge, { color: colors.white }]}>Save Check-in</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>+🦴5</Text>
+                </>
+              )}
+            </Pressable>
           </View>
         }
       >
@@ -331,6 +336,11 @@ export default function CheckInScreen() {
             numberOfLines={3}
             textAlignVertical="top"
             blurOnSubmit
+            onFocus={() => {
+              setTimeout(() => {
+                scrollRef.current?.scrollToEnd({ animated: true });
+              }, 350);
+            }}
           />
         </View>
       </KeyboardSafe>

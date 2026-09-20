@@ -26,6 +26,7 @@ export interface CheckinResult {
     longestStreak: number;
     streakBonus: number;
   };
+  updated?: boolean;
 }
 
 export interface CheckinEntry {

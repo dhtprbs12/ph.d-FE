@@ -108,7 +108,7 @@ export default function NomNomDetailScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={undefined}
     >
       <View style={[styles.header, { paddingTop: insets.top + spacing.xs }]}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}>
@@ -244,6 +244,7 @@ export default function NomNomDetailScreen() {
                 onChangeText={setNote}
                 placeholder="Write about your pet's day, food changes, behavior..."
                 onFocus={() => {
+                  if (Platform.OS === 'ios') return;
                   setTimeout(() => {
                     scrollRef.current?.scrollToEnd({ animated: true });
                   }, 300);

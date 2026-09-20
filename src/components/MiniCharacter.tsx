@@ -9,9 +9,10 @@ interface MiniCharacterProps {
   petId?: string;
   characterData?: CharacterState | null;
   square?: boolean;
+  cornerRadius?: number;
 }
 
-export default function MiniCharacter({ size = 60, petId, characterData, square }: MiniCharacterProps) {
+export default function MiniCharacter({ size = 60, petId, characterData, square, cornerRadius }: MiniCharacterProps) {
   const [character, setCharacter] = useState<CharacterState | null>(characterData || null);
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function MiniCharacter({ size = 60, petId, characterData, square 
   if (!baseImg) {
     const baseEmoji = charType === 'cat' ? '🐱' : '🐕';
     return (
-      <View style={[styles.container, { width: size, height: size, borderRadius: square ? 0 : size / 2 }]}>
+      <View style={[styles.container, { width: size, height: size, borderRadius: square ? (cornerRadius ?? 0) : size / 2 }]}>
         <Text style={{ fontSize: size * 0.5 }}>{baseEmoji}</Text>
       </View>
     );
@@ -39,7 +40,7 @@ export default function MiniCharacter({ size = 60, petId, characterData, square 
   const containerSize = size * 1.15;
 
   return (
-    <View style={[styles.container, { width: containerSize, height: containerSize, borderRadius: square ? 0 : containerSize / 2 }]}>
+    <View style={[styles.container, { width: containerSize, height: containerSize, borderRadius: square ? (cornerRadius ?? 0) : containerSize / 2 }]}>
       {equipped?.background && (() => {
         const bg = getItemLayer(equipped.background.assetKey);
         return bg ? (

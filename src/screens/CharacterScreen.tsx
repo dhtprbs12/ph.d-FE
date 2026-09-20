@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   headerSide: {
     flex: 1,
     alignItems: 'flex-start',
-  },,
+  },
   tokenDisplay: {
     flexDirection: 'row',
     alignItems: 'center',

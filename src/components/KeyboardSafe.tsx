@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, Ref } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -18,6 +18,7 @@ type Props = {
   contentContainerStyle?: StyleProp<ViewStyle>;
   keyboardVerticalOffset?: number;
   footer?: ReactNode;
+  scrollRef?: Ref<ScrollView>;
 };
 
 /** Keeps focused inputs above the keyboard and lets the user dismiss it. */
@@ -27,6 +28,7 @@ export default function KeyboardSafe({
   contentContainerStyle,
   keyboardVerticalOffset = 0,
   footer,
+  scrollRef,
 }: Props) {
   return (
     <KeyboardAvoidingView
@@ -35,11 +37,12 @@ export default function KeyboardSafe({
       keyboardVerticalOffset={keyboardVerticalOffset}
     >
       <ScrollView
+        ref={scrollRef}
         style={styles.flex}
         contentContainerStyle={contentContainerStyle}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        automaticallyAdjustKeyboardInsets
+        automaticallyAdjustKeyboardInsets={Platform.OS !== 'ios'}
         showsVerticalScrollIndicator={false}
         onScrollBeginDrag={Keyboard.dismiss}
       >
@@ -55,7 +58,7 @@ export default function KeyboardSafe({
 export const keyboardScrollProps = {
   keyboardShouldPersistTaps: 'handled' as const,
   keyboardDismissMode: (Platform.OS === 'ios' ? 'interactive' : 'on-drag') as 'interactive' | 'on-drag',
-  automaticallyAdjustKeyboardInsets: true,
+  automaticallyAdjustKeyboardInsets: Platform.OS !== 'ios',
   onScrollBeginDrag: (_e?: NativeSyntheticEvent<NativeScrollEvent>) => {
     Keyboard.dismiss();
   },

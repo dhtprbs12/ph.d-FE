@@ -27,6 +27,7 @@ import * as communityService from '../services/communityService';
 import type { RecentActivity } from '../services/communityService';
 import gamificationService, { GamificationSummary } from '../services/gamificationService';
 import petFoodService, { CurrentFood } from '../services/petFoodService';
+import checkinService from '../services/checkinService';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 import api from '../services/api';
 import { toTitleCase, buildThumbUrl } from '../utils/helpers';
@@ -269,11 +270,17 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [checkedInToday, setCheckedInToday] = useState(false);
   const searchTimer = useRef<NodeJS.Timeout | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (pet?.id) {
       petFoodService.getCurrentFood(pet.id).then(setCurrentFood).catch(console.warn);
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      checkinService.getCheckins(pet.id, todayStr, todayStr)
+        .then(r => setCheckedInToday((r.checkins?.length ?? 0) > 0))
+        .catch(() => setCheckedInToday(false));
     }
   }, [pet?.id]));
 
@@ -377,7 +384,9 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
               })}
               style={styles.checkinBtn}
             >
-              <Text style={[typography.labelSmall, { color: colors.white }]}>Check-in</Text>
+              <Text style={[typography.labelSmall, { color: colors.white }]}>
+                {checkedInToday ? 'Update' : 'Check-in'}
+              </Text>
             </Pressable>
           </View>
           {/* Scan nudge for free-text food */}
