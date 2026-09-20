@@ -9,7 +9,9 @@ export interface ScanHistoryDetailRow {
   product_id?: string | null;
   product_name?: string | null;
   product_brand?: string | null;
+  product_manufacturer?: string | null;
   product_image?: string | null;
+  product_life_stage?: string | null;
   final_score: number;
   grade: string;
   recommendation: string;
@@ -33,7 +35,9 @@ export function scanRowToScanResult(
     ? {
         id: scan.product_id,
         name: scan.product_name ?? 'Product',
+        ...(scan.product_manufacturer ? { manufacturer: scan.product_manufacturer } : {}),
         ...(scan.product_brand ? { brand: scan.product_brand } : {}),
+        ...(scan.product_life_stage ? { target_life_stage: scan.product_life_stage } : {}),
         ...(imageUrl ? { image_url: imageUrl } : {}),
       }
     : undefined;

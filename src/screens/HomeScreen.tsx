@@ -1250,7 +1250,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      (async () => {
+      const load = async () => {
         try {
           const [comm, act] = await Promise.allSettled([
             scanService.getCommunityStats(),
@@ -1263,8 +1263,13 @@ export default function HomeScreen() {
         } catch (e) {
           console.warn('[Home] loadStats error:', e);
         }
-      })();
-      return () => { cancelled = true; };
+      };
+      void load();
+      const timer = setInterval(load, 15000);
+      return () => {
+        cancelled = true;
+        clearInterval(timer);
+      };
     }, [])
   );
 

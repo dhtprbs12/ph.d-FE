@@ -176,6 +176,7 @@ export interface ScanResult {
     manufacturer?: string;
     brand?: string;
     targetPet?: string;
+    lifeStage?: string;
     ingredientCount?: number;
     confidence?: number;
   };
@@ -188,6 +189,8 @@ export interface ScanResult {
     image_url?: string;
     productType?: string;
     product_type?: string;
+    target_life_stage?: string;
+    lifeStage?: string;
   };
   parsedIngredients?: string[];
   analysis: Analysis;

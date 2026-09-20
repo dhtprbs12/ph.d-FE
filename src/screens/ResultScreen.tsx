@@ -47,7 +47,7 @@ import {
 } from '../theme';
 import type { AlternativeProduct, ConditionWarning, IngredientAnalysis, ScanResult } from '../types';
 import { formatCommunityScans } from '../types';
-import { buildImageUrl, buildThumbUrl, formatProductTitleText, productTypeLabel, toIngredientTitleCase } from '../utils/helpers';
+import { buildImageUrl, buildThumbUrl, formatLifeStage, formatProductTitleText, productTypeLabel, toIngredientTitleCase } from '../utils/helpers';
 import { useToast } from '../components/common/Toast';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 
@@ -108,17 +108,8 @@ const ResultSharePngCard = React.forwardRef<
     const ai = scanResult.aiInsights;
     const nameRaw = p?.name ?? scanResult.extracted?.productName ?? 'Product';
     const mfrRaw = p?.manufacturer ?? scanResult.extracted?.manufacturer;
-    const brandRaw = p?.brand ?? scanResult.extracted?.brand;
     const name = formatProductTitleText(nameRaw);
-    const brandLine = (() => {
-      const mfr = mfrRaw?.trim();
-      const b = brandRaw?.trim();
-      if (!mfr && !b) return undefined;
-      if (!mfr || mfr.toLowerCase() === b?.toLowerCase()) return b;
-      if (!b) return mfr;
-      return `${mfr} · ${b}`;
-    })();
-    const brand = brandLine ? formatProductTitleText(brandLine) : undefined;
+    const manufacturer = mfrRaw?.trim() ? formatProductTitleText(mfrRaw) : undefined;
     const score = Math.round(a?.finalScore ?? 0);
     const grade = (a?.grade ?? '—').toString().toUpperCase();
     const gDesc = getGradeDescription(grade);
@@ -220,9 +211,9 @@ const ResultSharePngCard = React.forwardRef<
                     </View>
                   )}
                   <View style={sharePngStyles.productTextCol}>
-                    {brand ? (
+                    {manufacturer ? (
                       <Text style={sharePngStyles.pBrand} allowFontScaling={false} numberOfLines={1}>
-                        {brand}
+                        {manufacturer}
                       </Text>
                     ) : null}
                     <Text style={sharePngStyles.pNameFieldLabel} allowFontScaling={false}>
@@ -720,17 +711,24 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
         ImageSlot
       )}
 
-      {/* Brand */}
+      {/* Manufacturer + life stage */}
       {(() => {
-        const mfr = product?.manufacturer?.trim();
-        const b = product?.brand?.trim();
-        const fallbackBrand = scanResult.extracted?.brand?.trim();
-        const brandVal = b || fallbackBrand;
-        if (!mfr && !brandVal) return null;
-        const display = (!mfr || mfr.toLowerCase() === brandVal?.toLowerCase())
-          ? brandVal
-          : !brandVal ? mfr : `${mfr} · ${brandVal}`;
-        return display ? <Text style={st.headerBrand}>{formatProductTitleText(display)}</Text> : null;
+        const mfr = product?.manufacturer?.trim() || scanResult.extracted?.manufacturer?.trim();
+        const lifeLabel = formatLifeStage(
+          product?.target_life_stage || product?.lifeStage || scanResult.extracted?.lifeStage,
+          scanResult.pet?.petType
+        );
+        if (!mfr && !lifeLabel) return null;
+        return (
+          <View style={st.mfrRow}>
+            {mfr ? <Text style={st.headerBrand}>{formatProductTitleText(mfr)}</Text> : null}
+            {lifeLabel ? (
+              <View style={[st.typePill, st.lifePill]}>
+                <Text style={[st.typePillText, { color: colors.primary }]}>{lifeLabel}</Text>
+              </View>
+            ) : null}
+          </View>
+        );
       })()}
 
       {/* Name */}
@@ -738,9 +736,8 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
         {formatProductTitleText(product?.name ?? scanResult.extracted?.productName ?? 'Product')}
       </Text>
 
-      {/* Product type pill */}
       {pType && (
-        <View style={[st.typePill, { backgroundColor: pillColor + '1F' }]}>
+        <View style={[st.typePill, { backgroundColor: pillColor + '1F', alignSelf: 'center', marginTop: spacing.xs }]}>
           <Text style={[st.typePillText, { color: pillColor }]}>{productTypePillLabel(pType)}</Text>
         </View>
       )}
@@ -1400,10 +1397,11 @@ export function ResultScreen() {
   const displayProduct = scanResult?.product ?? (paramProduct ? {
     id: paramProduct.id,
     name: paramProduct.name,
-    brand: paramProduct.brand,
+    manufacturer: paramProduct.manufacturer,
     image_url: paramProduct.image_url,
     productType: paramProduct.product_type,
     product_type: paramProduct.product_type,
+    target_life_stage: paramProduct.target_life_stage,
   } : undefined);
 
   const heroScoreStatus = useMemo((): 'ready' | 'loading' | 'error' => {
@@ -1990,15 +1988,27 @@ const st = StyleSheet.create({
   },
   headerBrand: {
     ...typography.labelSmall, color: colors.textSecondary,
-    textAlign: 'center',
+    flexShrink: 1,
   },
   headerName: {
     ...typography.bodyLarge, fontWeight: '600', color: colors.textPrimary,
     textAlign: 'center', marginTop: spacing.xxs,
   },
+  mfrRow: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    maxWidth: '100%',
+    paddingHorizontal: spacing.sm,
+  },
   typePill: {
-    alignSelf: 'center', paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: radius.full, marginTop: spacing.xs,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  lifePill: {
+    backgroundColor: colors.primary + '1A',
   },
   typePillText: { ...typography.labelSmall },
   gradeRow: {
