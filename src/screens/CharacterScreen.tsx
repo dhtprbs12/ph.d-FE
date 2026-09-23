@@ -19,6 +19,7 @@ import gamificationService from '../services/gamificationService';
 import { getBaseCharacter, getItemLayer, getItemThumb } from '../utils/characterAssets';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/common/Toast';
+import TokenEarnSheet from '../components/TokenEarnSheet';
 
 const CATEGORIES: { key: SlotName; label: string; emoji: string }[] = [
   { key: 'hat', label: 'Hats', emoji: '🎩' },
@@ -45,6 +46,7 @@ export default function CharacterScreen() {
   const [isLoading, setIsLoading] = useState(!cachedChar);
   const [character, setCharacter] = useState<CharacterState | null>(cachedChar);
   const [tokenBalance, setTokenBalance] = useState(0);
+  const [earnSheet, setEarnSheet] = useState<'how' | 'short' | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<SlotName>('hat');
   const [items, setItems] = useState<ShopItem[]>(shopService.getCachedItems('hat') || []);
   const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
@@ -123,10 +125,11 @@ export default function CharacterScreen() {
       }));
       toast.show({ message: selectedItem.name + ' is now yours!', type: 'reward' });
     } catch (e: any) {
-      const msg = e.response?.data?.error === 'insufficient_tokens'
-        ? 'Not enough tokens! Keep checking in to earn more 🦴'
-        : e.message || 'Purchase failed';
-      toast.show({ message: msg, type: 'error' });
+      if (e.response?.data?.error === 'insufficient_tokens') {
+        setEarnSheet('short');
+      } else {
+        toast.show({ message: e.message || 'Purchase failed', type: 'error' });
+      }
     } finally {
       setIsPurchasing(false);
     }
@@ -194,10 +197,16 @@ export default function CharacterScreen() {
         </View>
         <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>Character</Text>
         <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>
-          <View style={styles.tokenDisplay}>
+          <Pressable
+            onPress={() => setEarnSheet('how')}
+            style={styles.tokenDisplay}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="How to earn tokens"
+          >
             <Text style={{ fontSize: 14 }}>🦴</Text>
             <Text style={[typography.labelLarge, { color: colors.accent }]}>{tokenBalance}</Text>
-          </View>
+          </Pressable>
         </View>
       </View>
 
@@ -382,6 +391,12 @@ export default function CharacterScreen() {
           </Pressable>
         )}
       </View>
+      <TokenEarnSheet
+        visible={earnSheet != null}
+        onClose={() => setEarnSheet(null)}
+        title={earnSheet === 'short' ? 'Not enough tokens' : 'How to earn tokens'}
+        subtitle={earnSheet === 'short' ? "You don't have enough for this item." : undefined}
+      />
     </View>
   );
 }

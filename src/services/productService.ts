@@ -90,7 +90,8 @@ export async function getCachedReview(
   params?: AnalyzeProductParams
 ): Promise<ScanResult> {
   const { data } = await api.get<ScanResult>(`/products/${productId}/cached-review`, {
-    params: serializeAnalyzeParams(params),
+    params: serializeAnalyzeParams(params) as Record<string, string> | undefined,
+    quietStatuses: [404],
   });
   return data;
 }

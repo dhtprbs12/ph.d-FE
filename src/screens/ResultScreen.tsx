@@ -32,13 +32,11 @@ import type { HistoryStackParamList, HomeStackParamList } from '../navigation/ty
 import * as productService from '../services/productService';
 import * as scanService from '../services/scanService';
 import * as communityService from '../services/communityService';
-import { scanRowToScanResult } from '../utils/scanHistorySnapshot';
 import { useApp } from '../context/AppContext';
 import {
   colors,
   getGradeColor,
   getGradeDescription,
-  getPetTypeIcon,
   getRiskColor,
   radius,
   shadows,
@@ -591,6 +589,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
   const [imgFailed, setImgFailed] = useState(false);
   const [hideRemoteImage, setHideRemoteImage] = useState(false);
   const [howWeScoreVisible, setHowWeScoreVisible] = useState(false);
+  const [imageDiffVisible, setImageDiffVisible] = useState(false);
   const recoverInFlight = useRef(false);
 
   useEffect(() => {
@@ -632,8 +631,6 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
 
   const img = imgFailed ? null : headerImg;
   const pType = product?.productType ?? product?.product_type;
-  const petName = scanResult.pet?.name ?? 'Pet';
-  const petIcon = getPetTypeIcon(scanResult.pet?.petType ?? 'dog');
   const pillColor = productTypePillColor(pType);
 
   const recoverFromError = useCallback(() => {
@@ -766,22 +763,33 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
         )}
       </View>
 
-      {/* How we score — link opens sheet */}
-      <Pressable
-        onPress={() => setHowWeScoreVisible(true)}
-        disabled={scoreStatus !== 'ready'}
-        style={({ pressed }) => [
-          st.howWeScoreLink,
-          pressed && scoreStatus === 'ready' && { opacity: 0.75 },
-          scoreStatus !== 'ready' && { opacity: 0.35 },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="How we score"
-        accessibilityHint="Opens explanation of how the product score is calculated"
-      >
-        <Text style={st.howWeScoreLinkText}>How we score</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-      </Pressable>
+      <View style={st.infoLinkStack}>
+        <Pressable
+          onPress={() => setHowWeScoreVisible(true)}
+          disabled={scoreStatus !== 'ready'}
+          style={({ pressed }) => [
+            st.howWeScoreLink,
+            pressed && scoreStatus === 'ready' && { opacity: 0.75 },
+            scoreStatus !== 'ready' && { opacity: 0.35 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="How we score"
+          accessibilityHint="Opens explanation of how the product score is calculated"
+        >
+          <Text style={st.howWeScoreLinkText}>How we score</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+        </Pressable>
+        <Pressable
+          onPress={() => setImageDiffVisible(true)}
+          style={({ pressed }) => [st.howWeScoreLink, st.imageDiffLink, pressed && { opacity: 0.75 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Why images can differ"
+          accessibilityHint="Opens explanation of why the product photo may not match your bag"
+        >
+          <Text style={st.howWeScoreLinkText}>Why images can differ</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
 
       <Modal
         visible={howWeScoreVisible}
@@ -809,9 +817,9 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
                 bottom.
               </Text>
               <Text style={st.howWeScoreBullet}>
-                • <Text style={st.howWeScoreBulletBold}>Combining lines:</Text> Each ingredient is assessed from our
-                database and models. We merge those assessments using position weights so the score matches how much of
-                the formula each item likely represents.
+                • <Text style={st.howWeScoreBulletBold}>AI + our formula:</Text> AI assesses each ingredient. Our scoring
+                system then combines those assessments with list-position weights so the number stays consistent — not a
+                one-off chat answer.
               </Text>
               <Text style={st.howWeScoreBullet}>
                 • <Text style={st.howWeScoreBulletBold}>Healthy-pet guide:</Text> This score is a general product-quality
@@ -824,6 +832,59 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
             </ScrollView>
             <Pressable
               onPress={() => setHowWeScoreVisible(false)}
+              style={({ pressed }) => [st.howWeScoreDoneBtn, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+            >
+              <Text style={st.howWeScoreDoneText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={imageDiffVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setImageDiffVisible(false)}
+      >
+        <View style={st.howWeScoreModalRoot} pointerEvents="box-none">
+          <Pressable
+            style={st.howWeScoreBackdrop}
+            onPress={() => setImageDiffVisible(false)}
+            accessibilityLabel="Close image explanation"
+          />
+          <View style={st.howWeScoreSheet}>
+            <View style={st.howWeScoreHandle} />
+            <Text style={st.howWeScoreSheetTitle}>Why images can differ</Text>
+            <ScrollView
+              style={st.howWeScoreSheetScroll}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <Text style={st.howWeScoreBullet}>
+                The photo is a catalog image, not a picture of the bag in your hand. The score still comes from the
+                ingredient list.
+              </Text>
+              <Text style={st.howWeScoreBullet}>
+                • <Text style={st.howWeScoreBulletBold}>Same recipe, new bag:</Text> Brands redesign packaging. The
+                formula can stay the same while the photo looks different.
+              </Text>
+              <Text style={st.howWeScoreBullet}>
+                • <Text style={st.howWeScoreBulletBold}>One photo in our catalog:</Text> We keep a single product image,
+                often from a retailer or an older listing. Yours may be a newer or older print.
+              </Text>
+              <Text style={st.howWeScoreBullet}>
+                • <Text style={st.howWeScoreBulletBold}>Size and retailer shots:</Text> A 5 lb bag, a 30 lb bag, or a
+                store photo can all look different for the same product.
+              </Text>
+              <Text style={st.howWeScoreBullet}>
+                • <Text style={st.howWeScoreBulletBold}>What we analyze:</Text> Matching is by product and ingredients,
+                not by whether the bag art matches.
+              </Text>
+            </ScrollView>
+            <Pressable
+              onPress={() => setImageDiffVisible(false)}
               style={({ pressed }) => [st.howWeScoreDoneBtn, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel="Done"
@@ -852,17 +913,6 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
             </Text>
           </>
         )}
-      </View>
-
-      {/* Pet context pill */}
-      <View style={st.petPill}>
-        <Text style={st.petPillText}>
-          {scoreStatus === 'loading'
-            ? `${petIcon} Preparing analysis…`
-            : scoreStatus === 'error'
-              ? `${petIcon} Analysis unavailable`
-              : `${petIcon} Based on a healthy ${scanResult.pet?.petType ?? 'pet'}`}
-        </Text>
       </View>
 
       <Modal
@@ -987,16 +1037,22 @@ const ConditionWarningsCard = React.memo(function ConditionWarningsCard({
   }, {});
 
   const hasHighSeverity = (items: ConditionWarning[]) => items.some(w => w.severity === 'high');
+  const isUrgent = warnings.some(w => w.severity === 'high' || w.type === 'allergy');
+  const headerTint = isUrgent ? '#FDECEA' : '#FFF6E8';
+  const headerAccent = isUrgent ? colors.danger : colors.warning;
 
   return (
-    <View style={st.card}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.md }}>
-        <Text style={{ fontSize: 16, marginTop: 1 }}>🩺</Text>
-        <Text
-          style={{ ...typography.labelLarge, color: colors.textPrimary, flex: 1, flexWrap: 'wrap' }}
-        >
-          {`Health Condition Alerts for ${petName}`}
+    <View style={[st.card, st.watchoutsCard]}>
+      <View style={[st.watchoutsHeader, { backgroundColor: headerTint }]}>
+        <View style={[st.watchoutsIconWrap, { backgroundColor: headerAccent + '22' }]}>
+          <Ionicons name="warning" size={16} color={headerAccent} />
+        </View>
+        <Text style={st.watchoutsTitle}>
+          Watch-outs for <Text style={st.watchoutsName}>{petName}</Text>
         </Text>
+        <View style={[st.watchoutsCount, { backgroundColor: headerAccent }]}>
+          <Text style={st.watchoutsCountText}>{warnings.length}</Text>
+        </View>
       </View>
 
       {Object.entries(grouped).map(([label, items]) => {
@@ -1171,25 +1227,22 @@ function AltCard({ alt, onPress }: { alt: AlternativeProduct; onPress: () => voi
 /* ---------- Share Button ---------- */
 function ShareResultButton({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={{ borderRadius: radius.large, overflow: 'hidden' }}>
-      <LinearGradient
-        colors={[colors.primary, colors.primary + 'CC']}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={st.shareGrad}
-      >
-        <Ionicons name="share-outline" size={18} color={colors.white} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={st.shareTitle}>Share This Result</Text>
-          <Text style={st.shareSub}>Saves a shareable image card + full summary text</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={14} color={colors.white} style={{ opacity: 0.7 }} />
-      </LinearGradient>
+    <Pressable onPress={onPress} style={st.shareGrad}>
+      <Ionicons name="share-outline" size={18} color={colors.primary} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={st.shareTitle}>Share This Result</Text>
+        <Text style={st.shareSub}>Saves a shareable image card + full summary text</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={14} color={colors.primary} />
     </Pressable>
   );
 }
 
 /* ---------- Scan another (Home stack — resets stack → TwoStepScan) ---------- */
+const SHOW_SCAN_ANOTHER = false;
+
 function ScanAnotherButton({ onPress }: { onPress: () => void }) {
+  if (!SHOW_SCAN_ANOTHER) return null;
   return (
     <Pressable
       onPress={onPress}
@@ -1203,10 +1256,11 @@ function ScanAnotherButton({ onPress }: { onPress: () => void }) {
 }
 
 /* ---------- Dev-only Delete Button (testing) ----------
- * Removed before public launch. While we are still tuning OCR, this lets us
- * purge a product whose ingredients were extracted incorrectly so the bad
- * row (and its cached AI review) doesn't keep coming back on re-scan.
+ * Hidden until we need it again. Flip SHOW_DEV_DELETE to true to purge a
+ * product whose ingredients were extracted incorrectly.
  */
+const SHOW_DEV_DELETE = false;
+
 function DevDeleteButton({
   productId,
   productLabel,
@@ -1238,6 +1292,8 @@ function DevDeleteButton({
       setBusy(false);
     }
   }, [productId, onDeleted, toast]);
+
+  if (!SHOW_DEV_DELETE) return null;
 
   return (
     <View style={{ paddingHorizontal: spacing.md }}>
@@ -1281,35 +1337,23 @@ function TrustDisclaimerFooter({
 }) {
   return (
     <View style={st.footer}>
-      {/* Trust badges */}
-      <View style={st.trustRow}>
-        {community && community.totalScans >= 100 && (
+      {community && community.totalScans >= 100 && (
+        <View style={st.trustRow}>
           <View style={st.trustBadge}>
             <Ionicons name="people" size={16} color={colors.primary} />
             <Text style={st.trustValue}>{formatCommunityScans(community.totalScans)}</Text>
             <Text style={st.trustLabel}>Community</Text>
           </View>
-        )}
-        <View style={st.trustBadge}>
-          <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
-          <Text style={st.trustValue}>AAFCO</Text>
-          <Text style={st.trustLabel}>Compliant</Text>
         </View>
-        <View style={st.trustBadge}>
-          <Ionicons name="ribbon" size={16} color={colors.primary} />
-          <Text style={st.trustValue}>Expert</Text>
-          <Text style={st.trustLabel}>Reviewed</Text>
-        </View>
-      </View>
+      )}
 
-      {/* Disclaimer */}
       <View style={{ alignItems: 'center', gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="information-circle-outline" size={11} color={colors.textSecondary} />
           <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary }}>DISCLAIMER</Text>
         </View>
         <Text style={st.methodText}>
-          AI-generated analysis for reference only. Results may not be fully accurate. Consult your veterinarian before making dietary changes.
+          Ingredients shown here can be missing, misspelled, split, or out of order, and may not match the package. Formulas can also differ by bag size, region, or a later change. This is not veterinary advice or a safety certification, and PHD is not responsible for decisions based on this result.
         </Text>
       </View>
     </View>
@@ -1376,11 +1420,11 @@ export function ResultScreen() {
     route.params.suppressProductImage
   );
 
-  const isHistorySnapshotMode = !paramScanResult && !!paramScanId;
-  const isPreloadMode = !paramScanResult && !!paramProductId && !paramScanId;
+  const resolvedProductId = paramProductId || paramProduct?.id;
+  const needsProductReview = !paramScanResult && (!!resolvedProductId || !!paramScanId);
 
   const [scanResult, setScanResult] = useState<ScanResult | null>(paramScanResult ?? null);
-  const [analysisLoading, setAnalysisLoading] = useState(isPreloadMode || isHistorySnapshotMode);
+  const [analysisLoading, setAnalysisLoading] = useState(needsProductReview);
   const [analysisError, setAnalysisError] = useState(false);
   const pulseOpacity = usePulse();
 
@@ -1429,39 +1473,24 @@ export function ResultScreen() {
   }, [selectedPet]);
 
   useEffect(() => {
-    if (!isPreloadMode || !paramProductId) return;
+    if (!needsProductReview) return;
     let cancelled = false;
     (async () => {
       setAnalysisLoading(true);
       setAnalysisError(false);
       try {
-        // Use lightweight cached review (no AI re-analysis)
-        const result = await productService.getCachedReview(paramProductId, petParams);
-        if (!cancelled) setScanResult(result);
-      } catch {
-        // Fallback to full analyze if cache miss (first-time product)
-        try {
-          const result = await productService.analyzeProduct(paramProductId, petParams);
-          if (!cancelled) setScanResult(result);
-        } catch {
-          if (!cancelled) setAnalysisError(true);
+        let productId = resolvedProductId;
+        if (!productId && paramScanId) {
+          const scan = await scanService.getScanById(paramScanId);
+          productId = scan.product_id || undefined;
         }
-      } finally {
-        if (!cancelled) setAnalysisLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isPreloadMode, paramProductId, petParams]);
-
-  useEffect(() => {
-    if (!isHistorySnapshotMode || !paramScanId) return;
-    let cancelled = false;
-    (async () => {
-      setAnalysisLoading(true);
-      setAnalysisError(false);
-      try {
-        const scan = await scanService.getScanById(paramScanId);
-        const result = scanRowToScanResult(scan, historyImageParam);
+        if (!productId) throw new Error('Product id missing');
+        let result;
+        try {
+          result = await productService.getCachedReview(productId, petParams);
+        } catch {
+          result = await productService.analyzeProduct(productId, petParams);
+        }
         if (!cancelled) setScanResult(result);
       } catch {
         if (!cancelled) setAnalysisError(true);
@@ -1470,7 +1499,7 @@ export function ResultScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [isHistorySnapshotMode, paramScanId, historyImageParam]);
+  }, [needsProductReview, resolvedProductId, paramScanId, petParams]);
 
   const finalScore = displayScore;
   const productId = scanResult?.product?.id ?? paramProductId ?? paramProduct?.id;
@@ -1740,20 +1769,26 @@ export function ResultScreen() {
               onPress={() => {
                 setAnalysisError(false);
                 setAnalysisLoading(true);
-                if (isHistorySnapshotMode && paramScanId) {
-                  scanService.getScanById(paramScanId)
-                    .then((scan) => {
-                      setScanResult(scanRowToScanResult(scan, historyImageParam));
+                if (resolvedProductId || paramScanId) {
+                  (async () => {
+                    try {
+                      let productId = resolvedProductId;
+                      if (!productId && paramScanId) {
+                        const scan = await scanService.getScanById(paramScanId);
+                        productId = scan.product_id || undefined;
+                      }
+                      if (!productId) throw new Error('Product id missing');
+                      try {
+                        setScanResult(await productService.getCachedReview(productId, petParams));
+                      } catch {
+                        setScanResult(await productService.analyzeProduct(productId, petParams));
+                      }
                       setAnalysisLoading(false);
-                    })
-                    .catch(() => {
+                    } catch {
                       setAnalysisError(true);
                       setAnalysisLoading(false);
-                    });
-                } else if (paramProductId) {
-                  productService.analyzeProduct(paramProductId, petParams)
-                    .then(res => { setScanResult(res); setAnalysisLoading(false); })
-                    .catch(() => { setAnalysisError(true); setAnalysisLoading(false); });
+                    }
+                  })();
                 } else {
                   setAnalysisError(true);
                   setAnalysisLoading(false);
@@ -1948,6 +1983,39 @@ const st = StyleSheet.create({
     backgroundColor: colors.card, borderRadius: radius.large, padding: spacing.md,
     marginHorizontal: spacing.md, ...shadows.card,
   },
+  watchoutsCard: {
+    overflow: 'hidden',
+    paddingTop: 0,
+    borderWidth: 1,
+    borderColor: colors.warning + '55',
+  },
+  watchoutsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: -spacing.md,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+  },
+  watchoutsIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watchoutsTitle: { ...typography.titleMedium, color: colors.textPrimary, flex: 1, minWidth: 0 },
+  watchoutsName: { fontWeight: '700' },
+  watchoutsCount: {
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 7,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watchoutsCountText: { ...typography.labelMedium, fontWeight: '700', color: colors.white },
   headerImageSlot: {
     width: 80,
     height: 80,
@@ -2015,13 +2083,6 @@ const st = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: spacing.sm, marginTop: spacing.sm,
   },
-  petPill: {
-    alignSelf: 'center', flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-    backgroundColor: colors.lightGray, borderRadius: radius.full,
-    marginTop: spacing.sm,
-  },
-  petPillText: { ...typography.labelMedium, color: colors.textSecondary },
   statsStrip: {
     flexDirection: 'row', alignItems: 'center',
     marginHorizontal: spacing.md, marginTop: spacing.sm,
@@ -2086,9 +2147,13 @@ const st = StyleSheet.create({
   shareGrad: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: spacing.md,
+    borderRadius: radius.large,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
   },
-  shareTitle: { ...typography.bodyMedium, fontWeight: '600', color: colors.white },
-  shareSub: { ...typography.labelSmall, color: 'rgba(255,255,255,0.8)' },
+  shareTitle: { ...typography.bodyMedium, fontWeight: '600', color: colors.textPrimary },
+  shareSub: { ...typography.labelSmall, color: colors.textSecondary },
   scanAnotherCard: {
     backgroundColor: colors.card,
     borderRadius: radius.large,
@@ -2161,13 +2226,18 @@ const st = StyleSheet.create({
     textAlign: 'center', lineHeight: 16,
     paddingHorizontal: spacing.md,
   },
+  infoLinkStack: {
+    marginTop: spacing.md,
+  },
   howWeScoreLink: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    marginTop: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  imageDiffLink: {
+    paddingTop: 0,
   },
   howWeScoreLinkText: {
     ...typography.labelMedium,

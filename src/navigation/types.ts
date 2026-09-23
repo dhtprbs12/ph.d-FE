@@ -35,7 +35,7 @@ export type ResultParams =
     }
   | {
       scanResult?: undefined;
-      productId?: undefined;
+      productId?: string;
       scanId: string;
       /** Optional display hint while snapshot loads (from history list row). */
       product?: Product;

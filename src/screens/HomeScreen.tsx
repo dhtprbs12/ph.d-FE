@@ -35,6 +35,7 @@ import { getBaseCharacter, getItemLayer } from '../utils/characterAssets';
 import shopService, { CharacterState } from '../services/shopService';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import NomNomNotesCard from '../components/NomNomNotesCard';
+import TokenEarnSheet from '../components/TokenEarnSheet';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -135,6 +136,7 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
   const { width: windowWidth } = useWindowDimensions();
   const [summary, setSummary] = useState<GamificationSummary | null>(null);
   const [equipped, setEquipped] = useState<CharacterState['equipped'] | null>(null);
+  const [earnVisible, setEarnVisible] = useState(false);
 
   useFocusEffect(useCallback(() => {
     gamificationService.getSummary().then(setSummary).catch(console.warn);
@@ -149,8 +151,9 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
   const baseImg = getBaseCharacter('dog');
 
   return (
-    <Pressable onPress={onCharacterPress} style={styles.gamHeader}>
-      <View style={styles.gamCharacterArea}>
+    <>
+    <View style={styles.gamHeader}>
+      <Pressable onPress={onCharacterPress} style={styles.gamCharacterArea}>
         {(() => {
           const hasBg = !!equipped?.background && !!getItemLayer(equipped.background.assetKey);
           const sceneW = hasBg ? windowWidth - spacing.md * 4 : 200;
@@ -199,17 +202,23 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
             }]} />
           </View>
         )}
-      </View>
+      </Pressable>
       <View style={styles.gamBottomRow}>
         <View style={styles.gamLevelBadge}>
           <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Lv.{summary.scanLevel.currentLevel}</Text>
         </View>
-        <View style={styles.gamTokenBadge}>
+        <Pressable
+          onPress={() => setEarnVisible(true)}
+          style={styles.gamTokenBadge}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="How to earn tokens"
+        >
           <Text style={{ fontSize: 14 }}>🦴</Text>
           <Text style={[typography.labelLarge, { color: colors.accent }]}>
             {summary.tokens.balance}
           </Text>
-        </View>
+        </Pressable>
         {summary.streak.currentStreak > 0 && (
           <View style={styles.gamStreakBadge}>
             <Text style={{ fontSize: 14 }}>🔥</Text>
@@ -219,7 +228,9 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
           </View>
         )}
       </View>
-    </Pressable>
+    </View>
+    <TokenEarnSheet visible={earnVisible} onClose={() => setEarnVisible(false)} />
+    </>
   );
 }
 

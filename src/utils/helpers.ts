@@ -113,8 +113,9 @@ export function formatLifeStage(
   lifeStage?: string | null,
   petType?: string | null
 ): string {
-  if (!lifeStage || lifeStage === 'all') return '';
+  if (!lifeStage) return '';
   const stage = lifeStage.toLowerCase();
+  if (stage === 'all') return 'All ages';
   if (stage === 'puppy') return 'Puppy';
   if (stage === 'kitten') return 'Kitten';
   if (stage === 'puppy_kitten') {

@@ -423,6 +423,7 @@ export default function HistoryScreen() {
   const onCardPress = (item: ScanHistoryItem) => {
     navigation.navigate('Result', {
       scanId: item.id,
+      ...(item.product_id ? { productId: item.product_id } : {}),
       preloadedScore: {
         score: item.final_score,
         ...(item.grade ? { grade: item.grade } : {}),

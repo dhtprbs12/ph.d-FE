@@ -36,6 +36,8 @@ const TERMS_URL = 'https://phd-be-production.up.railway.app/terms';
  */
 const IOS_APP_STORE_ID = '0000000000';
 const ANDROID_PLAY_PACKAGE = 'com.petfoodanalyzer.app';
+/** Hide until the app is on the store. Flip to true at launch. */
+const SHOW_RATE_APP = false;
 
 function openUrl(url: string) {
   Linking.openURL(url).catch(() => {});
@@ -245,9 +247,9 @@ export default function SettingsScreen() {
         {/* My Character */}
         <Animated.View style={[styles.profileOuter, fadeStyles[1]]}>
           <View style={[styles.profileCard, shadows.card]}>
-            <MiniCharacter size={80} petId={selectedPet?.id} />
+            <MiniCharacter size={80} petId={selectedPet?.id} shrinkWithBackground />
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>My Character</Text>
+              <Text style={styles.profileName} numberOfLines={1}>{selectedPet?.name || 'No pet selected'}</Text>
               <Text style={styles.profileSub}>{pets.length} pet{pets.length !== 1 ? 's' : ''} registered</Text>
             </View>
           </View>
@@ -277,14 +279,18 @@ export default function SettingsScreen() {
             showChevron
             onPress={() => openUrl(TERMS_URL)}
           />
-          <SectionDivider />
-          <SettingsRow
-            icon="star"
-            iconColor={colors.accent}
-            title="Rate App"
-            showChevron
-            onPress={() => rateApp(toast)}
-          />
+          {SHOW_RATE_APP && (
+            <>
+              <SectionDivider />
+              <SettingsRow
+                icon="star"
+                iconColor={colors.accent}
+                title="Rate App"
+                showChevron
+                onPress={() => rateApp(toast)}
+              />
+            </>
+          )}
         </SettingsSection>
 
         <View style={styles.sectionGap} />
@@ -396,6 +402,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   profileInfo: {
+    flex: 1,
     marginLeft: spacing.md,
     gap: 4,
   },

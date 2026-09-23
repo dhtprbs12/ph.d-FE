@@ -10,9 +10,11 @@ interface MiniCharacterProps {
   characterData?: CharacterState | null;
   square?: boolean;
   cornerRadius?: number;
+  /** Slightly smaller circle when a background is equipped. */
+  shrinkWithBackground?: boolean;
 }
 
-export default function MiniCharacter({ size = 60, petId, characterData, square, cornerRadius }: MiniCharacterProps) {
+export default function MiniCharacter({ size = 60, petId, characterData, square, cornerRadius, shrinkWithBackground }: MiniCharacterProps) {
   const [character, setCharacter] = useState<CharacterState | null>(characterData || null);
 
   useEffect(() => {
@@ -36,8 +38,10 @@ export default function MiniCharacter({ size = 60, petId, characterData, square,
     );
   }
 
-  const renderSize = size;
-  const containerSize = size * 1.15;
+  const hasBackground = Boolean(equipped?.background && getItemLayer(equipped.background.assetKey));
+  const bgScale = shrinkWithBackground && hasBackground ? 0.86 : 1;
+  const renderSize = size * bgScale;
+  const containerSize = size * 1.15 * bgScale;
 
   return (
     <View style={[styles.container, { width: containerSize, height: containerSize, borderRadius: square ? (cornerRadius ?? 0) : containerSize / 2 }]}>

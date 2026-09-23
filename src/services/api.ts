@@ -46,7 +46,7 @@ async function request<T = any>(
   method: string,
   url: string,
   body?: any,
-  config?: { timeout?: number; params?: Record<string, string> }
+  config?: { timeout?: number; params?: Record<string, string>; quietStatuses?: number[] }
 ): Promise<ApiResponse<T>> {
   let fullUrl = `${BASE_URL}${url}`;
   if (config?.params) {
@@ -83,7 +83,9 @@ async function request<T = any>(
         error.response = { status: response.status, data };
         error.status = response.status;
         error.config = { url };
-        console.error('[API] response', { status: response.status, data, message: error.message, url });
+        if (!config?.quietStatuses?.includes(response.status)) {
+          console.error('[API] response', { status: response.status, data, message: error.message, url });
+        }
         throw error;
       }
 
@@ -103,7 +105,7 @@ async function request<T = any>(
 }
 
 const api = {
-  get<T = any>(url: string, config?: { params?: Record<string, string>; timeout?: number }): Promise<ApiResponse<T>> {
+  get<T = any>(url: string, config?: { params?: Record<string, string>; timeout?: number; quietStatuses?: number[] }): Promise<ApiResponse<T>> {
     return request<T>('GET', url, undefined, config);
   },
   post<T = any>(url: string, data?: any, config?: { timeout?: number }): Promise<ApiResponse<T>> {
