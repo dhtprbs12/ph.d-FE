@@ -53,6 +53,7 @@ export async function batchScores(
 }
 
 export interface AnalyzeProductParams {
+  petId?: string;
   petName?: string;
   petType?: string;
   petBreed?: string;

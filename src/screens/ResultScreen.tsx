@@ -1463,6 +1463,7 @@ export function ResultScreen() {
       ...(c.notes ? { notes: c.notes } : {}),
     }));
     return {
+      petId: selectedPet.id,
       petName: selectedPet.name,
       petType: selectedPet.pet_type,
       petBreed: selectedPet.breed,

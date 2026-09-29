@@ -171,7 +171,7 @@ export default function CheckInScreen() {
 
       <KeyboardSafe
         scrollRef={scrollRef}
-        contentContainerStyle={{ padding: spacing.md, gap: spacing.md, paddingBottom: 24 }}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: 24 }}
         footer={
           <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
             <Pressable
@@ -193,6 +193,7 @@ export default function CheckInScreen() {
           </View>
         }
       >
+        <View style={{ gap: spacing.md }}>
         {/* Date + Food info */}
         <View style={styles.card}>
           <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>
@@ -355,6 +356,7 @@ export default function CheckInScreen() {
               }, 350);
             }}
           />
+        </View>
         </View>
       </KeyboardSafe>
 
