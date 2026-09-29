@@ -157,8 +157,8 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
         {(() => {
           const hasBg = !!equipped?.background && !!getItemLayer(equipped.background.assetKey);
           const sceneW = hasBg ? windowWidth - spacing.md * 4 : 200;
-          const sceneH = hasBg ? 240 : 200;
-          const charSize = hasBg ? Math.round(sceneH * 0.58) : 200;
+          const sceneH = hasBg ? sceneW : 200;
+          const charSize = hasBg ? Math.round(sceneW * 0.42) : 200;
           return (
             <View style={{ width: sceneW, height: sceneH, position: 'relative', borderRadius: 16, overflow: 'hidden' }}>
               {hasBg && (
@@ -993,39 +993,62 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
   if (loading) return null;
   if (timeline.length === 0) return null;
 
-  const filtered = timeline.filter(e => e.daysOnFood > 0);
+  const filtered = timeline.filter(e => e.isCurrent || e.daysOnFood > 0);
   if (filtered.length === 0) return null;
-  const top3 = filtered.slice(0, 3);
+  const newestFirst = [...filtered].reverse();
+  const top3 = newestFirst.slice(0, 3);
+  const extraCount = newestFirst.length - top3.length;
   const firstInsight = insights.length > 0 ? insights[0] : null;
+  const openHistory = () => navigation.navigate('Passport', { petId, petName });
 
   return (
     <View style={[styles.card, shadows.card]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
         <Text style={[typography.titleLarge, { color: colors.textPrimary }]}>
-          🍽 {petName ? `${petName}'s` : ''} Food Journey
+          🍽 {petName ? `${petName}'s` : ''} Food history
         </Text>
       </View>
 
-      <View style={{ gap: spacing.xs }}>
-        {top3.map((entry, i) => {
-          const dateStr = entry.startedAt.includes('T') ? entry.startedAt : entry.startedAt + 'T12:00:00';
-          const startLabel = new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      <View style={{ gap: spacing.sm }}>
+        {top3.map((entry) => {
+          const startRaw = entry.startedAt.includes('T') ? entry.startedAt : `${entry.startedAt}T12:00:00`;
+          const startLabel = new Date(startRaw).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const endLabel = entry.isCurrent || !entry.endedAt
+            ? 'now'
+            : new Date(entry.endedAt.includes('T') ? entry.endedAt : `${entry.endedAt}T12:00:00`)
+              .toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const thumb = buildThumbUrl(entry.imageUrl) || entry.imageUrl;
+          const stool = entry.stats.checkinCount > 0 && entry.stats.avgStoolScore != null
+            ? (entry.stats.avgStoolScore >= 3.5 ? '🙂' : entry.stats.avgStoolScore >= 2.5 ? '😐' : '😕')
+            : null;
+          const dayWord = entry.daysOnFood === 1 ? 'day' : 'days';
+
           return (
-            <View key={entry.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-              <View style={{ flex: 1 }}>
-                <Text style={[typography.labelMedium, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {entry.productName}
+            <Pressable key={entry.id} onPress={openHistory} style={styles.historyRow}>
+              {thumb ? (
+                <Image source={{ uri: thumb }} style={styles.historyThumb} />
+              ) : (
+                <View style={[styles.historyThumb, styles.historyThumbFallback]}>
+                  <Ionicons name="nutrition-outline" size={18} color={colors.textSecondary} />
+                </View>
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[typography.labelLarge, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>
+                    {entry.productName}
+                  </Text>
+                  {entry.isCurrent ? (
+                    <View style={styles.historyCurrentBadge}>
+                      <Text style={styles.historyCurrentText}>Current</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={[typography.labelMedium, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+                  {entry.daysOnFood} {dayWord} · {startLabel} – {endLabel}
                 </Text>
               </View>
-              <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                {entry.daysOnFood}d · {startLabel}
-              </Text>
-              {entry.stats.checkinCount > 0 && entry.stats.avgStoolScore !== null && (
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                  {entry.stats.avgStoolScore >= 3.5 ? '🙂' : entry.stats.avgStoolScore >= 2.5 ? '😐' : '😕'} {entry.stats.avgStoolScore >= 3.5 ? 'Good' : entry.stats.avgStoolScore >= 2.5 ? 'Okay' : 'Poor'}
-                </Text>
-              )}
-            </View>
+              {stool ? <Text style={{ fontSize: 18 }}>{stool}</Text> : null}
+            </Pressable>
           );
         })}
       </View>
@@ -1048,17 +1071,19 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
         </View>
       )}
 
-      {timeline.length === 1 && (
+      {filtered.length === 1 && (
         <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs }]}>
           Keep checking in to unlock insights!
         </Text>
       )}
 
       <Pressable
-        onPress={() => navigation.navigate('Passport', { petId, petName })}
+        onPress={openHistory}
         style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: spacing.sm }}
       >
-        <Text style={[typography.labelMedium, { color: colors.primary }]}>View Full Report</Text>
+        <Text style={[typography.labelMedium, { color: colors.primary }]}>
+          {extraCount > 0 ? `View all · ${newestFirst.length} foods` : 'View all'}
+        </Text>
         <Ionicons name="chevron-forward" size={14} color={colors.primary} />
       </Pressable>
     </View>
@@ -1655,6 +1680,34 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: radius.medium,
     overflow: 'hidden',
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  historyThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.medium,
+    backgroundColor: colors.lightGray,
+  },
+  historyThumbFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  historyCurrentBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  historyCurrentText: {
+    ...typography.labelSmall,
+    fontWeight: '700',
+    color: colors.white,
   },
   scanNudge: {
     flexDirection: 'row',

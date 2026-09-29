@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   Pressable,
@@ -12,6 +13,8 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../theme';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
+import ZoomableImageModal from '../components/ZoomableImageModal';
+import { buildImageUrl, buildThumbUrl } from '../utils/helpers';
 
 function StoolScoreLabel(score: number | null): { label: string; emoji: string; color: string } {
   if (score === null) return { label: 'No data', emoji: '—', color: colors.textSecondary };
@@ -22,96 +25,125 @@ function StoolScoreLabel(score: number | null): { label: string; emoji: string; 
   return { label: 'Bad', emoji: '😫', color: colors.danger };
 }
 
-function TimelineCard({ entry, prevEntry }: { entry: TimelineEntry; prevEntry?: TimelineEntry }) {
-  const dateStr = entry.startedAt.includes('T') ? entry.startedAt : entry.startedAt + 'T12:00:00';
-  const startMonth = new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const stool = StoolScoreLabel(entry.stats.avgStoolScore);
-  const hasSymptoms = entry.stats.itchCount > 0 || entry.stats.vomitCount > 0;
-  const hasCheckins = entry.stats.checkinCount > 0;
+function formatPassportDay(raw?: string | null) {
+  if (!raw) return null;
+  const dateStr = raw.includes('T') ? raw : `${raw}T12:00:00`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
-  const prevStool = prevEntry?.stats.avgStoolScore ?? null;
-  const stoolDiff = (hasCheckins && prevStool !== null && entry.stats.avgStoolScore !== null)
-    ? +(entry.stats.avgStoolScore - prevStool).toFixed(1)
-    : null;
+function dayWord(n: number) {
+  return n === 1 ? 'day' : 'days';
+}
+
+function StatTile({
+  emoji,
+  label,
+  value,
+  color,
+  tint,
+}: {
+  emoji: string;
+  label: string;
+  value: string;
+  color: string;
+  tint: string;
+}) {
+  return (
+    <View style={[styles.statTile, { backgroundColor: tint }]}>
+      <Text style={styles.statEmoji}>{emoji}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { color }]} numberOfLines={2}>{value}</Text>
+    </View>
+  );
+}
+
+function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressImage: (uri: string) => void }) {
+  const stool = StoolScoreLabel(entry.stats.avgStoolScore);
+  const hasCheckins = entry.stats.checkinCount > 0;
+  const startLabel = formatPassportDay(entry.startedAt);
+  const endLabel = entry.isCurrent || !entry.endedAt ? 'now' : formatPassportDay(entry.endedAt);
+  const range = startLabel && endLabel ? `${startLabel} – ${endLabel}` : startLabel;
+  const itchOn = entry.stats.itchCount > 0;
+  const vomitOn = entry.stats.vomitCount > 0;
+  const thumbUri = buildThumbUrl(entry.imageUrl) || entry.imageUrl;
+  const fullUri = buildImageUrl(entry.imageUrl) || entry.imageUrl;
 
   return (
     <View style={styles.timelineCard}>
-      <View style={styles.timelineContent}>
-        {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={[typography.labelLarge, { color: colors.textPrimary }]} numberOfLines={2}>{entry.productName}</Text>
-            {entry.brand && <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>{entry.brand}</Text>}
+      <View style={[styles.timelineContent, entry.isCurrent && styles.timelineContentCurrent]}>
+        <View style={styles.titleRow}>
+          {thumbUri ? (
+            <Pressable
+              onPress={() => fullUri && onPressImage(fullUri)}
+              accessibilityRole="button"
+              accessibilityLabel="View product image full-screen"
+            >
+              <Image source={{ uri: thumbUri }} style={styles.productImage} />
+            </Pressable>
+          ) : (
+            <View style={[styles.productImage, styles.productImageFallback]}>
+              <Ionicons name="nutrition-outline" size={22} color={colors.textSecondary} />
+            </View>
+          )}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.productName} numberOfLines={2}>{entry.productName}</Text>
+            {entry.brand ? <Text style={styles.brandName}>{entry.brand}</Text> : null}
           </View>
-          <View style={{ alignItems: 'flex-end', marginLeft: spacing.sm }}>
-            <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>{startMonth}</Text>
-            <Text style={[typography.labelMedium, { color: colors.textPrimary }]}>{entry.daysOnFood} days</Text>
+          {entry.isCurrent ? (
+            <View style={styles.currentBadge}>
+              <Text style={styles.currentBadgeText}>Current</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.metaRow}>
+          <View style={styles.dateChip}>
+            <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+            <Text style={styles.dateChipText}>{range}</Text>
+          </View>
+          <View style={styles.daysChip}>
+            <Text style={styles.daysChipText}>
+              {entry.daysOnFood} {dayWord(entry.daysOnFood)}
+            </Text>
           </View>
         </View>
 
-        {/* Stats */}
         {hasCheckins ? (
-          <View style={{ gap: 6, marginTop: spacing.xs }}>
-            {/* Stool summary */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-              <Text style={{ fontSize: 16 }}>{stool.emoji}</Text>
-              <Text style={[typography.bodySmall, { color: stool.color, fontWeight: '600' }]}>
-                Stool: {stool.label}
+          <>
+            <View style={styles.checkinChip}>
+              <Ionicons name="checkbox-outline" size={15} color={colors.primary} />
+              <Text style={styles.checkinChipText}>
+                From {entry.stats.checkinCount} {entry.stats.checkinCount === 1 ? 'check-in' : 'check-ins'}
               </Text>
-              {stoolDiff !== null && stoolDiff !== 0 && (
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: stoolDiff > 0 ? colors.safe + '15' : colors.danger + '15',
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: radius.small,
-                }}>
-                  <Ionicons
-                    name={stoolDiff > 0 ? 'arrow-up' : 'arrow-down'}
-                    size={10}
-                    color={stoolDiff > 0 ? colors.safe : colors.danger}
-                  />
-                  <Text style={[typography.caption, { color: stoolDiff > 0 ? colors.safe : colors.danger, fontWeight: '600' }]}>
-                    {Math.abs(stoolDiff)}
-                  </Text>
-                </View>
-              )}
             </View>
-
-            {/* Symptoms */}
-            {hasSymptoms ? (
-              <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
-                {entry.stats.itchCount > 0 && (
-                  <View style={styles.symptomTag}>
-                    <Text style={styles.symptomTagText}>🐾 Itching {entry.stats.itchCount}x</Text>
-                  </View>
-                )}
-                {entry.stats.vomitCount > 0 && (
-                  <View style={[styles.symptomTag, { backgroundColor: colors.danger + '12' }]}>
-                    <Text style={[styles.symptomTagText, { color: colors.danger }]}>🤮 Vomiting {entry.stats.vomitCount}x</Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={{ fontSize: 12 }}>✨</Text>
-                <Text style={[typography.caption, { color: colors.safe }]}>No symptoms reported</Text>
-              </View>
-            )}
-          </View>
+            <View style={styles.statRow}>
+              <StatTile
+                emoji={stool.emoji}
+                label="Stool"
+                value={`Usually ${stool.label}`}
+                color={stool.color}
+                tint={stool.color + '18'}
+              />
+              <StatTile
+                emoji="🐾"
+                label="Itching"
+                value={itchOn ? `${entry.stats.itchCount} ${dayWord(entry.stats.itchCount)}` : 'None'}
+                color={itchOn ? '#B8860B' : colors.safe}
+                tint={itchOn ? colors.caution + '28' : colors.safe + '14'}
+              />
+              <StatTile
+                emoji={vomitOn ? '🤮' : '✨'}
+                label="Vomiting"
+                value={vomitOn ? `${entry.stats.vomitCount} ${dayWord(entry.stats.vomitCount)}` : 'None'}
+                color={vomitOn ? colors.danger : colors.safe}
+                tint={vomitOn ? colors.danger + '18' : colors.safe + '14'}
+              />
+            </View>
+          </>
         ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs }}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
-            <Text style={[typography.bodySmall, { color: colors.textSecondary, fontStyle: 'italic' }]}>
-              {entry.daysOnFood <= 3 ? 'Keep checking in to see stats!' : 'No check-in data for this period'}
-            </Text>
-          </View>
-        )}
-
-        {entry.isCurrent && (
-          <View style={styles.currentBadge}>
-            <Text style={[typography.labelSmall, { color: colors.primary }]}>Current</Text>
+          <View style={styles.emptyCheckins}>
+            <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.emptyCheckinsText}>No check-ins on this food yet</Text>
           </View>
         )}
       </View>
@@ -154,6 +186,7 @@ export default function PassportScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [insights, setInsights] = useState<InsightData[]>([]);
+  const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -172,7 +205,9 @@ export default function PassportScreen() {
     }, [petId])
   );
 
-  const filteredTimeline = timeline.filter(e => e.daysOnFood > 0);
+  const filteredTimeline = [...timeline]
+    .filter(e => e.isCurrent || e.daysOnFood > 0)
+    .reverse();
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -180,7 +215,7 @@ export default function PassportScreen() {
         <Pressable onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>Nutrition Passport</Text>
+        <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>Food history</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -195,7 +230,7 @@ export default function PassportScreen() {
         >
           {/* Pet Name */}
           <Text style={[typography.displaySmall, { color: colors.textPrimary }]}>
-            📊 {petName || 'Pet'}'s Journey
+            {petName || 'Pet'}'s food history
           </Text>
 
           {/* Timeline */}
@@ -242,8 +277,8 @@ export default function PassportScreen() {
                 })()
               )}
 
-              {filteredTimeline.map((entry, i) => (
-                <TimelineCard key={entry.id} entry={entry} prevEntry={i < filteredTimeline.length - 1 ? filteredTimeline[i + 1] : undefined} />
+              {filteredTimeline.map((entry) => (
+                <TimelineCard key={entry.id} entry={entry} onPressImage={setZoomImageUri} />
               ))}
             </View>
           ) : (
@@ -275,6 +310,7 @@ export default function PassportScreen() {
           )}
         </ScrollView>
       )}
+      <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
     </View>
   );
 }
@@ -295,37 +331,93 @@ const styles = StyleSheet.create({
   timelineContent: {
     flex: 1,
     backgroundColor: colors.white,
-    borderRadius: radius.medium,
+    borderRadius: radius.large,
     padding: spacing.md,
-    gap: spacing.xs,
+    gap: spacing.sm,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
-  timelineStats: {
+  timelineContentCurrent: {
+    borderWidth: 1,
+    borderColor: colors.primary + '33',
+  },
+  titleRow: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.xxs,
+    alignItems: 'flex-start',
+    gap: spacing.sm,
   },
-  timelineStat: {
-    fontSize: 12,
-    color: colors.textSecondary,
+  productImage: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.medium,
+    backgroundColor: colors.lightGray,
   },
-  symptomTag: {
+  productImageFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  productName: { ...typography.titleMedium, color: colors.textPrimary },
+  brandName: { ...typography.labelSmall, color: colors.textSecondary, marginTop: 2, letterSpacing: 0.2 },
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.caution + '15',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  dateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primary + '12',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+  },
+  dateChipText: { ...typography.labelMedium, fontWeight: '600', color: colors.primary },
+  daysChip: {
+    backgroundColor: colors.lightGray,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+  },
+  daysChipText: { ...typography.labelMedium, fontWeight: '600', color: colors.textPrimary },
+  checkinChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.lightGray,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+  },
+  checkinChipText: { ...typography.labelLarge, color: colors.textPrimary },
+  statRow: { flexDirection: 'row', gap: spacing.xs },
+  statTile: {
+    flex: 1,
+    borderRadius: radius.medium,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.small,
+    paddingVertical: 10,
+    gap: 2,
   },
-  symptomTagText: {
-    ...typography.caption,
-    fontWeight: '500',
-    color: '#B8860B',
+  statEmoji: { fontSize: 16, marginBottom: 2 },
+  statLabel: { ...typography.labelSmall, color: colors.textSecondary },
+  statValue: { ...typography.labelMedium, fontWeight: '700' },
+  emptyCheckins: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.lightGray,
+    borderRadius: radius.medium,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
   },
+  emptyCheckinsText: { ...typography.labelMedium, color: colors.textSecondary, flex: 1 },
   comparisonBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -336,13 +428,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   currentBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primary + '1A',
+    backgroundColor: colors.primary,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: radius.full,
-    marginTop: spacing.xxs,
   },
+  currentBadgeText: { ...typography.labelSmall, fontWeight: '700', color: colors.white },
   insightCard: {
     backgroundColor: colors.white,
     borderRadius: radius.medium,

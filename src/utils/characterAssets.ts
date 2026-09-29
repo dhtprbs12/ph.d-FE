@@ -44,6 +44,10 @@ const ITEM_LAYERS: Record<string, ImageSourcePropType> = {
   bg_yosemite: require('../../assets/character/items/yosemite.jpg'),
   bg_harvard: require('../../assets/character/items/harvard_campus.jpg'),
   bg_dodgers: require('../../assets/character/items/dodgers_stadium.jpg'),
+  bg_beverly: require('../../assets/character/items/beverly.jpg'),
+  bg_cat_world: require('../../assets/character/items/cat_world.jpg'),
+  bg_liberty: require('../../assets/character/items/liberty.jpg'),
+  bg_vet: require('../../assets/character/items/vet.jpg'),
 };
 
 const ITEM_THUMBS: Record<string, ImageSourcePropType> = {
@@ -86,6 +90,10 @@ const ITEM_THUMBS: Record<string, ImageSourcePropType> = {
   bg_yosemite: require('../../assets/character/thumbs/yosemite_thumb.png'),
   bg_harvard: require('../../assets/character/thumbs/harvard_campus_thumb.png'),
   bg_dodgers: require('../../assets/character/thumbs/dodgers_stadium_thumb.png'),
+  bg_beverly: require('../../assets/character/thumbs/beverly_thumb.png'),
+  bg_cat_world: require('../../assets/character/thumbs/cat_world_thumb.png'),
+  bg_liberty: require('../../assets/character/thumbs/liberty_thumb.png'),
+  bg_vet: require('../../assets/character/thumbs/vet_thumb.png'),
 };
 
 export function getBaseCharacter(type: string): ImageSourcePropType {

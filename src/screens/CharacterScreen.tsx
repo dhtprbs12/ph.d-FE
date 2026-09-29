@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -32,7 +31,6 @@ const CATEGORIES: { key: SlotName; label: string; emoji: string }[] = [
 
 export default function CharacterScreen() {
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const navigation = useNavigation();
   const { selectedPet } = useApp();
   const petName = selectedPet?.name;
@@ -215,9 +213,9 @@ export default function CharacterScreen() {
         {(() => {
           const bgLayer = localEquipped.background ? getItemLayer(localEquipped.background.assetKey) : null;
           const hasBg = !!bgLayer;
-          const sceneW = hasBg ? windowWidth - spacing.md * 4 : 220;
-          const sceneH = hasBg ? 240 : 220;
-          const charSize = hasBg ? Math.round(sceneH * 0.58) : 220;
+          const sceneW = 220;
+          const sceneH = 220;
+          const charSize = hasBg ? Math.round(sceneW * 0.62) : 220;
           return (
             <View style={[styles.characterContainer, { width: sceneW, height: sceneH, borderRadius: hasBg ? radius.large : 0 }]}>
               {bgLayer && (
