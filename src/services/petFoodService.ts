@@ -6,6 +6,7 @@ export interface CurrentFood {
   scanId: string | null;
   productName: string;
   brand: string | null;
+  manufacturer: string | null;
   imageUrl: string | null;
   barcode: string | null;
   startedAt: string;

@@ -355,8 +355,7 @@ export default function HistoryScreen() {
   const loadHistory = useCallback(async () => {
     try {
       const items = await scanService.getHistory({
-        petName: filterPet?.name,
-        petType: filterPet?.pet_type,
+        ...(filterPetId ? { petId: filterPetId } : {}),
         limit: 50,
         offset: 0,
       });
@@ -366,7 +365,7 @@ export default function HistoryScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [filterPet]);
+  }, [filterPetId]);
 
   useEffect(() => {
     setIsLoading(true);

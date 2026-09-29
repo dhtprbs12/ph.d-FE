@@ -119,8 +119,7 @@ export async function foodCheck(
 }
 
 export interface ScanHistoryParams {
-  petName?: string;
-  petType?: string;
+  petId?: string;
   limit: number;
   offset: number;
 }

@@ -131,15 +131,12 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
     <View style={[styles.card, shadows.card]}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.title}>Nom Nom Notes</Text>
-          {streak && streak.currentStreak > 0 && (
-            <View style={styles.streakBadge}>
-              <Ionicons name="flame" size={14} color={colors.warning} />
-              <Text style={styles.streakText}>{streak.currentStreak} day streak</Text>
-            </View>
-          )}
-        </View>
+        <Text style={styles.title}>Nom Nom Notes</Text>
+        {streak && streak.currentStreak > 0 && (
+          <Text style={styles.streakText}>
+            {streak.currentStreak} {streak.currentStreak === 1 ? 'day' : 'days'} in a row
+          </Text>
+        )}
       </View>
 
       {/* Month Nav */}
@@ -283,29 +280,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
   },
   title: {
     ...typography.titleLarge,
     color: colors.textPrimary,
-  },
-  streakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(244,162,97,0.12)',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    gap: 4,
+    flexShrink: 1,
   },
   streakText: {
-    ...typography.labelSmall,
-    color: colors.warning,
+    ...typography.labelLarge,
+    color: colors.primary,
   },
   monthNav: {
     flexDirection: 'row',

@@ -205,7 +205,7 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
       </Pressable>
       <View style={styles.gamBottomRow}>
         <View style={styles.gamLevelBadge}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Lv.{summary.scanLevel.currentLevel}</Text>
+          <Text style={[typography.labelLarge, { color: colors.primary }]}>Lv.{summary.scanLevel.currentLevel}</Text>
         </View>
         <Pressable
           onPress={() => setEarnVisible(true)}
@@ -214,19 +214,11 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
           accessibilityRole="button"
           accessibilityLabel="How to earn tokens"
         >
-          <Text style={{ fontSize: 14 }}>🦴</Text>
+          <Text style={typography.labelLarge}>🦴</Text>
           <Text style={[typography.labelLarge, { color: colors.accent }]}>
             {summary.tokens.balance}
           </Text>
         </Pressable>
-        {summary.streak.currentStreak > 0 && (
-          <View style={styles.gamStreakBadge}>
-            <Text style={{ fontSize: 14 }}>🔥</Text>
-            <Text style={[typography.labelMedium, { color: colors.danger }]}>
-              {summary.streak.currentStreak}d
-            </Text>
-          </View>
-        )}
       </View>
     </View>
     <TokenEarnSheet visible={earnVisible} onClose={() => setEarnVisible(false)} />
@@ -381,6 +373,11 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
               <Text style={[typography.labelLarge, { color: colors.textPrimary }]} numberOfLines={1}>
                 {toTitleCase(currentFood.productName)}
               </Text>
+              {currentFood.manufacturer ? (
+                <Text style={[typography.labelMedium, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {toTitleCase(currentFood.manufacturer)}
+                </Text>
+              ) : null}
               <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
                 {pet.name} · Day {currentFood.daysOnFood}
               </Text>
@@ -1606,7 +1603,7 @@ const styles = StyleSheet.create({
   gamLevelBadge: {
     backgroundColor: colors.primary + '1A',
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: radius.full,
   },
   gamBottomRow: {
@@ -1628,15 +1625,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: colors.accent + '1A',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-  },
-  gamStreakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.danger + '1A',
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.full,

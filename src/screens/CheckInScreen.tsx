@@ -45,6 +45,7 @@ export default function CheckInScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const [currentFoodName, setCurrentFoodName] = useState<string | undefined>(initialFoodName);
+  const [currentFoodManufacturer, setCurrentFoodManufacturer] = useState<string | null>(null);
   const [currentFoodImage, setCurrentFoodImage] = useState<string | undefined>(foodImage);
   const [showFoodChange, setShowFoodChange] = useState(false);
   const [pendingFood, setPendingFood] = useState<FoodSelection | null>(null);
@@ -62,6 +63,7 @@ export default function CheckInScreen() {
       petFoodService.getCurrentFood(petId).then(food => {
         if (food) {
           setCurrentFoodName(food.productName);
+          setCurrentFoodManufacturer(food.manufacturer);
           setCurrentFoodImage(food.imageUrl || undefined);
         }
       }).catch(console.warn);
@@ -104,7 +106,11 @@ export default function CheckInScreen() {
         brand: food.brand,
       });
       setCurrentFoodName(food.productName);
+      setCurrentFoodManufacturer(null);
       setCurrentFoodImage(food.imageUrl || undefined);
+      petFoodService.getCurrentFood(petId).then(next => {
+        if (next) setCurrentFoodManufacturer(next.manufacturer);
+      }).catch(() => {});
       setShowFoodChange(false);
       setPendingFood(null);
     } catch (e) {
@@ -204,9 +210,16 @@ export default function CheckInScreen() {
                     <Ionicons name="nutrition" size={22} color={colors.textSecondary} />
                   </View>
                 )}
-                <Text style={[typography.bodyMedium, { color: colors.textPrimary, fontWeight: '600', flex: 1 }]}>
-                  {toTitleCase(currentFoodName)}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.bodyMedium, { color: colors.textPrimary, fontWeight: '600' }]} numberOfLines={2}>
+                    {toTitleCase(currentFoodName)}
+                  </Text>
+                  {currentFoodManufacturer ? (
+                    <Text style={[typography.labelMedium, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {toTitleCase(currentFoodManufacturer)}
+                    </Text>
+                  ) : null}
+                </View>
                 <Pressable onPress={() => setShowFoodChange(!showFoodChange)}>
                   <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600' }}>
                     {showFoodChange ? 'Cancel' : 'Switch Food'}
