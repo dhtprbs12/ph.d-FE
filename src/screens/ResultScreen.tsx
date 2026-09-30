@@ -49,6 +49,9 @@ import { buildImageUrl, buildThumbUrl, formatLifeStage, formatProductTitleText, 
 import { useToast } from '../components/common/Toast';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 
+const SCORE_OPINION_LINE =
+  'An opinion from the ingredient list, not a safety certification.';
+
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -299,6 +302,10 @@ const ResultSharePngCard = React.forwardRef<
             ) : null}
           </View>
 
+          <Text style={sharePngStyles.opinionLine} allowFontScaling={false}>
+            {SCORE_OPINION_LINE}
+          </Text>
+
           <View style={sharePngStyles.footBar}>
             <View style={sharePngStyles.footLogoMat} collapsable={false}>
               <Image
@@ -447,6 +454,15 @@ const sharePngStyles = StyleSheet.create({
     gap: 8,
   },
   bulletAlert: { fontSize: 12, lineHeight: 17, color: colors.textPrimary, fontWeight: '500' },
+  opinionLine: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
   footBar: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -915,6 +931,10 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
         )}
       </View>
 
+      {scoreStatus === 'ready' ? (
+        <Text style={st.scoreOpinion}>{SCORE_OPINION_LINE}</Text>
+      ) : null}
+
       <Modal
         visible={imageZoomOpen && canZoom}
         animationType="fade"
@@ -1353,7 +1373,7 @@ function TrustDisclaimerFooter({
           <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary }}>DISCLAIMER</Text>
         </View>
         <Text style={st.methodText}>
-          Ingredients shown here can be missing, misspelled, split, or out of order, and may not match the package. Formulas can also differ by bag size, region, or a later change. This is not veterinary advice or a safety certification, and PHD is not responsible for decisions based on this result.
+          Ingredients shown here can be missing, misspelled, split, or out of order, and may not match the package. Formulas can also differ by bag size, region, or a later change. Check the package before you buy. This is not veterinary advice or a safety certification. PHD is not affiliated with the brand, and is not responsible for decisions based on this result.
         </Text>
       </View>
     </View>
@@ -2083,6 +2103,14 @@ const st = StyleSheet.create({
   gradeRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: spacing.sm, marginTop: spacing.sm,
+  },
+  scoreOpinion: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    lineHeight: 18,
   },
   statsStrip: {
     flexDirection: 'row', alignItems: 'center',
