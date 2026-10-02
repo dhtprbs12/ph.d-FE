@@ -7,11 +7,12 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, radius, typography } from '../theme';
+import { colors, spacing, radius, typography, shadows } from '../theme';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { buildImageUrl, buildThumbUrl } from '../utils/helpers';
@@ -154,6 +155,7 @@ function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressIm
 function InsightCard({ insight, onPress }: { insight: InsightData; onPress: () => void }) {
   const typeColors = {
     itch_correlation: '#E74C3C',
+    vomit_correlation: colors.danger,
     stool_negative: '#E67E22',
     stool_positive: colors.safe,
     mixed: colors.textSecondary,
@@ -187,6 +189,7 @@ export default function PassportScreen() {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [insights, setInsights] = useState<InsightData[]>([]);
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
+  const [howItWorksVisible, setHowItWorksVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -229,9 +232,20 @@ export default function PassportScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Pet Name */}
-          <Text style={[typography.displaySmall, { color: colors.textPrimary }]}>
-            {petName || 'Pet'}'s food history
-          </Text>
+          <View>
+            <Text style={[typography.displaySmall, { color: colors.textPrimary }]}>
+              {petName || 'Pet'}'s food history
+            </Text>
+            <Pressable
+              onPress={() => setHowItWorksVisible(true)}
+              style={({ pressed }) => [styles.howItWorksLink, pressed && { opacity: 0.75 }]}
+              accessibilityRole="button"
+              accessibilityLabel="How food history works"
+            >
+              <Text style={styles.howItWorksLinkText}>How this works</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+            </Pressable>
+          </View>
 
           {/* Timeline */}
           {filteredTimeline.length > 0 ? (
@@ -251,15 +265,19 @@ export default function PassportScreen() {
                   const stoolWorsened = currStool !== null && prevStool !== null && currStool < prevStool;
                   const itchImproved = curr.stats.itchCount < prev.stats.itchCount;
                   const itchWorsened = curr.stats.itchCount > prev.stats.itchCount;
+                  const vomitImproved = curr.stats.vomitCount < prev.stats.vomitCount;
+                  const vomitWorsened = curr.stats.vomitCount > prev.stats.vomitCount;
 
                   const changes: string[] = [];
                   if (stoolImproved) changes.push('Stool improved');
                   if (stoolWorsened) changes.push('Stool worsened');
                   if (itchImproved) changes.push('Less itching');
                   if (itchWorsened) changes.push('More itching');
+                  if (vomitImproved) changes.push('Less vomiting');
+                  if (vomitWorsened) changes.push('More vomiting');
 
                   if (changes.length === 0) return null;
-                  const isPositive = stoolImproved || itchImproved;
+                  const isPositive = stoolImproved || itchImproved || vomitImproved;
 
                   return (
                     <View style={[styles.comparisonBanner, { backgroundColor: isPositive ? colors.safe + '10' : colors.warning + '10', borderColor: isPositive ? colors.safe + '30' : colors.warning + '30' }]}>
@@ -311,6 +329,55 @@ export default function PassportScreen() {
         </ScrollView>
       )}
       <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
+      <Modal
+        visible={howItWorksVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setHowItWorksVisible(false)}
+      >
+        <View style={styles.howSheetRoot} pointerEvents="box-none">
+          <Pressable
+            style={styles.howSheetBackdrop}
+            onPress={() => setHowItWorksVisible(false)}
+            accessibilityLabel="Close food history explanation"
+          />
+          <View style={styles.howSheet}>
+            <View style={styles.howSheetHandle} />
+            <Text style={styles.howSheetTitle}>How food history works</Text>
+            <ScrollView style={styles.howSheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
+              <Text style={styles.howBullet}>
+                • <Text style={styles.howBulletBold}>Your food story:</Text> See every food your pet has been on, and how
+                their stool, itching, and vomiting looked during that time.
+              </Text>
+              <Text style={styles.howBullet}>
+                • <Text style={styles.howBulletBold}>After a switch:</Text> See whether stool, itching, or vomiting got
+                better or worse on the current food compared with the one right before it.
+              </Text>
+              <Text style={styles.howBullet}>
+                • <Text style={styles.howBulletBold}>Ingredient patterns:</Text> See which proteins or grains may be
+                affecting your pet's stool, itching, or vomiting.
+              </Text>
+              <Text style={styles.howBullet}>
+                • <Text style={styles.howBulletBold}>Check in at least 3 times on each food:</Text> One or two days can't
+                tell a real pattern from an off day. Once two of your foods each have three check-ins, we can start
+                comparing their ingredients.
+              </Text>
+              <Text style={styles.howBullet}>
+                • <Text style={styles.howBulletBold}>A pattern, not a diagnosis:</Text> Use this to notice what to ask
+                your veterinarian about. It does not prove an ingredient caused a symptom.
+              </Text>
+            </ScrollView>
+            <Pressable
+              onPress={() => setHowItWorksVisible(false)}
+              style={({ pressed }) => [styles.howDoneBtn, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+            >
+              <Text style={styles.howDoneText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -444,6 +511,76 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
+  },
+  howItWorksLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+  },
+  howItWorksLinkText: {
+    ...typography.labelMedium,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  howSheetRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  howSheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  howSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radius.large,
+    borderTopRightRadius: radius.large,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    maxHeight: '78%',
+    ...shadows.card,
+  },
+  howSheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.divider,
+    marginBottom: spacing.md,
+  },
+  howSheetTitle: {
+    ...typography.titleMedium,
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  howSheetScroll: {
+    maxHeight: 360,
+  },
+  howBullet: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: spacing.md,
+  },
+  howBulletBold: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  howDoneBtn: {
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: radius.medium,
+    minHeight: 48,
+  },
+  howDoneText: {
+    ...typography.labelLarge,
+    color: colors.white,
+    fontWeight: '700',
   },
   emptyCard: {
     alignItems: 'center',

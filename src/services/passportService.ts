@@ -21,11 +21,11 @@ export interface TimelineEntry {
 export interface InsightData {
   ingredient: string;
   label: string;
-  type: 'itch_correlation' | 'stool_negative' | 'stool_positive' | 'mixed';
+  type: 'itch_correlation' | 'vomit_correlation' | 'stool_negative' | 'stool_positive' | 'mixed';
   summary: string;
   data: {
-    withIngredient: { foods: string[]; avgItchRate: number; avgStoolScore: number };
-    withoutIngredient: { foods: string[]; avgItchRate: number; avgStoolScore: number };
+    withIngredient: { foods: { name: string; isCurrent: boolean }[]; avgItchRate: number; avgVomitRate: number; avgStoolScore: number };
+    withoutIngredient: { foods: { name: string; isCurrent: boolean }[]; avgItchRate: number; avgVomitRate: number; avgStoolScore: number };
   };
   disclaimer: string;
 }

@@ -41,7 +41,7 @@ export default function InsightDetailScreen() {
         <View style={{ alignItems: 'center', gap: spacing.sm }}>
           <Text style={{ fontSize: 48 }}>💡</Text>
           <Text style={[typography.displaySmall, { color: colors.textPrimary, textAlign: 'center' }]}>
-            {insight.label} Connection
+            {insight.label}
           </Text>
           <Text style={[typography.bodyMedium, { color: colors.textSecondary, textAlign: 'center' }]}>
             {insight.summary}
@@ -51,11 +51,18 @@ export default function InsightDetailScreen() {
         {/* With ingredient */}
         <View style={styles.comparisonCard}>
           <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>
-            ✅ With {insight.label}
+            Foods with {insight.label}
           </Text>
           <View style={styles.comparisonFoods}>
             {insight.data.withIngredient.foods.map((f, i) => (
-              <Text key={i} style={[typography.bodySmall, { color: colors.textSecondary }]}>• {f}</Text>
+              <View key={i} style={styles.foodRow}>
+                <Text style={[typography.bodySmall, styles.foodName]}>• {f.name}</Text>
+                {f.isCurrent ? (
+                  <View style={styles.currentBadge}>
+                    <Text style={styles.currentBadgeText}>Current</Text>
+                  </View>
+                ) : null}
+              </View>
             ))}
           </View>
           <View style={styles.comparisonStats}>
@@ -67,17 +74,28 @@ export default function InsightDetailScreen() {
               <Text style={styles.statValue}>{insight.data.withIngredient.avgItchRate}%</Text>
               <Text style={styles.statLabel}>Itch Rate</Text>
             </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{insight.data.withIngredient.avgVomitRate}%</Text>
+              <Text style={styles.statLabel}>Vomit Rate</Text>
+            </View>
           </View>
         </View>
 
         {/* Without ingredient */}
         <View style={styles.comparisonCard}>
           <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>
-            ❌ Without {insight.label}
+            Foods without {insight.label}
           </Text>
           <View style={styles.comparisonFoods}>
             {insight.data.withoutIngredient.foods.map((f, i) => (
-              <Text key={i} style={[typography.bodySmall, { color: colors.textSecondary }]}>• {f}</Text>
+              <View key={i} style={styles.foodRow}>
+                <Text style={[typography.bodySmall, styles.foodName]}>• {f.name}</Text>
+                {f.isCurrent ? (
+                  <View style={styles.currentBadge}>
+                    <Text style={styles.currentBadgeText}>Current</Text>
+                  </View>
+                ) : null}
+              </View>
             ))}
           </View>
           <View style={styles.comparisonStats}>
@@ -88,6 +106,10 @@ export default function InsightDetailScreen() {
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{insight.data.withoutIngredient.avgItchRate}%</Text>
               <Text style={styles.statLabel}>Itch Rate</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{insight.data.withoutIngredient.avgVomitRate}%</Text>
+              <Text style={styles.statLabel}>Vomit Rate</Text>
             </View>
           </View>
         </View>
@@ -126,11 +148,31 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   comparisonFoods: {
-    gap: spacing.xxs,
+    gap: spacing.xs,
+  },
+  foodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  foodName: {
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  currentBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  currentBadgeText: {
+    ...typography.labelSmall,
+    fontWeight: '700',
+    color: colors.white,
   },
   comparisonStats: {
     flexDirection: 'row',
-    gap: spacing.xl,
+    justifyContent: 'space-between',
     marginTop: spacing.sm,
   },
   statItem: {
