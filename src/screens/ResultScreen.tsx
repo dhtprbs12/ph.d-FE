@@ -1171,7 +1171,7 @@ function IngredientDetailRow({ ing }: { ing: IngredientAnalysis }) {
 /* ---------- Alternatives Section ---------- */
 function AlternativesSection({
   alternatives, isLoading, onTap,
-}: { alternatives: AlternativeProduct[]; isLoading: boolean; onTap: (id: string) => void }) {
+}: { alternatives: AlternativeProduct[]; isLoading: boolean; onTap: (alt: AlternativeProduct) => void }) {
   return (
     <View style={st.altSection}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
@@ -1188,7 +1188,7 @@ function AlternativesSection({
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             {alternatives.map(alt => (
-              <AltCard key={alt.product.id} alt={alt} onPress={() => onTap(alt.product.id)} />
+              <AltCard key={alt.product.id} alt={alt} onPress={() => onTap(alt)} />
             ))}
           </View>
         </ScrollView>
@@ -1604,12 +1604,16 @@ export function ResultScreen() {
     return () => { cancelled = true; };
   }, [productId, selectedPet]);
 
-  const onAlternativeTap = useCallback(async (pid: string) => {
-    try {
-      const res = await productService.analyzeProduct(pid, petParams);
-      navigation.replace('Result', { scanResult: res });
-    } catch (e) { console.warn(e); }
-  }, [navigation, petParams]);
+  const onAlternativeTap = useCallback((alt: AlternativeProduct) => {
+    navigation.push('Result', {
+      productId: alt.product.id,
+      product: alt.product,
+      preloadedScore: {
+        score: alt.score ?? 0,
+        grade: alt.grade,
+      },
+    });
+  }, [navigation]);
 
   const preloadedScanResult = useMemo((): ScanResult => {
     const withHistoryImage = (r: ScanResult): ScanResult => {
