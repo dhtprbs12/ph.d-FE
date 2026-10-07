@@ -158,7 +158,7 @@ function InsightCard({ insight, onPress }: { insight: InsightData; onPress: () =
     vomit_correlation: colors.danger,
     stool_negative: '#E67E22',
     stool_positive: colors.safe,
-    mixed: colors.textSecondary,
+    mixed: colors.danger,
   };
 
   return (

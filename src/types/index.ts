@@ -123,6 +123,7 @@ export interface ProductFilterParams {
   withLamb?: boolean;
   withTurkey?: boolean;
   withDuck?: boolean;
+  withOther?: boolean;
   healthConditions?: unknown;
   minScore?: number;
   q?: string;

@@ -43,7 +43,7 @@ type PetTypeFilter = 'dog' | 'cat' | '';
 type FoodType = '' | 'dry_food' | 'wet_food' | 'treats' | 'supplement';
 type LifeStage = '' | 'puppy' | 'kitten' | 'adult' | 'senior';
 type Diet = '' | 'grain_free' | 'with_grains';
-type Protein = '' | 'chicken' | 'beef' | 'fish' | 'lamb' | 'turkey' | 'duck';
+type Protein = '' | 'chicken' | 'beef' | 'fish' | 'lamb' | 'turkey' | 'duck' | 'other';
 
 interface ChipDef<T> { value: T; label: string; emoji: string }
 
@@ -94,6 +94,7 @@ const PROTEIN_CHIPS: ChipDef<Protein>[] = [
   { value: 'lamb', label: 'Lamb', emoji: '🐑' },
   { value: 'turkey', label: 'Turkey', emoji: '🦃' },
   { value: 'duck', label: 'Duck', emoji: '🦆' },
+  { value: 'other', label: 'Other', emoji: '🍖' },
 ];
 
 
@@ -113,6 +114,7 @@ function buildFilterParams(
   if (protein === 'lamb') params.withLamb = true;
   if (protein === 'turkey') params.withTurkey = true;
   if (protein === 'duck') params.withDuck = true;
+  if (protein === 'other') params.withOther = true;
   return params;
 }
 
