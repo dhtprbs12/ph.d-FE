@@ -159,6 +159,7 @@ export interface Product {
   manufacturer?: string;
   brand?: string;
   product_type?: string;
+  diet_tags?: string | null;
   texture?: string;
   target_pet_type?: string;
   target_life_stage?: string;
@@ -190,6 +191,7 @@ export interface ScanResult {
     image_url?: string;
     productType?: string;
     product_type?: string;
+    diet_tags?: string | null;
     target_life_stage?: string;
     lifeStage?: string;
   };

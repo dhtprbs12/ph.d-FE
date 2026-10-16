@@ -90,6 +90,20 @@ function productTypePillColor(type?: string): string {
   }
 }
 
+/** Grain-free or With grains. Limited ingredient stays off this row. */
+function dietGrainPill(tags?: string | null): { label: string; color: string } | null {
+  if (!tags) return null;
+  const set = new Set(
+    String(tags)
+      .split(/[,+]/)
+      .map(s => s.trim().toLowerCase().replace(/\s+/g, '_'))
+      .filter(Boolean)
+  );
+  if (set.has('grain_free') && !set.has('with_grains')) return { label: 'Grain-free', color: '#2E7D32' };
+  if (set.has('with_grains') && !set.has('grain_free')) return { label: 'With grains', color: '#8D6E63' };
+  return null;
+}
+
 /** Off-screen share card width (taller share story feel via content + padding; height is intrinsic). */
 const SHARE_PNG_W = 400;
 
@@ -648,6 +662,7 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
   const img = imgFailed ? null : headerImg;
   const pType = product?.productType ?? product?.product_type;
   const pillColor = productTypePillColor(pType);
+  const dietPill = dietGrainPill(product?.diet_tags);
 
   const recoverFromError = useCallback(() => {
     if (suppressProductImage) return;
@@ -749,9 +764,18 @@ const ScoreHeaderCard = React.memo(function ScoreHeaderCard({
         {formatProductTitleText(product?.name ?? scanResult.extracted?.productName ?? 'Product')}
       </Text>
 
-      {pType && (
-        <View style={[st.typePill, { backgroundColor: pillColor + '1F', alignSelf: 'center', marginTop: spacing.xs }]}>
-          <Text style={[st.typePillText, { color: pillColor }]}>{productTypePillLabel(pType)}</Text>
+      {(pType || dietPill) && (
+        <View style={st.pillRow}>
+          {pType ? (
+            <View style={[st.typePill, { backgroundColor: pillColor + '1F' }]}>
+              <Text style={[st.typePillText, { color: pillColor }]}>{productTypePillLabel(pType)}</Text>
+            </View>
+          ) : null}
+          {dietPill ? (
+            <View style={[st.typePill, { backgroundColor: dietPill.color + '1F' }]}>
+              <Text style={[st.typePillText, { color: dietPill.color }]}>{dietPill.label}</Text>
+            </View>
+          ) : null}
         </View>
       )}
 
@@ -1117,7 +1141,7 @@ const ConditionWarningsCard = React.memo(function ConditionWarningsCard({
 const IngredientPillsCard = React.memo(function IngredientPillsCard({
   ingredients,
 }: { ingredients: IngredientAnalysis[] }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpanded(e => !e);
@@ -1465,6 +1489,7 @@ export function ResultScreen() {
     image_url: paramProduct.image_url,
     productType: paramProduct.product_type,
     product_type: paramProduct.product_type,
+    diet_tags: paramProduct.diet_tags,
     target_life_stage: paramProduct.target_life_stage,
   } : undefined);
 
@@ -1631,7 +1656,11 @@ export function ResultScreen() {
     };
 
     if (scanResult) {
-      return withHistoryImage(scanResult);
+      const tags = scanResult.product?.diet_tags ?? paramProduct?.diet_tags;
+      const withTags = scanResult.product && tags && !scanResult.product.diet_tags
+        ? { ...scanResult, product: { ...scanResult.product, diet_tags: tags } }
+        : scanResult;
+      return withHistoryImage(withTags);
     }
     let productForSkeleton: ScanResult['product'] = displayProduct;
     if (displayProduct && historyImageParam) {
@@ -1655,7 +1684,7 @@ export function ResultScreen() {
         petType: selectedPet?.pet_type ?? 'dog',
       },
     };
-  }, [scanResult, displayProduct, displayScore, displayGrade, paramPreloaded, selectedPet, historyImageParam]);
+  }, [scanResult, displayProduct, displayScore, displayGrade, paramPreloaded, paramProduct, selectedPet, historyImageParam]);
 
   const onShare = useCallback(async () => {
     if (!preloadedScanResult?.analysis) return;
@@ -2095,6 +2124,15 @@ const st = StyleSheet.create({
     gap: 6,
     maxWidth: '100%',
     paddingHorizontal: spacing.sm,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: spacing.xs,
   },
   typePill: {
     paddingHorizontal: 8, paddingVertical: 3,
