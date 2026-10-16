@@ -171,6 +171,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        // Check-in and food calls need the server id. The local id is not a pet row.
+        dispatch({ type: 'UPDATE_PET', pet: finalPet, oldId: newPet.id });
+        if (willBeSelected) {
+          dispatch({ type: 'SET_SELECTED_PET', pet: finalPet });
+          await saveSelectedPetId(finalPet.id);
+        }
+        await savePetsLocally(allPets.map(p => (p.id === newPet.id ? finalPet : p)));
+
         await authenticateAndSync();
       } catch (e) {
         console.warn('Server create failed:', e);
