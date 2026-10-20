@@ -54,6 +54,7 @@ export type HomeStackParamList = {
   FoodCheck: undefined;
   AddPet: undefined;
   ProductRegister: { barcode?: string } | undefined;
+  LookupPhotos: { mode: 'search' | 'barcode'; barcode?: string; barcodePhotoUri?: string; email?: string };
   CheckIn: { petId: string; petName?: string; foodName?: string; daysOnFood?: number };
   Character: undefined;
   Passport: { petId: string; petName?: string };
@@ -64,6 +65,7 @@ export type HomeStackParamList = {
 export type HistoryStackParamList = {
   History: undefined;
   Result: ResultParams;
+  AnalysisRequests: undefined;
 };
 
 export type CommunityStackParamList = {

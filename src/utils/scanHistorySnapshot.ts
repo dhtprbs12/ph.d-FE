@@ -22,8 +22,13 @@ export function scanRowToScanResult(
   scan: ScanHistoryDetailRow,
   historyImageUrl?: string
 ): ScanResult {
-  const raw = (scan.analysis ?? {}) as Analysis & { aiInsights?: AIInsights };
-  const { aiInsights, ...analysisRest } = raw;
+  const raw = (scan.analysis ?? {}) as Analysis & {
+    aiInsights?: AIInsights;
+    sourceNote?: string;
+    productName?: string;
+    brand?: string;
+  };
+  const { aiInsights, sourceNote, productName, brand, ...analysisRest } = raw;
   const analysis = analysisRest as Analysis;
 
   const imageUrl =
@@ -40,7 +45,10 @@ export function scanRowToScanResult(
         ...(scan.product_life_stage ? { target_life_stage: scan.product_life_stage } : {}),
         ...(imageUrl ? { image_url: imageUrl } : {}),
       }
-    : undefined;
+    : {
+        name: productName || scan.product_name || 'Pet food',
+        ...((brand || scan.product_brand) ? { brand: brand || scan.product_brand || undefined } : {}),
+      };
 
   return {
     scanId: scan.id,
@@ -57,6 +65,7 @@ export function scanRowToScanResult(
       petType: scan.pet_type,
     },
     ...(product ? { product } : {}),
+    ...(sourceNote ? { sourceNote } : {}),
     extracted: {
       ...(scan.product_name ? { productName: scan.product_name } : {}),
       ...(scan.product_brand ? { brand: scan.product_brand } : {}),

@@ -12,6 +12,7 @@ import api from '../services/api';
 import petFoodService from '../services/petFoodService';
 import { toTitleCase } from '../utils/helpers';
 import { useToast } from '../components/common/Toast';
+import { lookupByBarcode, ackLookup } from '../services/lookupService';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -24,6 +25,8 @@ export function QuickScanScreen() {
   const foodPetId = route.params?.petId;
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
+  const cameraRef = useRef<CameraView>(null);
+  const [barcodePhotoUri, setBarcodePhotoUri] = useState<string | null>(null);
   const [looking, setLooking] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [foodSetInfo, setFoodSetInfo] = useState<{ name: string } | null>(null);
@@ -37,6 +40,14 @@ export function QuickScanScreen() {
   const handleBarCodeScanned = useCallback(async ({ data }: { data: string }) => {
     if (scannedRef.current || !selectedPet) return;
     scannedRef.current = true;
+    let photoUri: string | null = null;
+    try {
+      const shot = await cameraRef.current?.takePictureAsync({ quality: 0.6 });
+      photoUri = shot?.uri || null;
+      if (photoUri) setBarcodePhotoUri(photoUri);
+    } catch {
+      photoUri = null;
+    }
     setLooking(true);
     setNotFound(false);
     setScannedBarcode(data);
@@ -103,6 +114,18 @@ export function QuickScanScreen() {
       }
     } catch (e: any) {
       if (e?.response?.status === 404) {
+        if (mode === 'analyze') {
+          try {
+            const existing = await lookupByBarcode(data);
+            if (existing?.scanResult) {
+              await ackLookup(existing.id);
+              navigation.replace('Result', { scanResult: existing.scanResult });
+              return;
+            }
+          } catch {
+            // A miss still opens the photo flow.
+          }
+        }
         setNotFound(true);
       } else {
         toast.show({ message: 'Something went wrong. Try again.', type: 'error' });
@@ -145,6 +168,7 @@ export function QuickScanScreen() {
       <View style={s.cameraContainer}>
         {!notFound && !looking && (
           <CameraView
+            ref={cameraRef}
             style={s.camera}
             facing="back"
             autofocus="on"
@@ -175,22 +199,28 @@ export function QuickScanScreen() {
             <Ionicons name="search-outline" size={48} color={colors.textSecondary} />
             <Text style={s.notFoundTitle}>Product Not Found</Text>
             <Text style={s.notFoundSub}>
-              This barcode isn't in our database yet.{'\n'}Help us add it and earn tokens!
+              This barcode isn't in our database yet.{'\n'}Photograph the front and the ingredient panel.
             </Text>
             <View style={s.notFoundBtns}>
               <Pressable onPress={retry} style={s.retryBtn}>
                 <Text style={s.retryBtnText}>Scan Again</Text>
               </Pressable>
             </View>
-            <Pressable
-              onPress={() => navigation.replace('ProductRegister', { barcode: scannedBarcode ?? undefined })}
-              style={s.registerBtn}
-            >
-              <Text style={s.registerBtnText}>Register Product</Text>
-              <View style={s.tokenBadge}>
-                <Text style={s.tokenBadgeText}>+🦴20</Text>
-              </View>
-            </Pressable>
+            {mode === 'analyze' ? (
+              <Pressable
+                onPress={() => navigation.replace('LookupPhotos', {
+                  mode: 'barcode',
+                  barcode: scannedBarcode ?? undefined,
+                  barcodePhotoUri: barcodePhotoUri ?? undefined,
+                })}
+                style={s.registerBtn}
+              >
+                <Text style={s.registerBtnText}>Photograph the bag</Text>
+                <View style={s.tokenBadge}>
+                  <Text style={s.tokenBadgeText}>+🦴20</Text>
+                </View>
+              </Pressable>
+            ) : null}
           </View>
         )}
       </View>

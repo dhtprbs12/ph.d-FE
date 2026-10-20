@@ -32,7 +32,7 @@ import type { HistoryStackParamList, HomeStackParamList } from '../navigation/ty
 import * as productService from '../services/productService';
 import * as scanService from '../services/scanService';
 import * as communityService from '../services/communityService';
-import { useApp } from '../context/AppContext';
+import { scanRowToScanResult } from '../utils/scanHistorySnapshot';
 import {
   colors,
   getGradeColor,
@@ -1528,6 +1528,10 @@ export function ResultScreen() {
         let productId = resolvedProductId;
         if (!productId && paramScanId) {
           const scan = await scanService.getScanById(paramScanId);
+          if (!scan.product_id) {
+            if (!cancelled) setScanResult(scanRowToScanResult(scan));
+            return;
+          }
           productId = scan.product_id || undefined;
         }
         if (!productId) throw new Error('Product id missing');
@@ -1864,6 +1868,12 @@ export function ResultScreen() {
             <IngredientPillsCard ingredients={ingredients} />
           </>
         )}
+
+        {preloadedScanResult.sourceNote ? (
+          <Text style={{ ...typography.bodySmall, color: colors.textSecondary, paddingHorizontal: spacing.md }}>
+            {preloadedScanResult.sourceNote}
+          </Text>
+        ) : null}
 
         <AlternativesSection alternatives={alternatives} isLoading={altLoading} onTap={onAlternativeTap} />
 

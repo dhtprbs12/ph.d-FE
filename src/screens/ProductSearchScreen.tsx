@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   type NativeScrollEvent,
@@ -23,6 +24,9 @@ import { colors, getGradeColor, radius, shadows, spacing, typography } from '../
 import type { CachedScore, Product, ProductFilterParams } from '../types';
 
 import { buildImageUrl, buildThumbUrl, formatProductTitleText } from '../utils/helpers';
+import { LookupRequestCard } from '../components/LookupRequestCard';
+import { PushOptInModal, registerPushToken } from '../components/PushOptInModal';
+import { createNameLookup, openAnalysisRequests } from '../services/lookupService';
 
 const PAGE = 20;
 const DEBOUNCE_MS = 600;
@@ -295,6 +299,9 @@ export function ProductSearchScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [askPush, setAskPush] = useState(false);
+  const pendingLookup = useRef<{ brand: string; queryName: string; pastedUrl: string; email: string } | null>(null);
 
   const hasFilters = !!petType || !!foodType || !!lifeStage || !!diet || !!protein || query.length > 0;
 
@@ -445,6 +452,35 @@ export function ProductSearchScreen() {
 
 
   const showEmpty = hasLoadedOnce && !loading && products.length === 0;
+
+  const sendLookup = async (allowPush: boolean) => {
+    const pending = pendingLookup.current;
+    if (!pending || !selectedPet) return;
+    setAskPush(false);
+    setLookupBusy(true);
+    try {
+      if (allowPush) await registerPushToken();
+      await createNameLookup({
+        petId: selectedPet.id,
+        petName: selectedPet.name,
+        petType: selectedPet.pet_type,
+        brand: pending.brand,
+        queryName: pending.queryName,
+        pastedUrl: pending.pastedUrl || undefined,
+        email: pending.email || undefined,
+        filterHints: {
+          lifeStage: lifeStage || undefined,
+          diet: diet || undefined,
+          protein: protein || undefined,
+        },
+      });
+      openAnalysisRequests(navigation);
+    } catch (error: any) {
+      Alert.alert('Could not request this food', error?.message || 'Try again.');
+    } finally {
+      setLookupBusy(false);
+    }
+  };
   const showList = products.length > 0;
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -528,6 +564,17 @@ export function ProductSearchScreen() {
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={st.emptyBody}>Searching...</Text>
           </View>
+        ) : showEmpty && query.trim() ? (
+          <LookupRequestCard
+            petName={selectedPet?.name || 'your pet'}
+            searchQuery={query.trim()}
+            submitting={lookupBusy}
+            onRequest={(input) => {
+              pendingLookup.current = input;
+              setAskPush(true);
+            }}
+            onUploadPhotos={(email) => navigation.navigate('LookupPhotos', { mode: 'search', email })}
+          />
         ) : showEmpty ? (
           <View style={st.emptyCenter}>
             <Ionicons name="search" size={40} color={'rgba(92,107,102,0.5)'} />
@@ -560,6 +607,7 @@ export function ProductSearchScreen() {
           </View>
         ) : null}
       </ScrollView>
+      <PushOptInModal visible={askPush} onAllow={() => sendLookup(true)} onSkip={() => sendLookup(false)} />
     </SafeAreaView>
   );
 }

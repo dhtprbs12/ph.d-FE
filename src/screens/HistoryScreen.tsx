@@ -26,6 +26,7 @@ import * as scanService from '../services/scanService';
 import * as communityService from '../services/communityService';
 import type { SavedProduct } from '../services/communityService';
 import { buildImageUrl, buildThumbUrl, formatDate, formatLifeStage, formatProductTitleText } from '../utils/helpers';
+import { listLookups } from '../services/lookupService';
 
 type Nav = NativeStackNavigationProp<HistoryStackParamList>;
 
@@ -334,6 +335,7 @@ export default function HistoryScreen() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([]);
   const [savedLoading, setSavedLoading] = useState(true);
+  const [pendingLookups, setPendingLookups] = useState(0);
 
   // Auto-sync with global selectedPet (user can still override via filter modal)
   useEffect(() => {
@@ -386,11 +388,13 @@ export default function HistoryScreen() {
 
   useFocusEffect(useCallback(() => {
     void loadSaved();
+    listLookups().then((data) => setPendingLookups(data.pending)).catch(() => {});
   }, [loadSaved]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([loadHistory(), loadSaved()]);
+    listLookups().then((data) => setPendingLookups(data.pending)).catch(() => {});
     setRefreshing(false);
   }, [loadHistory, loadSaved]);
 
@@ -473,6 +477,27 @@ export default function HistoryScreen() {
           <Text style={[styles.tabText, tab === 'saved' && styles.tabTextActive]}>Saved</Text>
         </Pressable>
       </View>
+
+      <Pressable
+        onPress={() => navigation.navigate('AnalysisRequests')}
+        style={{
+          marginHorizontal: spacing.md,
+          marginBottom: spacing.sm,
+          backgroundColor: colors.card,
+          borderRadius: radius.large,
+          padding: spacing.md,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>Analysis requests</Text>
+        {pendingLookups > 0 ? (
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>{pendingLookups}</Text>
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        )}
+      </Pressable>
 
       {tab === 'saved' ? (
         savedLoading ? (

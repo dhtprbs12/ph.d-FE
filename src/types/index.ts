@@ -199,6 +199,8 @@ export interface ScanResult {
   analysis: Analysis;
   aiInsights?: AIInsights;
   pet: { id?: string; name: string; petType: string };
+  /** Shown when the report came from a private lookup. */
+  sourceNote?: string | null;
 }
 
 export interface Analysis {
