@@ -26,11 +26,10 @@ export function QuickScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
   const cameraRef = useRef<CameraView>(null);
-  const [barcodePhotoUri, setBarcodePhotoUri] = useState<string | null>(null);
   const [looking, setLooking] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [missedScan, setMissedScan] = useState<{ barcode: string; photoUri?: string } | null>(null);
   const [foodSetInfo, setFoodSetInfo] = useState<{ name: string } | null>(null);
-  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [pendingSwitch, setPendingSwitch] = useState<{ name: string; productId: string; brand?: string; currentName?: string } | null>(null);
 
   useEffect(() => {
@@ -44,13 +43,11 @@ export function QuickScanScreen() {
     try {
       const shot = await cameraRef.current?.takePictureAsync({ quality: 0.6 });
       photoUri = shot?.uri || null;
-      if (photoUri) setBarcodePhotoUri(photoUri);
     } catch {
       photoUri = null;
     }
     setLooking(true);
     setNotFound(false);
-    setScannedBarcode(data);
 
     try {
       const res = await api.get<any>(`/scan/barcode-lookup`, {
@@ -105,10 +102,11 @@ export function QuickScanScreen() {
         };
         navigation.replace('Result', { scanResult });
       } else if (result?.product) {
-        // Product found but no cached analysis
+        setMissedScan(null);
         setNotFound(true);
         setLooking(false);
       } else {
+        setMissedScan({ barcode: data, photoUri: photoUri ?? undefined });
         setNotFound(true);
         setLooking(false);
       }
@@ -126,6 +124,7 @@ export function QuickScanScreen() {
             // A miss still opens the photo flow.
           }
         }
+        setMissedScan({ barcode: data, photoUri: photoUri ?? undefined });
         setNotFound(true);
       } else {
         toast.show({ message: 'Something went wrong. Try again.', type: 'error' });
@@ -137,6 +136,7 @@ export function QuickScanScreen() {
   const retry = () => {
     scannedRef.current = false;
     setNotFound(false);
+    setMissedScan(null);
     setLooking(false);
   };
 
@@ -171,7 +171,8 @@ export function QuickScanScreen() {
             ref={cameraRef}
             style={s.camera}
             facing="back"
-            autofocus="on"
+            mode="picture"
+            autofocus="off"
             barcodeScannerSettings={{
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'code93', 'itf14', 'qr'],
             }}
@@ -180,7 +181,6 @@ export function QuickScanScreen() {
         )}
         {!notFound && !looking && (
           <View style={s.overlay}>
-            <View style={s.scanFrame} />
             <Text style={s.hint}>Point at the barcode</Text>
           </View>
         )}
@@ -199,23 +199,25 @@ export function QuickScanScreen() {
             <Ionicons name="search-outline" size={48} color={colors.textSecondary} />
             <Text style={s.notFoundTitle}>Product Not Found</Text>
             <Text style={s.notFoundSub}>
-              This barcode isn't in our database yet.{'\n'}Photograph the front and the ingredient panel.
+              {missedScan
+                ? "This product isn't in our database yet."
+                : "This product doesn't have a report yet."}
             </Text>
             <View style={s.notFoundBtns}>
               <Pressable onPress={retry} style={s.retryBtn}>
                 <Text style={s.retryBtnText}>Scan Again</Text>
               </Pressable>
             </View>
-            {mode === 'analyze' ? (
+            {mode === 'analyze' && missedScan ? (
               <Pressable
                 onPress={() => navigation.replace('LookupPhotos', {
                   mode: 'barcode',
-                  barcode: scannedBarcode ?? undefined,
-                  barcodePhotoUri: barcodePhotoUri ?? undefined,
+                  barcode: missedScan.barcode,
+                  barcodePhotoUri: missedScan.photoUri,
                 })}
                 style={s.registerBtn}
               >
-                <Text style={s.registerBtnText}>Photograph the bag</Text>
+                <Text style={s.registerBtnText}>Register</Text>
                 <View style={s.tokenBadge}>
                   <Text style={s.tokenBadgeText}>+🦴20</Text>
                 </View>
@@ -310,13 +312,6 @@ const s = StyleSheet.create({
   cameraContainer: { flex: 1, position: 'relative', margin: 16, borderRadius: 20, overflow: 'hidden', backgroundColor: '#000' },
   camera: { flex: 1 },
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  scanFrame: {
-    width: '70%',
-    height: 3,
-    backgroundColor: colors.primary,
-    opacity: 0.7,
-    borderRadius: 2,
-  },
   hint: { color: '#fff', fontSize: 14, marginTop: 20, fontWeight: '500' },
   loadingModal: {
     flex: 1,

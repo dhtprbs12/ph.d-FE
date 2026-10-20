@@ -63,9 +63,8 @@ export type HomeStackParamList = {
 };
 
 export type HistoryStackParamList = {
-  History: undefined;
+  History: { tab?: 'requests' } | undefined;
   Result: ResultParams;
-  AnalysisRequests: undefined;
 };
 
 export type CommunityStackParamList = {

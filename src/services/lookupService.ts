@@ -162,7 +162,8 @@ export async function savePushToken(token: string) {
   return parse(response);
 }
 
-export function openAnalysisRequests(navigation: { getParent?: () => any }) {
-  const tab = navigation.getParent?.()?.getParent?.() || navigation.getParent?.();
-  tab?.navigate?.('HistoryTab', { screen: 'AnalysisRequests' });
+export function openAnalysisRequests(navigation: { getParent?: () => any; popToTop?: () => void }) {
+  const tabs = navigation.getParent?.();
+  navigation.popToTop?.();
+  tabs?.navigate?.('HistoryTab', { screen: 'History', params: { tab: 'requests' } });
 }

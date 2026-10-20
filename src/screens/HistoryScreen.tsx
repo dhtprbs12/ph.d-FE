@@ -14,7 +14,7 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused, useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { HistoryStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +27,7 @@ import * as communityService from '../services/communityService';
 import type { SavedProduct } from '../services/communityService';
 import { buildImageUrl, buildThumbUrl, formatDate, formatLifeStage, formatProductTitleText } from '../utils/helpers';
 import { listLookups } from '../services/lookupService';
+import { AnalysisRequestsList } from './AnalysisRequestsScreen';
 
 type Nav = NativeStackNavigationProp<HistoryStackParamList>;
 
@@ -324,9 +325,10 @@ function SavedCard({ item, onPress, onUnsave }: {
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
+  const route = useRoute<RouteProp<HistoryStackParamList, 'History'>>();
   const { pets, selectedPet } = useApp();
 
-  const [tab, setTab] = useState<'all' | 'saved'>('all');
+  const [tab, setTab] = useState<'all' | 'saved' | 'requests'>('all');
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -387,9 +389,13 @@ export default function HistoryScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => {
+    if (route.params?.tab === 'requests') {
+      setTab('requests');
+      navigation.setParams({ tab: undefined });
+    }
     void loadSaved();
     listLookups().then((data) => setPendingLookups(data.pending)).catch(() => {});
-  }, [loadSaved]));
+  }, [loadSaved, navigation, route.params?.tab]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -476,30 +482,20 @@ export default function HistoryScreen() {
         >
           <Text style={[styles.tabText, tab === 'saved' && styles.tabTextActive]}>Saved</Text>
         </Pressable>
+        <Pressable
+          onPress={() => setTab('requests')}
+          style={[styles.tab, tab === 'requests' && styles.tabActive]}
+        >
+          <Text style={[styles.tabText, tab === 'requests' && styles.tabTextActive]}>Analysis</Text>
+          <Text style={[styles.tabText, tab === 'requests' && styles.tabTextActive]}>
+            requests{pendingLookups > 0 ? ` (${pendingLookups})` : ''}
+          </Text>
+        </Pressable>
       </View>
 
-      <Pressable
-        onPress={() => navigation.navigate('AnalysisRequests')}
-        style={{
-          marginHorizontal: spacing.md,
-          marginBottom: spacing.sm,
-          backgroundColor: colors.card,
-          borderRadius: radius.large,
-          padding: spacing.md,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>Analysis requests</Text>
-        {pendingLookups > 0 ? (
-          <Text style={{ color: colors.primary, fontWeight: '700' }}>{pendingLookups}</Text>
-        ) : (
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-        )}
-      </Pressable>
-
-      {tab === 'saved' ? (
+      {tab === 'requests' ? (
+        <AnalysisRequestsList onPendingChange={setPendingLookups} />
+      ) : tab === 'saved' ? (
         savedLoading ? (
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -652,17 +648,20 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     backgroundColor: colors.lightGray,
-    borderRadius: radius.full,
-    padding: 3,
+    borderRadius: radius.large,
+    padding: 4,
   },
   tab: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: radius.full,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: radius.medium,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   tabActive: {
     backgroundColor: colors.white,
