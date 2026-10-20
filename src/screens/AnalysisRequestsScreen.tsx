@@ -5,14 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { HistoryStackParamList } from '../navigation/types';
 import { colors, radius, spacing, typography } from '../theme';
-import {
-  ackLookup,
-  chooseLookup,
-  getLookup,
-  listLookups,
-  type LookupCandidate,
-  type LookupSummary,
-} from '../services/lookupService';
+import { listLookups, type LookupSummary } from '../services/lookupService';
 
 const STATUS_LABEL: Record<LookupSummary['status'], string> = {
   queued: 'Preparing',
@@ -22,22 +15,12 @@ const STATUS_LABEL: Record<LookupSummary['status'], string> = {
   failed: "Couldn't find a label",
 };
 
-function failureCopy(item: LookupSummary) {
-  if (item.failureReason === 'unreadable_photo') {
-    return "We couldn't read the ingredient panel. Photograph it again.";
-  }
-  const name = item.queryName || 'this food';
-  return `We couldn't find a published ingredient panel for ${name}. Check the spelling, or add a product page link.`;
-}
-
 export function AnalysisRequestsList({ onPendingChange }: { onPendingChange?: (count: number) => void }) {
   const navigation = useNavigation<NativeStackNavigationProp<HistoryStackParamList>>();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<LookupSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [choices, setChoices] = useState<LookupCandidate[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -62,28 +45,6 @@ export function AnalysisRequestsList({ onPendingChange }: { onPendingChange?: (c
     });
     return () => sub.remove();
   }, [refresh]);
-
-  const open = async (item: LookupSummary) => {
-    if (item.status === 'needs_choice') {
-      const detail = await getLookup(item.id);
-      setOpenId(item.id);
-      setChoices(detail.candidates || []);
-      return;
-    }
-    if (item.status !== 'ready') return;
-    const detail = await getLookup(item.id);
-    if (!detail.scanResult) return;
-    await ackLookup(item.id);
-    navigation.navigate('Result', { scanResult: detail.scanResult });
-  };
-
-  const choose = async (url: string) => {
-    if (!openId) return;
-    await chooseLookup(openId, url);
-    setOpenId(null);
-    setChoices([]);
-    void refresh();
-  };
 
   if (loading) {
     return (
@@ -117,37 +78,21 @@ export function AnalysisRequestsList({ onPendingChange }: { onPendingChange?: (c
         </Text>
       ) : null}
       {items.map((item) => (
-        <View key={item.id} style={{ gap: spacing.sm }}>
-          <Pressable
-            onPress={() => open(item)}
-            style={{ backgroundColor: colors.white, borderRadius: radius.large, padding: spacing.md, gap: 4 }}
-          >
-            <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
-              {[item.brand, item.queryName].filter(Boolean).join(' ') || 'Food photos'}
+        <Pressable
+          key={item.id}
+          onPress={() => navigation.navigate('LookupRequest', { id: item.id })}
+          style={{ backgroundColor: colors.white, borderRadius: radius.large, padding: spacing.md, gap: 4 }}
+        >
+          <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
+            {[item.brand, item.queryName].filter(Boolean).join(' ') || 'Food photos'}
+          </Text>
+          <Text style={{ color: colors.primary, fontWeight: '600' }}>{STATUS_LABEL[item.status]}</Text>
+          {item.status === 'queued' || item.status === 'searching' ? (
+            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
+              We'll notify you within 24 hours.
             </Text>
-            <Text style={{ color: colors.primary, fontWeight: '600' }}>{STATUS_LABEL[item.status]}</Text>
-            {item.status === 'failed' ? (
-              <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>{failureCopy(item)}</Text>
-            ) : null}
-          </Pressable>
-          {openId === item.id ? (
-            <View style={{ gap: spacing.sm }}>
-              <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>Which food is it?</Text>
-              {choices.map((choice) => (
-                <Pressable
-                  key={choice.url}
-                  onPress={() => choose(choice.url)}
-                  style={{ backgroundColor: colors.card, borderRadius: radius.medium, padding: spacing.md, borderWidth: 1, borderColor: colors.divider }}
-                >
-                  <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{choice.title}</Text>
-                  <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-                    {[choice.brand, choice.domain].filter(Boolean).join(' · ')}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
           ) : null}
-        </View>
+        </Pressable>
       ))}
     </ScrollView>
   );

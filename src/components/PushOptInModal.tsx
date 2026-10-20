@@ -33,6 +33,18 @@ export function PushOptInModal({
   );
 }
 
+export async function notificationPermissionStatus(): Promise<'granted' | 'denied' | 'undetermined'> {
+  try {
+    const Notifications = await import('expo-notifications');
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted || current.status === 'granted') return 'granted';
+    if (current.status === 'denied') return 'denied';
+    return 'undetermined';
+  } catch {
+    return 'undetermined';
+  }
+}
+
 export async function registerPushToken() {
   try {
     const Notifications = await import('expo-notifications');

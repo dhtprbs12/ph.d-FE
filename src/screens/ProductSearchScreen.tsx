@@ -25,7 +25,7 @@ import type { CachedScore, Product, ProductFilterParams } from '../types';
 
 import { buildImageUrl, buildThumbUrl, formatProductTitleText } from '../utils/helpers';
 import { LookupRequestCard } from '../components/LookupRequestCard';
-import { PushOptInModal, registerPushToken } from '../components/PushOptInModal';
+import { PushOptInModal, notificationPermissionStatus, registerPushToken } from '../components/PushOptInModal';
 import { createNameLookup, openAnalysisRequests } from '../services/lookupService';
 
 const PAGE = 20;
@@ -302,6 +302,7 @@ export function ProductSearchScreen() {
   const [lookupBusy, setLookupBusy] = useState(false);
   const [askPush, setAskPush] = useState(false);
   const pendingLookup = useRef<{ brand: string; queryName: string; pastedUrl: string; email: string } | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const hasFilters = !!petType || !!foodType || !!lifeStage || !!diet || !!protein || query.length > 0;
 
@@ -468,11 +469,6 @@ export function ProductSearchScreen() {
         queryName: pending.queryName,
         pastedUrl: pending.pastedUrl || undefined,
         email: pending.email || undefined,
-        filterHints: {
-          lifeStage: lifeStage || undefined,
-          diet: diet || undefined,
-          protein: protein || undefined,
-        },
       });
       openAnalysisRequests(navigation);
     } catch (error: any) {
@@ -533,12 +529,15 @@ export function ProductSearchScreen() {
 
       {/* Filters + Results */}
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={400}
+        contentContainerStyle={{ paddingBottom: showEmpty && query.trim() ? 320 : 0 }}
       >
         <View style={{ paddingTop: spacing.sm }}>
           <ChipRow title="Pet Type" items={PET_TYPE_CHIPS} selected={petType} onSelect={setPetType} />
@@ -569,8 +568,18 @@ export function ProductSearchScreen() {
             petName={selectedPet?.name || 'your pet'}
             searchQuery={query.trim()}
             submitting={lookupBusy}
-            onRequest={(input) => {
+            scrollRef={scrollRef}
+            onRequest={async (input) => {
               pendingLookup.current = input;
+              const status = await notificationPermissionStatus();
+              if (status === 'granted') {
+                sendLookup(true);
+                return;
+              }
+              if (status === 'denied') {
+                sendLookup(false);
+                return;
+              }
               setAskPush(true);
             }}
             onUploadPhotos={(email) => navigation.navigate('LookupPhotos', { mode: 'search', email })}

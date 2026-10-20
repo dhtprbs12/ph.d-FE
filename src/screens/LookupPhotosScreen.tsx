@@ -22,7 +22,7 @@ import { useApp } from '../context/AppContext';
 import { colors, radius, spacing, typography } from '../theme';
 import api from '../services/api';
 import { createPhotoLookup, openAnalysisRequests } from '../services/lookupService';
-import { PushOptInModal, registerPushToken } from '../components/PushOptInModal';
+import { PushOptInModal, notificationPermissionStatus, registerPushToken } from '../components/PushOptInModal';
 
 type Slot = 'front' | 'ingredients' | 'barcode';
 
@@ -98,6 +98,19 @@ export function LookupPhotosScreen() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const askThenSubmit = async () => {
+    const status = await notificationPermissionStatus();
+    if (status === 'granted') {
+      await submit(true);
+      return;
+    }
+    if (status === 'denied') {
+      await submit(false);
+      return;
+    }
+    setAskPush(true);
   };
 
   return (
@@ -177,7 +190,7 @@ export function LookupPhotosScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <Pressable
           disabled={!ready || busy}
-          onPress={() => setAskPush(true)}
+          onPress={askThenSubmit}
           style={[styles.submit, (!ready || busy) && styles.submitOff]}
         >
           {busy ? (

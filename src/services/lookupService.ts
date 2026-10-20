@@ -28,23 +28,12 @@ export interface LookupSummary {
   createdAt: string;
 }
 
-export interface LookupCandidate {
-  title: string;
-  brand?: string | null;
-  url: string;
-  domain: string;
-}
-
 export interface LookupDetail extends LookupSummary {
-  candidates: LookupCandidate[];
   scanResult?: ScanResult | null;
   tokensAwarded?: number;
-}
-
-export interface FilterHints {
-  lifeStage?: string;
-  diet?: string;
-  protein?: string;
+  frontImageUrl?: string | null;
+  ingredientImageUrl?: string | null;
+  barcodeImageUrl?: string | null;
 }
 
 export async function createNameLookup(body: {
@@ -55,7 +44,6 @@ export async function createNameLookup(body: {
   queryName: string;
   pastedUrl?: string;
   email?: string;
-  filterHints?: FilterHints;
 }) {
   const response = await fetch(`${BASE_URL}/lookups`, {
     method: 'POST',
@@ -126,15 +114,6 @@ export async function listLookups() {
 export async function getLookup(id: string) {
   const response = await fetch(`${BASE_URL}/lookups/${id}`, { headers: await authHeaders() });
   return parse(response) as Promise<LookupDetail>;
-}
-
-export async function chooseLookup(id: string, url: string) {
-  const response = await fetch(`${BASE_URL}/lookups/${id}/choice`, {
-    method: 'POST',
-    headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
-  return parse(response);
 }
 
 export async function ackLookup(id: string) {

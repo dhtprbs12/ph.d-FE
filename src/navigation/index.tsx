@@ -39,6 +39,7 @@ import PassportScreen from '../screens/PassportScreen';
 import InsightDetailScreen from '../screens/InsightDetailScreen';
 import NomNomDetailScreen from '../screens/NomNomDetailScreen';
 import { LookupPhotosScreen } from '../screens/LookupPhotosScreen';
+import { LookupRequestScreen } from '../screens/LookupRequestScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -110,6 +111,7 @@ function HistoryStackNavigator() {
   return (
     <HistoryStack.Navigator screenOptions={{ headerShown: false }}>
       <HistoryStack.Screen name="History" component={HistoryScreen} />
+      <HistoryStack.Screen name="LookupRequest" component={LookupRequestScreen} />
       <HistoryStack.Screen name="Result" component={ResultScreen} />
     </HistoryStack.Navigator>
   );

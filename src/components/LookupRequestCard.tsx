@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { colors, radius, spacing, typography } from '../theme';
 import api from '../services/api';
@@ -8,12 +9,14 @@ export function LookupRequestCard({
   petName,
   searchQuery,
   submitting,
+  scrollRef,
   onRequest,
   onUploadPhotos,
 }: {
   petName: string;
   searchQuery: string;
   submitting: boolean;
+  scrollRef?: React.RefObject<ScrollView | null>;
   onRequest: (input: { brand: string; queryName: string; pastedUrl: string; email: string }) => void;
   onUploadPhotos: (email: string) => void;
 }) {
@@ -36,7 +39,17 @@ export function LookupRequestCard({
 
   const ready = brand.trim().length > 0 && queryName.trim().length > 0;
 
-  const onLinkFocus = async () => {
+  const revealField = (target: number) => {
+    setTimeout(() => {
+      const scroller = scrollRef?.current as (ScrollView & {
+        scrollResponderScrollNativeHandleToKeyboard?: (node: number, extraHeight: number, preventNegativeScrollOffset: boolean) => void;
+      }) | null;
+      scroller?.scrollResponderScrollNativeHandleToKeyboard?.(target, 140, true);
+    }, 280);
+  };
+
+  const onLinkFocus = async (target: number) => {
+    revealField(target);
     try {
       const text = await Clipboard.getStringAsync();
       if (/^https?:\/\//i.test(text.trim())) setLinkOffer(text.trim());
@@ -47,15 +60,22 @@ export function LookupRequestCard({
 
   return (
     <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md, gap: spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        <Ionicons name="search" size={26} color={colors.textPrimary} />
+        <Text style={{ fontSize: 22, fontWeight: '700', color: colors.textPrimary, flex: 1 }}>
+          No product found
+        </Text>
+      </View>
       <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>
         We'll look this up for {petName}
       </Text>
       <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>
-        This food isn't in the app yet. Add the brand and product name, and we'll read the published ingredient panel.
+        Write every word you see for the brand and the product name.
       </Text>
       <TextInput
         value={brand}
         onChangeText={setBrand}
+        onFocus={(event) => revealField(event.target)}
         placeholder="Brand"
         placeholderTextColor={colors.textSecondary}
         style={inputStyle}
@@ -63,6 +83,7 @@ export function LookupRequestCard({
       <TextInput
         value={queryName}
         onChangeText={setQueryName}
+        onFocus={(event) => revealField(event.target)}
         placeholder="Product name"
         placeholderTextColor={colors.textSecondary}
         style={inputStyle}
@@ -73,7 +94,7 @@ export function LookupRequestCard({
       <TextInput
         value={pastedUrl}
         onChangeText={setPastedUrl}
-        onFocus={onLinkFocus}
+        onFocus={(event) => onLinkFocus(event.target)}
         placeholder="Product page link (optional)"
         placeholderTextColor={colors.textSecondary}
         autoCapitalize="none"
@@ -90,6 +111,7 @@ export function LookupRequestCard({
       <TextInput
         value={email}
         onChangeText={setEmail}
+        onFocus={(event) => revealField(event.target)}
         placeholder="Email me too. Optional."
         placeholderTextColor={colors.textSecondary}
         autoCapitalize="none"
@@ -100,7 +122,8 @@ export function LookupRequestCard({
         disabled={!ready || submitting}
         onPress={() => onRequest({ brand: brand.trim(), queryName: queryName.trim(), pastedUrl: pastedUrl.trim(), email: email.trim() })}
         style={{
-          backgroundColor: ready && !submitting ? colors.primary : colors.textSecondary,
+          backgroundColor: colors.primary,
+          opacity: ready && !submitting ? 1 : 0.45,
           borderRadius: radius.medium,
           padding: spacing.md,
           alignItems: 'center',
@@ -108,11 +131,27 @@ export function LookupRequestCard({
       >
         <Text style={{ color: colors.white, fontWeight: '700' }}>{submitting ? 'Sending...' : 'Request analysis'}</Text>
       </Pressable>
-      <Pressable onPress={() => onUploadPhotos(email.trim())} style={{ paddingVertical: spacing.sm }}>
-        <Text style={{ color: colors.primary, fontWeight: '700' }}>Upload photos instead</Text>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary, marginTop: 4 }]}>
-          Read the bag itself for a more accurate report. You'll earn 🦴×20.
-        </Text>
+      <Pressable
+        onPress={() => onUploadPhotos(email.trim())}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.sm,
+          backgroundColor: colors.card,
+          borderWidth: 1,
+          borderColor: colors.primary,
+          borderRadius: radius.medium,
+          padding: spacing.md,
+        }}
+      >
+        <Ionicons name="camera-outline" size={22} color={colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Photograph the product</Text>
+          <Text style={[typography.bodySmall, { color: colors.textSecondary, marginTop: 2 }]}>
+            Use the package for a more accurate report. You'll earn 🦴×20.
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.primary} />
       </Pressable>
     </View>
   );

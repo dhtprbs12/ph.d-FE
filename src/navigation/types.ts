@@ -64,6 +64,7 @@ export type HomeStackParamList = {
 
 export type HistoryStackParamList = {
   History: { tab?: 'requests' } | undefined;
+  LookupRequest: { id: string };
   Result: ResultParams;
 };
 
