@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Pressable,
   Modal,
+  DeviceEventEmitter,
   Animated,
   Dimensions,
   useWindowDimensions,
@@ -27,7 +28,12 @@ import * as communityService from '../services/communityService';
 import type { RecentActivity } from '../services/communityService';
 import gamificationService, { GamificationSummary } from '../services/gamificationService';
 import petFoodService, { CurrentFood } from '../services/petFoodService';
-import checkinService from '../services/checkinService';
+import checkinService, { DailyLog } from '../services/checkinService';
+import DailyLogSheets from '../components/DailyLogSheets';
+import { scheduleDailyReminders } from '../services/dailyReminders';
+import { calendarDaysOnFood, formatFoodDay, formatLogTime, phoneYmd } from '../utils/foodTime';
+import { isVomitLog, logSummary } from '../utils/dailyLog';
+import { useToast } from '../components/common/Toast';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 import api from '../services/api';
 import { toTitleCase, buildThumbUrl } from '../utils/helpers';
@@ -137,6 +143,13 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
   const [summary, setSummary] = useState<GamificationSummary | null>(null);
   const [equipped, setEquipped] = useState<CharacterState['equipped'] | null>(null);
   const [earnVisible, setEarnVisible] = useState(false);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('phd-bones-refresh', () => {
+      gamificationService.getSummary().then(setSummary).catch(console.warn);
+    });
+    return () => sub.remove();
+  }, []);
 
   useFocusEffect(useCallback(() => {
     gamificationService.getSummary().then(setSummary).catch(console.warn);
@@ -273,19 +286,25 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [checkedInToday, setCheckedInToday] = useState(false);
+  const [recentLogs, setRecentLogs] = useState<DailyLog[]>([]);
+  const [logSheet, setLogSheet] = useState<'meal' | 'health' | null>(null);
+  const toast = useToast();
   const searchTimer = useRef<NodeJS.Timeout | null>(null);
+  const foodDays = currentFood ? calendarDaysOnFood(currentFood.startedAt, null, true) : 1;
+
+  const loadFoodAndLogs = useCallback(() => {
+    if (!pet?.id) return;
+    petFoodService.getCurrentFood(pet.id).then(setCurrentFood).catch(console.warn);
+    checkinService.getRecent(pet.id, 2).then(r => setRecentLogs(r.checkins || [])).catch(() => setRecentLogs([]));
+    const today = phoneYmd();
+    checkinService.getCheckins(pet.id, today, today)
+      .then(r => scheduleDailyReminders(pet.name, (r.checkins?.length ?? 0) > 0))
+      .catch(() => scheduleDailyReminders(pet.name, false));
+  }, [pet?.id, pet?.name]);
 
   useFocusEffect(useCallback(() => {
-    if (pet?.id) {
-      petFoodService.getCurrentFood(pet.id).then(setCurrentFood).catch(console.warn);
-      const now = new Date();
-      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      checkinService.getCheckins(pet.id, todayStr, todayStr)
-        .then(r => setCheckedInToday((r.checkins?.length ?? 0) > 0))
-        .catch(() => setCheckedInToday(false));
-    }
-  }, [pet?.id]));
+    loadFoodAndLogs();
+  }, [loadFoodAndLogs]));
 
   const handleSearchFood = (text: string) => {
     setFoodNameInput(text);
@@ -379,24 +398,27 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
                 </Text>
               ) : null}
               <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-                {pet.name} · Day {currentFood.daysOnFood}
+                {pet.name} · Day {foodDays}
               </Text>
             </View>
-            <Pressable
-              onPress={() => navigation.navigate('CheckIn', {
-                petId: pet.id,
-                petName: pet.name,
-                foodName: currentFood.productName,
-                foodImage: currentFood.imageUrl,
-                daysOnFood: currentFood.daysOnFood,
-              })}
-              style={styles.checkinBtn}
-            >
-              <Text style={[typography.labelSmall, { color: colors.white }]}>
-                {checkedInToday ? 'Update' : 'Check-in'}
-              </Text>
+          </View>
+          <View style={styles.logActions}>
+            <Pressable onPress={() => setLogSheet('meal')} style={styles.logBtn}>
+              <Text style={styles.logBtnText}>🍖 Log a Meal</Text>
+            </Pressable>
+            <Pressable onPress={() => setLogSheet('health')} style={styles.logBtn}>
+              <Text style={styles.logBtnText}>🩺 Log Pet Health</Text>
             </Pressable>
           </View>
+          {recentLogs.map(entry => (
+            <Text
+              key={entry.id}
+              style={[typography.labelMedium, { color: isVomitLog(entry) ? colors.danger : colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              {formatLogTime(entry.loggedAt)}  {logSummary(entry)}
+            </Text>
+          ))}
           {/* Scan nudge for free-text food */}
           {!hasProductId && (
             <Pressable
@@ -489,7 +511,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
               <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>Current</Text>
                 <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>{toTitleCase(currentFood?.productName || '')}</Text>
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>Day {currentFood?.daysOnFood}</Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>Day {foodDays}</Text>
               </View>
               <Ionicons name="arrow-down" size={20} color={colors.textSecondary} />
               <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
@@ -510,6 +532,17 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
         </Modal>
       )}
       <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
+      <DailyLogSheets
+        petId={pet.id}
+        visible={logSheet}
+        onClose={() => setLogSheet(null)}
+        onSaved={(tokens) => {
+          setLogSheet(null);
+          if (tokens > 0) toast.show({ message: `🦴×${tokens}`, type: 'reward' });
+          DeviceEventEmitter.emit('phd-bones-refresh');
+          loadFoodAndLogs();
+        }}
+      />
     </View>
   );
 }
@@ -1008,17 +1041,14 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
 
       <View style={{ gap: spacing.sm }}>
         {top3.map((entry) => {
-          const startRaw = entry.startedAt.includes('T') ? entry.startedAt : `${entry.startedAt}T12:00:00`;
-          const startLabel = new Date(startRaw).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          const endLabel = entry.isCurrent || !entry.endedAt
-            ? 'now'
-            : new Date(entry.endedAt.includes('T') ? entry.endedAt : `${entry.endedAt}T12:00:00`)
-              .toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const daysOnFood = calendarDaysOnFood(entry.startedAt, entry.endedAt, entry.isCurrent);
+          const startLabel = formatFoodDay(entry.startedAt);
+          const endLabel = entry.isCurrent || !entry.endedAt ? 'now' : formatFoodDay(entry.endedAt);
           const thumb = buildThumbUrl(entry.imageUrl) || entry.imageUrl;
           const stool = entry.stats.checkinCount > 0 && entry.stats.avgStoolScore != null
             ? (entry.stats.avgStoolScore >= 3.5 ? '🙂' : entry.stats.avgStoolScore >= 2.5 ? '😐' : '😕')
             : null;
-          const dayWord = entry.daysOnFood === 1 ? 'day' : 'days';
+          const dayWord = daysOnFood === 1 ? 'day' : 'days';
 
           return (
             <Pressable key={entry.id} onPress={openHistory} style={styles.historyRow}>
@@ -1041,7 +1071,7 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
                   ) : null}
                 </View>
                 <Text style={[typography.labelMedium, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-                  {entry.daysOnFood} {dayWord} · {startLabel} – {endLabel}
+                  {daysOnFood} {dayWord} · {startLabel} – {endLabel}
                 </Text>
               </View>
               {stool ? <Text style={{ fontSize: 18 }}>{stool}</Text> : null}
@@ -1070,7 +1100,7 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
 
       {filtered.length === 1 && (
         <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs }]}>
-          Keep checking in to unlock insights!
+          Log pet health to unlock insights!
         </Text>
       )}
 
@@ -1657,11 +1687,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkinBtn: {
+  logActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  logBtn: {
+    flex: 1,
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
+    borderRadius: radius.medium,
+    alignItems: 'center',
     paddingVertical: spacing.xs,
-    borderRadius: radius.full,
+  },
+  logBtnText: {
+    ...typography.labelSmall,
+    color: colors.white,
   },
   foodImage: {
     width: 48,

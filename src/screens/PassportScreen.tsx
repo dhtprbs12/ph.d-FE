@@ -16,6 +16,7 @@ import { colors, spacing, radius, typography, shadows } from '../theme';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { buildImageUrl, buildThumbUrl } from '../utils/helpers';
+import { calendarDaysOnFood, formatFoodDay } from '../utils/foodTime';
 
 function StoolScoreLabel(score: number | null): { label: string; emoji: string; color: string } {
   if (score === null) return { label: 'No data', emoji: '—', color: colors.textSecondary };
@@ -27,9 +28,7 @@ function StoolScoreLabel(score: number | null): { label: string; emoji: string; 
 }
 
 function formatPassportDay(raw?: string | null) {
-  if (!raw) return null;
-  const dateStr = raw.includes('T') ? raw : `${raw}T12:00:00`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return formatFoodDay(raw);
 }
 
 function dayWord(n: number) {
@@ -61,6 +60,7 @@ function StatTile({
 function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressImage: (uri: string) => void }) {
   const stool = StoolScoreLabel(entry.stats.avgStoolScore);
   const hasCheckins = entry.stats.checkinCount > 0;
+  const daysOnFood = calendarDaysOnFood(entry.startedAt, entry.endedAt, entry.isCurrent);
   const startLabel = formatPassportDay(entry.startedAt);
   const endLabel = entry.isCurrent || !entry.endedAt ? 'now' : formatPassportDay(entry.endedAt);
   const range = startLabel && endLabel ? `${startLabel} – ${endLabel}` : startLabel;
@@ -104,7 +104,7 @@ function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressIm
           </View>
           <View style={styles.daysChip}>
             <Text style={styles.daysChipText}>
-              {entry.daysOnFood} {dayWord(entry.daysOnFood)}
+              {daysOnFood} {dayWord(daysOnFood)}
             </Text>
           </View>
         </View>
@@ -114,7 +114,7 @@ function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressIm
             <View style={styles.checkinChip}>
               <Ionicons name="checkbox-outline" size={15} color={colors.primary} />
               <Text style={styles.checkinChipText}>
-                From {entry.stats.checkinCount} {entry.stats.checkinCount === 1 ? 'check-in' : 'check-ins'}
+                From {entry.stats.checkinCount} {entry.stats.checkinCount === 1 ? 'log' : 'logs'}
               </Text>
             </View>
             <View style={styles.statRow}>

@@ -74,12 +74,12 @@ export default function CheckInScreen() {
         const existing = result.checkins?.[0];
         if (existing) {
           setAlreadyCheckedIn(true);
-          setStoolScore(existing.stoolScore);
+          if (existing.stoolScore) setStoolScore(existing.stoolScore);
           if (existing.appetite === 'low' || existing.appetite === 'normal' || existing.appetite === 'high') {
-            setAppetite(existing.appetite);
+            setAppetite(existing.appetite || 'normal');
           }
-          setVomiting(!!existing.vomiting);
-          setItching(!!existing.itching);
+          setVomiting(existing.vomiting === 'food' || existing.vomiting === 'yellow');
+          setItching(existing.itching === 'scratching' || existing.itching === 'licking');
           setNotes(existing.notes || '');
         }
       }).catch(console.warn);
@@ -127,25 +127,24 @@ export default function CheckInScreen() {
 
     setIsLoading(true);
     try {
-      const result = await checkinService.saveCheckin(petId, {
+      const result = await checkinService.saveLog(petId, {
+        logType: 'health',
         stoolScore,
         appetite,
-        vomiting,
-        itching,
-        notes: notes.trim() || undefined,
+        vomiting: vomiting ? 'food' : 'none',
+        itching: itching ? 'scratching' : 'none',
+        notes: notes.trim() || null,
         localDate,
       });
 
-      let message = result.updated
-        ? `Check-in updated for ${petName || 'your pet'}!`
-        : `Check-in saved for ${petName || 'your pet'}!`;
+      let message = `Check-in saved for ${petName || 'your pet'}!`;
       if (result.tokensAwarded > 0) {
         message += `\n🦴 +${result.tokensAwarded} tokens earned!`;
       }
       if (result.streakInfo.streakBonus > 0) {
         message += `\n🔥 Streak bonus: +${result.streakInfo.streakBonus} tokens!`;
       }
-      if (!result.updated && result.streakInfo.currentStreak > 1) {
+      if (result.streakInfo.currentStreak > 1) {
         message += `\n🔥 ${result.streakInfo.currentStreak}-day streak!`;
       }
 

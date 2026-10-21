@@ -16,7 +16,9 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import type { HomeStackParamList } from '../navigation/types';
-import checkinService, { CheckinEntry } from '../services/checkinService';
+import checkinService, { DailyLog } from '../services/checkinService';
+import { formatLogTime } from '../utils/foodTime';
+import { isVomitLog, logSummary } from '../utils/dailyLog';
 import notesService from '../services/notesService';
 import { toTitleCase, buildThumbUrl, buildImageUrl } from '../utils/helpers';
 import { useToast } from '../components/common/Toast';
@@ -33,7 +35,7 @@ export default function NomNomDetailScreen() {
 
   const scrollRef = useRef<ScrollView>(null);
   const noteInputRef = useRef<View>(null);
-  const [checkin, setCheckin] = useState<CheckinEntry | null>(null);
+  const [logs, setLogs] = useState<DailyLog[]>([]);
   const [note, setNote] = useState('');
   const [originalNote, setOriginalNote] = useState('');
   const [loading, setLoading] = useState(true);
@@ -54,8 +56,9 @@ export default function NomNomDetailScreen() {
         notesService.getNotes(petId, date, date),
       ]);
 
-      if (cRes.status === 'fulfilled' && cRes.value.checkins.length > 0) {
-        setCheckin(cRes.value.checkins[0]);
+      if (cRes.status === 'fulfilled') {
+        const rows = [...(cRes.value.checkins || [])].sort((a, b) => String(a.loggedAt || '').localeCompare(String(b.loggedAt || '')));
+        setLogs(rows);
       }
       if (nRes.status === 'fulfilled' && nRes.value.length > 0) {
         setNote(nRes.value[0].note);
@@ -141,96 +144,21 @@ export default function NomNomDetailScreen() {
           <>
             {/* Check-in Section */}
             <View style={[styles.section, shadows.card]}>
-              <Text style={styles.sectionTitle}>Daily Check-in</Text>
-              {checkin ? (
-                <View style={styles.checkinGrid}>
-                  <View style={styles.checkinRow}>
-                    {/* Stool */}
-                    <View style={[styles.checkinCard, { backgroundColor: getStoolColor(checkin.stoolScore) + '12' }]}>
-                      <Text style={styles.checkinEmoji}>💩</Text>
-                      <Text style={styles.checkinCardLabel}>Stool</Text>
-                      <Text style={[styles.checkinCardValue, { color: getStoolColor(checkin.stoolScore) }]}>
-                        {checkin.stoolScore}/5
-                      </Text>
-                      <Text style={[styles.checkinCardSub, { color: getStoolColor(checkin.stoolScore) }]}>
-                        {getStoolLabel(checkin.stoolScore)}
-                      </Text>
-                    </View>
-                    {/* Appetite */}
-                    <View style={[styles.checkinCard, { backgroundColor: colors.primary + '12' }]}>
-                      <Text style={styles.checkinEmoji}>
-                        {checkin.appetite === 'low' ? '😔' : checkin.appetite === 'high' ? '🤩' : '😋'}
-                      </Text>
-                      <Text style={styles.checkinCardLabel}>Appetite</Text>
-                      <Text style={[styles.checkinCardValue, { color: colors.primary }]}>
-                        {checkin.appetite.charAt(0).toUpperCase() + checkin.appetite.slice(1)}
-                      </Text>
-                    </View>
+              <Text style={styles.sectionTitle}>Daily log</Text>
+              {logs.length > 0 ? logs.map(entry => (
+                <View key={entry.id} style={styles.logRow}>
+                  <Text style={[styles.logTime, isVomitLog(entry) && { color: colors.danger }]}>
+                    {formatLogTime(entry.loggedAt)}
+                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.logTitle, isVomitLog(entry) && { color: colors.danger }]}>{logSummary(entry)}</Text>
+                    {entry.notes ? <Text style={styles.logNote}>{entry.notes}</Text> : null}
                   </View>
-                  {/* Symptoms */}
-                  <View style={[styles.checkinCard, styles.checkinCardWide, { backgroundColor: (!checkin.vomiting && !checkin.itching) ? colors.safe + '12' : colors.danger + '12' }]}>
-                    <View style={styles.symptomHeader}>
-                      <Text style={styles.checkinEmoji}>
-                        {!checkin.vomiting && !checkin.itching ? '✨' : '⚠️'}
-                      </Text>
-                      <Text style={styles.checkinCardLabel}>Symptoms</Text>
-                    </View>
-                    <View style={styles.symptomRow}>
-                      {checkin.vomiting && (
-                        <View style={[styles.symptomTag, { backgroundColor: colors.danger + '20' }]}>
-                          <Ionicons name="alert-circle" size={12} color={colors.danger} />
-                          <Text style={[styles.symptomText, { color: colors.danger }]}>Vomiting</Text>
-                        </View>
-                      )}
-                      {checkin.itching && (
-                        <View style={[styles.symptomTag, { backgroundColor: colors.caution + '20' }]}>
-                          <Ionicons name="alert-circle" size={12} color="#B8860B" />
-                          <Text style={[styles.symptomText, { color: '#B8860B' }]}>Itching</Text>
-                        </View>
-                      )}
-                      {!checkin.vomiting && !checkin.itching && (
-                        <Text style={[styles.checkinCardValue, { color: colors.safe }]}>All clear!</Text>
-                      )}
-                    </View>
-                  </View>
-                  {/* Food */}
-                  {checkin.foodName && (
-                    <View style={[styles.checkinCard, styles.checkinCardWide, { backgroundColor: colors.accent + '12' }]}>
-                      <View style={styles.symptomHeader}>
-                        <Text style={styles.checkinEmoji}>🍽️</Text>
-                        <Text style={styles.checkinCardLabel}>Food</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                        {checkin.foodImageUrl ? (
-                          <Pressable onPress={() => {
-                            const full = buildImageUrl(checkin.foodImageUrl);
-                            if (full) setZoomImageUri(full);
-                          }}>
-                            <Image
-                              source={{ uri: buildThumbUrl(checkin.foodImageUrl) ?? undefined }}
-                              style={{ width: 44, height: 44, borderRadius: radius.small, backgroundColor: colors.lightGray }}
-                            />
-                          </Pressable>
-                        ) : null}
-                        <Text style={[styles.checkinCardValue, { flex: 1 }]}>{toTitleCase(checkin.foodName)}</Text>
-                      </View>
-                    </View>
-                  )}
-                  {/* Checkin Notes */}
-                  {checkin.notes && (
-                    <View style={[styles.checkinCard, styles.checkinCardWide, { backgroundColor: colors.lightGray }]}>
-                      <View style={styles.symptomHeader}>
-                        <Text style={styles.checkinEmoji}>📝</Text>
-                        <Text style={styles.checkinCardLabel}>Check-in Notes</Text>
-                      </View>
-                      <Text style={styles.checkinNotes}>{checkin.notes}</Text>
-                    </View>
-                  )}
                 </View>
-              ) : (
+              )) : (
                 <View style={styles.emptyState}>
                   <Ionicons name="paw-outline" size={32} color={colors.textSecondary} style={{ opacity: 0.4 }} />
-                  <Text style={styles.emptyText}>No check-in for this day</Text>
+                  <Text style={styles.emptyText}>No log for this day</Text>
                 </View>
               )}
             </View>
@@ -336,6 +264,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.large,
     padding: spacing.md,
+  },
+  logRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  logTime: {
+    ...typography.labelMedium,
+    color: colors.textSecondary,
+    width: 72,
+  },
+  logTitle: {
+    ...typography.labelLarge,
+    color: colors.textPrimary,
+  },
+  logNote: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   sectionTitle: {
     ...typography.titleMedium,

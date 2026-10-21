@@ -10,7 +10,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import notesService, { NoteEntry, StreakInfo } from '../services/notesService';
-import checkinService, { CheckinEntry } from '../services/checkinService';
+import checkinService, { DailyLog } from '../services/checkinService';
+import { formatLogTime } from '../utils/foodTime';
+import { logSummary } from '../utils/dailyLog';
 
 interface Props {
   petId: string;
@@ -34,7 +36,7 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
   const [today, setToday] = useState(() => new Date());
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [checkins, setCheckins] = useState<CheckinEntry[]>([]);
+  const [checkins, setCheckins] = useState<DailyLog[]>([]);
   const [notes, setNotes] = useState<NoteEntry[]>([]);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(toDateStr(today));
@@ -119,9 +121,11 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
     setSelectedDate(prev => prev === dateStr ? null : dateStr);
   }, [viewYear, viewMonth]);
 
-  const selectedCheckin = useMemo(() => {
-    if (!selectedDate) return null;
-    return checkins.find(c => normalizeDate(c.date) === selectedDate) || null;
+  const selectedLogs = useMemo(() => {
+    if (!selectedDate) return [];
+    return checkins
+      .filter(c => normalizeDate(c.date) === selectedDate)
+      .sort((a, b) => String(a.loggedAt || '').localeCompare(String(b.loggedAt || '')));
   }, [selectedDate, checkins]);
 
   const selectedNote = selectedDate ? noteMap[selectedDate] : null;
@@ -206,7 +210,7 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
           <View style={styles.legend}>
             <View style={styles.legendItem}>
               <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-              <Text style={styles.legendLabel}>Check-in</Text>
+              <Text style={styles.legendLabel}>Log</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.dot, { backgroundColor: colors.accent }]} />
@@ -223,19 +227,17 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
                 })}
               </Text>
 
-              {hasCheckin && selectedCheckin ? (
-                <View style={styles.previewRow}>
+              {selectedLogs.length > 0 ? selectedLogs.slice(0, 2).map(entry => (
+                <View key={entry.id} style={styles.previewRow}>
                   <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
                   <Text style={styles.previewText}>
-                    Stool: {selectedCheckin.stoolScore}/5 &middot; Appetite: {selectedCheckin.appetite}
-                    {selectedCheckin.vomiting ? ' \u00B7 Vomiting' : ''}
-                    {selectedCheckin.itching ? ' \u00B7 Itching' : ''}
+                    {formatLogTime(entry.loggedAt)} {logSummary(entry)}
                   </Text>
                 </View>
-              ) : (
+              )) : (
                 <View style={styles.previewRow}>
                   <Ionicons name="ellipse-outline" size={16} color={colors.textSecondary} />
-                  <Text style={styles.previewText}>No check-in</Text>
+                  <Text style={styles.previewText}>No log</Text>
                 </View>
               )}
 
