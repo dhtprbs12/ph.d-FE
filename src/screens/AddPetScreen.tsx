@@ -27,6 +27,11 @@ import { useApp } from '../context/AppContext';
 import { DOG_BREEDS, CAT_BREEDS } from '../data/breeds';
 import api from '../services/api';
 import { useToast } from '../components/common/Toast';
+import FoodSearchInput from '../components/FoodSearchInput';
+import { LookupRequestCard } from '../components/LookupRequestCard';
+import { BarcodeRegisterFields } from '../components/BarcodeRegisterFields';
+import { AnalysisNotice } from '../components/AnalysisNotice';
+import { createNameLookup, createPhotoLookup } from '../services/lookupService';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 
@@ -58,6 +63,11 @@ export default function AddPetScreen() {
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
   const [breedDropdownVisible, setBreedDropdownVisible] = useState(false);
+  const [scannedFood, setScannedFood] = useState<{ productName: string; productId?: string; brand?: string } | null>(null);
+  const [nameRequest, setNameRequest] = useState<{ brand: string; queryName: string; pastedUrl: string; email: string } | null>(null);
+  const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; requested?: boolean } | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [missQuery, setMissQuery] = useState('');
 
   const breedList = petType === 'dog' ? DOG_BREEDS : CAT_BREEDS;
   const filteredBreeds = useMemo(() => {
@@ -110,7 +120,7 @@ export default function AddPetScreen() {
       notes: undefined,
     }));
 
-    await addPet({
+    const created = await addPet({
       id: `local-${Date.now()}`,
       name: name.trim(),
       pet_type: petType,
@@ -123,6 +133,37 @@ export default function AddPetScreen() {
       healthConditions,
       photoData: photoUri ?? undefined,
     });
+    if (!created?.id || created.id.startsWith('local-')) return created;
+    if (scannedFood?.productId) {
+      await api.post(`/pets/${created.id}/current-food`, {
+        productId: scannedFood.productId,
+        productName: scannedFood.productName,
+        brand: scannedFood.brand || undefined,
+      });
+    } else if (nameRequest) {
+      await createNameLookup({
+        petId: created.id,
+        petName: created.name,
+        petType: created.pet_type,
+        brand: nameRequest.brand,
+        queryName: nameRequest.queryName,
+        pastedUrl: nameRequest.pastedUrl,
+        email: nameRequest.email,
+        setAsCurrentFood: true,
+      });
+    } else if (barcodeMiss?.requested && barcodeMiss.barcode && barcodeMiss.front && barcodeMiss.ingredients) {
+      await createPhotoLookup({
+        frontImageUri: barcodeMiss.front,
+        ingredientImageUri: barcodeMiss.ingredients,
+        barcodeImageUri: barcodeMiss.photoUri || undefined,
+        barcode: barcodeMiss.barcode,
+        petId: created.id,
+        petName: created.name,
+        petType: created.pet_type,
+        setAsCurrentFood: true,
+      });
+    }
+    return created;
   };
 
   const savePet = async () => {
@@ -141,13 +182,20 @@ export default function AddPetScreen() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanLooking, setScanLooking] = useState(false);
   const scanRef = useRef(false);
+  const cameraRef = useRef<CameraView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [scannedFood, setScannedFood] = useState<{ productName: string; productId?: string; brand?: string } | null>(null);
 
   const handleBarcodeScan = useCallback(async ({ data }: { data: string }) => {
     if (scanRef.current) return;
     scanRef.current = true;
     setScanLooking(true);
+    let photoUri: string | null = null;
+    try {
+      const shot = await cameraRef.current?.takePictureAsync({ quality: 0.6 });
+      photoUri = shot?.uri || null;
+    } catch {
+      photoUri = null;
+    }
     try {
       const res = await api.get<any>('/scan/barcode-lookup', {
         params: { barcode: data, petType },
@@ -162,11 +210,17 @@ export default function AddPetScreen() {
         setScannerOpen(false);
       } else {
         setScannerOpen(false);
-        toast.show({ message: 'Product not found. You can register it from the home screen!', type: 'info' });
+        setBarcodeMiss({ barcode: data, photoUri, front: null, ingredients: null });
+        setScannedFood(null);
+        setNameRequest(null);
+        setRequestOpen(false);
       }
     } catch {
       setScannerOpen(false);
-      toast.show({ message: 'Product not found. You can register it from the home screen!', type: 'info' });
+      setBarcodeMiss({ barcode: data, photoUri, front: null, ingredients: null });
+      setScannedFood(null);
+      setNameRequest(null);
+      setRequestOpen(false);
     } finally {
       setScanLooking(false);
     }
@@ -188,17 +242,6 @@ export default function AddPetScreen() {
     setIsLoading(true);
     try {
       await savePetCore();
-      if (scannedFood) {
-        const createdPets = await (await import('../services/api')).default.get('/pets');
-        const latestPet = createdPets.data.pets?.[createdPets.data.pets.length - 1];
-        if (latestPet?.id) {
-          await api.post(`/pets/${latestPet.id}/current-food`, {
-            productId: scannedFood.productId || undefined,
-            productName: scannedFood.productName,
-            brand: scannedFood.brand || undefined,
-          });
-        }
-      }
       navigation.goBack();
     } catch (e: any) {
       toast.show({ message: e.message || 'Failed to add pet', type: 'error' });
@@ -510,20 +553,61 @@ export default function AddPetScreen() {
                   <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
                 </Pressable>
               </View>
-            ) : (
-              <Pressable
-                onPress={openScanner}
-                style={({ pressed }) => [styles.foodOptionBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Ionicons name="barcode-outline" size={28} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>Scan Food Barcode</Text>
-                  <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-                    If not in our database, you can register it and earn 🦴×20
-                  </Text>
+            ) : nameRequest ? (
+              <View style={{ gap: spacing.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, backgroundColor: colors.primary + '12', borderRadius: radius.large }}>
+                  <Ionicons name="time-outline" size={20} color={colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{nameRequest.queryName}</Text>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{nameRequest.brand}</Text>
+                  </View>
+                  <Pressable onPress={() => setNameRequest(null)}>
+                    <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
+                  </Pressable>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-              </Pressable>
+                <AnalysisNotice />
+              </View>
+            ) : barcodeMiss ? (
+              <BarcodeRegisterFields
+                barcode={barcodeMiss.barcode}
+                petName={name.trim() || 'your pet'}
+                requested={barcodeMiss.requested === true}
+                onBack={() => setBarcodeMiss(null)}
+                onRequest={() => setBarcodeMiss({ ...barcodeMiss, requested: true })}
+                onChange={(photos) => setBarcodeMiss({ ...barcodeMiss, ...photos })}
+              />
+            ) : requestOpen ? (
+              <LookupRequestCard
+                petName={name.trim() || 'your pet'}
+                searchQuery={missQuery}
+                onBack={() => setRequestOpen(false)}
+                actionLabel="Use this food"
+                onRequest={async (input) => { setNameRequest(input); setRequestOpen(false); }}
+              />
+            ) : (
+              <View style={{ gap: spacing.md }}>
+                <FoodSearchInput
+                  petType={petType}
+                  onSelect={(food) => setScannedFood(food)}
+                  onMiss={(query) => { setMissQuery(query); setRequestOpen(true); }}
+                />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.divider }} />
+                  <Text style={[typography.bodySmall, { color: colors.textSecondary, fontWeight: '500' }]}>or</Text>
+                  <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.divider }} />
+                </View>
+                <Pressable
+                  onPress={openScanner}
+                  style={({ pressed }) => [styles.foodOptionBtn, pressed && { opacity: 0.9 }]}
+                >
+                  <Ionicons name="barcode-outline" size={28} color={colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[typography.labelLarge, { color: colors.textPrimary }]}>Scan barcode</Text>
+                    <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>If you have one, scan it.</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                </Pressable>
+              </View>
             )}
           </View>
         )}
@@ -557,7 +641,7 @@ export default function AddPetScreen() {
             </Pressable>
           ) : (
             <Pressable
-              onPress={scannedFood ? savePetWithFood : savePet}
+              onPress={scannedFood || nameRequest || barcodeMiss?.requested ? savePetWithFood : savePet}
               disabled={isLoading}
               style={({ pressed }) => [
                 styles.nextBtn,
@@ -568,7 +652,7 @@ export default function AddPetScreen() {
               {isLoading ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={styles.nextBtnText}>{scannedFood ? 'Add Pet' : 'Skip & Add Pet'}</Text>
+                <Text style={styles.nextBtnText}>{scannedFood || nameRequest || barcodeMiss?.requested ? 'Add Pet' : 'Skip & Add Pet'}</Text>
               )}
             </Pressable>
           )}
@@ -579,6 +663,7 @@ export default function AddPetScreen() {
       <Modal visible={scannerOpen} animationType="slide" presentationStyle="fullScreen">
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <CameraView
+            ref={cameraRef}
             style={{ flex: 1 }}
             barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
             onBarcodeScanned={scanLooking ? undefined : handleBarcodeScan}

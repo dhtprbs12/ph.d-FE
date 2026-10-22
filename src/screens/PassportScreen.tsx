@@ -111,12 +111,6 @@ function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressIm
 
         {hasCheckins ? (
           <>
-            <View style={styles.checkinChip}>
-              <Ionicons name="checkbox-outline" size={15} color={colors.primary} />
-              <Text style={styles.checkinChipText}>
-                From {entry.stats.checkinCount} {entry.stats.checkinCount === 1 ? 'log' : 'logs'}
-              </Text>
-            </View>
             <View style={styles.statRow}>
               <StatTile
                 emoji={stool.emoji}
@@ -144,7 +138,7 @@ function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressIm
         ) : (
           <View style={styles.emptyCheckins}>
             <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.emptyCheckinsText}>No check-ins on this food yet</Text>
+            <Text style={styles.emptyCheckinsText}>No health logs for this food yet</Text>
           </View>
         )}
       </View>
@@ -358,8 +352,8 @@ export default function PassportScreen() {
                 affecting your pet's stool, itching, or vomiting.
               </Text>
               <Text style={styles.howBullet}>
-                • <Text style={styles.howBulletBold}>Check in at least 3 times on each food:</Text> One or two days can't
-                tell a real pattern from an off day. Once two of your foods each have three check-ins, we can start
+                • <Text style={styles.howBulletBold}>Log pet health at least 3 times on each food:</Text> Meals don't count here. One or two days can't
+                tell a real pattern from an off day. Once two foods each have three health logs, we can start
                 comparing their ingredients.
               </Text>
               <Text style={styles.howBullet}>
@@ -453,17 +447,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   daysChipText: { ...typography.labelMedium, fontWeight: '600', color: colors.textPrimary },
-  checkinChip: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.lightGray,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.full,
-  },
-  checkinChipText: { ...typography.labelLarge, color: colors.textPrimary },
   statRow: { flexDirection: 'row', gap: spacing.xs },
   statTile: {
     flex: 1,

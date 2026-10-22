@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useReducer, useCallback } from 'react';
+import { AppState } from 'react-native';
 import type { Pet } from '../types';
 import * as authService from '../services/authService';
 import * as petService from '../services/petService';
@@ -57,7 +58,7 @@ function reducer(state: AppState, action: Action): AppState {
 interface AppContextValue extends AppState {
   authenticateAndSync: () => Promise<void>;
   selectPet: (pet: Pet) => void;
-  addPet: (pet: Pet) => Promise<void>;
+  addPet: (pet: Pet) => Promise<Pet>;
   updatePet: (pet: Pet) => Promise<void>;
   deletePet: (pet: Pet) => Promise<void>;
   setPrimaryPet: (pet: Pet) => void;
@@ -75,9 +76,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isLoading: true,
   });
 
+  const authenticateAndSync = useCallback(async () => {
+    try {
+      dispatch({ type: 'SET_AUTHENTICATED', value: true });
+
+      const serverPets = await petService.getPets();
+      const localPets = await loadPetsLocally<Pet>();
+      const localPhotoMap = new Map(localPets.map(p => [p.id, p.photoData]));
+      const merged = serverPets.map(sp => ({
+        ...sp,
+        photoData: sp.photoData ?? (sp as any).photo_url ?? localPhotoMap.get(sp.id) ?? undefined,
+      }));
+
+      dispatch({ type: 'SET_PETS', pets: merged });
+      await savePetsLocally(merged);
+
+      const selectedId = await getSelectedPetId();
+      const selected = merged.find(p => p.id === selectedId) ??
+        merged.find(p => p.is_primary) ??
+        merged[0] ??
+        null;
+      dispatch({ type: 'SET_SELECTED_PET', pet: selected });
+      if (!selected) await saveSelectedPetId(null);
+    } catch (e) {
+      console.warn('Pet sync failed (offline mode):', e);
+    }
+  }, []);
+
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const localPets = await loadPetsLocally<Pet>();
+      if (cancelled) return;
       if (localPets.length > 0) {
         dispatch({ type: 'SET_PETS', pets: localPets });
         const selectedId = await getSelectedPetId();
@@ -89,46 +119,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // History (and other flows) use isAuthenticated; token is set on first disclaimer.
       // Returning users skip Disclaimer, so restore session from stored token.
       const token = await authService.getToken();
+      if (cancelled) return;
       if (token) {
         dispatch({ type: 'SET_AUTHENTICATED', value: true });
       }
       dispatch({ type: 'SET_LOADING', value: false });
+      if (token) await authenticateAndSync();
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticateAndSync]);
 
-  const authenticateAndSync = useCallback(async () => {
-    try {
-      dispatch({ type: 'SET_AUTHENTICATED', value: true });
-
-      const serverPets = await petService.getPets();
-      if (serverPets.length > 0) {
-        const localPets = await loadPetsLocally<Pet>();
-        const localPhotoMap = new Map(localPets.map(p => [p.id, p.photoData]));
-        const merged = serverPets.map(sp => ({
-          ...sp,
-          photoData: sp.photoData ?? (sp as any).photo_url ?? localPhotoMap.get(sp.id) ?? undefined,
-        }));
-
-        dispatch({ type: 'SET_PETS', pets: merged });
-        await savePetsLocally(merged);
-
-        const selectedId = await getSelectedPetId();
-        const selected = merged.find(p => p.id === selectedId) ??
-          merged.find(p => p.is_primary) ??
-          merged[0];
-        dispatch({ type: 'SET_SELECTED_PET', pet: selected ?? null });
-      }
-    } catch (e) {
-      console.warn('Pet sync failed (offline mode):', e);
-    }
-  }, []);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      void authService.getToken().then((token) => {
+        if (token) void authenticateAndSync();
+      });
+    });
+    return () => sub.remove();
+  }, [authenticateAndSync]);
 
   const selectPet = useCallback((pet: Pet) => {
     dispatch({ type: 'SET_SELECTED_PET', pet });
     saveSelectedPetId(pet.id);
   }, []);
 
-  const addPet = useCallback(async (pet: Pet): Promise<void> => {
+  const addPet = useCallback(async (pet: Pet): Promise<Pet> => {
     const isFirst = state.pets.length === 0;
     const newPet = isFirst ? { ...pet, is_primary: true } : pet;
     const willBeSelected = isFirst || !state.selectedPet;
@@ -180,10 +198,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await savePetsLocally(allPets.map(p => (p.id === newPet.id ? finalPet : p)));
 
         await authenticateAndSync();
+        return finalPet;
       } catch (e) {
         console.warn('Server create failed:', e);
       }
     }
+    return newPet;
   }, [state.pets, state.selectedPet, state.isAuthenticated]);
 
   const updatePetAction = useCallback(async (pet: Pet) => {
@@ -261,16 +281,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [state.pets, state.isAuthenticated]);
 
   const refreshPets = useCallback(async () => {
-    try {
-      const serverPets = await petService.getPets();
-      if (serverPets.length > 0) {
-        dispatch({ type: 'SET_PETS', pets: serverPets });
-        await savePetsLocally(serverPets);
-      }
-    } catch (e) {
-      console.warn('Refresh pets failed:', e);
-    }
-  }, []);
+    const token = await authService.getToken();
+    if (!token) return;
+    await authenticateAndSync();
+  }, [authenticateAndSync]);
 
   const resetApp = useCallback(async () => {
     dispatch({ type: 'RESET' });

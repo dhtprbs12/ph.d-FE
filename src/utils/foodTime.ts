@@ -33,5 +33,5 @@ export function formatLogTime(raw?: string | null): string {
   if (!raw) return '';
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }

@@ -208,12 +208,13 @@ export function QuickScanScreen() {
                 <Text style={s.retryBtnText}>Scan Again</Text>
               </Pressable>
             </View>
-            {mode === 'analyze' && missedScan ? (
+            {(mode === 'analyze' || route.params?.firstFood) && missedScan ? (
               <Pressable
                 onPress={() => navigation.replace('LookupPhotos', {
                   mode: 'barcode',
                   barcode: missedScan.barcode,
                   barcodePhotoUri: missedScan.photoUri,
+                  setAsCurrentFood: route.params?.firstFood === true,
                 })}
                 style={s.registerBtn}
               >

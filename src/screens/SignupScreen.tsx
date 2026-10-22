@@ -20,6 +20,10 @@ import type { PetSex } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 import { DOG_BREEDS, CAT_BREEDS } from '../data/breeds';
 import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
+import { LookupRequestCard } from '../components/LookupRequestCard';
+import { BarcodeRegisterFields } from '../components/BarcodeRegisterFields';
+import { AnalysisNotice } from '../components/AnalysisNotice';
+import { createNameLookup, createPhotoLookup } from '../services/lookupService';
 import { useToast } from '../components/common/Toast';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { buildThumbUrl, buildImageUrl } from '../utils/helpers';
@@ -65,10 +69,15 @@ export default function SignupScreen({ navigation }: Props) {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
   const [currentFoodSelection, setCurrentFoodSelection] = useState<FoodSelection | null>(null);
+  const [nameRequest, setNameRequest] = useState<{ brand: string; queryName: string; pastedUrl: string; email: string } | null>(null);
+  const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; requested?: boolean } | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [missQuery, setMissQuery] = useState('');
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanLooking, setScanLooking] = useState(false);
   const scanRef = useRef(false);
+  const cameraRef = useRef<CameraView>(null);
   const [zoomUri, setZoomUri] = useState<string | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
@@ -76,6 +85,13 @@ export default function SignupScreen({ navigation }: Props) {
     if (scanRef.current) return;
     scanRef.current = true;
     setScanLooking(true);
+    let photoUri: string | null = null;
+    try {
+      const shot = await cameraRef.current?.takePictureAsync({ quality: 0.6 });
+      photoUri = shot?.uri || null;
+    } catch {
+      photoUri = null;
+    }
     try {
       const res = await api.get<any>('/scan/barcode-lookup', {
         params: { barcode: data, petType },
@@ -89,13 +105,25 @@ export default function SignupScreen({ navigation }: Props) {
           imageUrl: result.product.imageUrl || result.product.image_url || null,
         });
         setScannerOpen(false);
+        setNameRequest(null);
+        setRequestOpen(false);
       } else {
         setScannerOpen(false);
-        toast.show({ message: 'Product not found. Try searching by name instead.', type: 'info' });
+        setCurrentFoodSelection(null);
+        setNameRequest(null);
+        setRequestOpen(false);
+        setBarcodeMiss({ barcode: data, photoUri, front: null, ingredients: null });
       }
-    } catch {
+    } catch (e: any) {
       setScannerOpen(false);
-      toast.show({ message: 'Failed to look up barcode', type: 'error' });
+      if (e?.response?.status === 404) {
+        setCurrentFoodSelection(null);
+        setNameRequest(null);
+        setRequestOpen(false);
+        setBarcodeMiss({ barcode: data, photoUri, front: null, ingredients: null });
+      } else {
+        toast.show({ message: 'Failed to look up barcode', type: 'error' });
+      }
     } finally {
       setScanLooking(false);
     }
@@ -226,15 +254,45 @@ export default function SignupScreen({ navigation }: Props) {
         }
       }
 
-      if (currentFoodSelection?.productName && createdPet?.id) {
+      if (createdPet?.id && currentFoodSelection?.productId) {
         try {
           await api.post(`/pets/${createdPet.id}/current-food`, {
-            productId: currentFoodSelection.productId || undefined,
+            productId: currentFoodSelection.productId,
             productName: currentFoodSelection.productName,
             brand: currentFoodSelection.brand || undefined,
           });
         } catch (e) {
           console.warn('Current food registration failed:', e);
+        }
+      } else if (createdPet?.id && nameRequest) {
+        try {
+          await createNameLookup({
+            petId: createdPet.id,
+            petName: createdPet.name,
+            petType: createdPet.pet_type || petType,
+            brand: nameRequest.brand,
+            queryName: nameRequest.queryName,
+            pastedUrl: nameRequest.pastedUrl,
+            email: nameRequest.email || email.trim() || undefined,
+            setAsCurrentFood: true,
+          });
+        } catch (e) {
+          console.warn('Food lookup failed:', e);
+        }
+      } else if (createdPet?.id && barcodeMiss?.requested && barcodeMiss.front && barcodeMiss.ingredients) {
+        try {
+          await createPhotoLookup({
+            frontImageUri: barcodeMiss.front,
+            ingredientImageUri: barcodeMiss.ingredients,
+            barcode: barcodeMiss.barcode,
+            barcodeImageUri: barcodeMiss.photoUri || undefined,
+            petId: createdPet.id,
+            petName: createdPet.name,
+            petType: createdPet.pet_type || petType,
+            setAsCurrentFood: true,
+          });
+        } catch (e) {
+          console.warn('Food photo lookup failed:', e);
         }
       }
 
@@ -604,14 +662,48 @@ export default function SignupScreen({ navigation }: Props) {
                   <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
                 </Pressable>
               </View>
+            ) : nameRequest ? (
+              <View style={{ gap: spacing.sm }}>
+                <View style={styles.selectedFood}>
+                  <Ionicons name="time-outline" size={22} color={colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{nameRequest.queryName}</Text>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{nameRequest.brand}</Text>
+                  </View>
+                  <Pressable onPress={() => setNameRequest(null)}>
+                    <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
+                  </Pressable>
+                </View>
+                <AnalysisNotice />
+              </View>
+            ) : barcodeMiss ? (
+              <BarcodeRegisterFields
+                barcode={barcodeMiss.barcode}
+                petName={petName.trim() || 'your pet'}
+                requested={barcodeMiss.requested === true}
+                onBack={() => setBarcodeMiss(null)}
+                onRequest={() => setBarcodeMiss({ ...barcodeMiss, requested: true })}
+                onChange={(photos) => setBarcodeMiss({ ...barcodeMiss, ...photos })}
+              />
+            ) : requestOpen ? (
+              <LookupRequestCard
+                petName={petName.trim() || 'your pet'}
+                searchQuery={missQuery}
+                onBack={() => setRequestOpen(false)}
+                actionLabel="Use this food"
+                onRequest={async (input) => { setNameRequest(input); setRequestOpen(false); }}
+              />
             ) : (
               <FoodSearchInput
                 petType={petType}
                 onSelect={(food) => setCurrentFoodSelection(food)}
-                placeholder="Search or type food name..."
+                onMiss={(query) => { setMissQuery(query); setRequestOpen(true); }}
+                placeholder="Search food name..."
               />
             )}
 
+            {!barcodeMiss && !requestOpen && !nameRequest && (
+            <>
             <View style={styles.orDivider}>
               <View style={styles.orLine} />
               <Text style={styles.orText}>or</Text>
@@ -624,11 +716,13 @@ export default function SignupScreen({ navigation }: Props) {
             >
               <Ionicons name="barcode-outline" size={22} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Scan Food Barcode</Text>
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>Scan the barcode on your pet food bag</Text>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Scan barcode</Text>
+                <Text style={{ fontSize: 13, color: colors.textSecondary }}>If you have one, scan it.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
             </Pressable>
+            </>
+            )}
 
             <View style={[styles.row, { marginTop: spacing.lg }]}>
               <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
@@ -641,7 +735,7 @@ export default function SignupScreen({ navigation }: Props) {
               >
                 {loading ? <ActivityIndicator color={colors.white} /> : (
                   <Text style={styles.buttonText}>
-                    {currentFoodSelection ? 'Create Account' : 'Skip & Create Account'}
+                    {currentFoodSelection?.productId || nameRequest || barcodeMiss?.requested ? 'Create Account' : 'Skip & Create Account'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -653,6 +747,7 @@ export default function SignupScreen({ navigation }: Props) {
       <Modal visible={scannerOpen} animationType="slide" presentationStyle="fullScreen">
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <CameraView
+            ref={cameraRef}
             style={{ flex: 1 }}
             barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
             onBarcodeScanned={scanLooking ? undefined : handleBarcodeScan}

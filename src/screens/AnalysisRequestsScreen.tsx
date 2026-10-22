@@ -5,15 +5,41 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { HistoryStackParamList } from '../navigation/types';
 import { colors, radius, spacing, typography } from '../theme';
+import { formatProductTitleText } from '../utils/helpers';
 import { listLookups, type LookupSummary } from '../services/lookupService';
 
 const STATUS_LABEL: Record<LookupSummary['status'], string> = {
   queued: 'Preparing',
   searching: 'Preparing',
-  needs_choice: 'Choose a match',
+  needs_choice: 'Choose',
   ready: 'Ready',
-  failed: "Couldn't find a label",
+  failed: 'No label',
 };
+
+function formatRequestedAt(value: string) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const hasZone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(raw);
+  const normalized = raw.includes('T') || hasZone ? raw : `${raw.replace(' ', 'T')}Z`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function statusPill(status: LookupSummary['status']) {
+  if (status === 'ready') {
+    return { color: colors.white, backgroundColor: colors.primary };
+  }
+  if (status === 'failed') {
+    return { color: '#9C4221', backgroundColor: '#F8E6DF' };
+  }
+  return { color: colors.textSecondary, backgroundColor: colors.lightGray };
+}
 
 export function AnalysisRequestsList({ onPendingChange }: { onPendingChange?: (count: number) => void }) {
   const navigation = useNavigation<NativeStackNavigationProp<HistoryStackParamList>>();
@@ -81,17 +107,38 @@ export function AnalysisRequestsList({ onPendingChange }: { onPendingChange?: (c
         <Pressable
           key={item.id}
           onPress={() => navigation.navigate('LookupRequest', { id: item.id })}
-          style={{ backgroundColor: colors.white, borderRadius: radius.large, padding: spacing.md, gap: 4 }}
+          style={{
+            backgroundColor: colors.white,
+            borderRadius: radius.large,
+            padding: spacing.sm,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
+          }}
         >
-          <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
-            {[item.brand, item.queryName].filter(Boolean).join(' ') || 'Food photos'}
-          </Text>
-          <Text style={{ color: colors.primary, fontWeight: '600' }}>{STATUS_LABEL[item.status]}</Text>
-          {item.status === 'queued' || item.status === 'searching' ? (
-            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-              We'll notify you within 24 hours.
+          <View style={{
+            width: 44,
+            height: 44,
+            borderRadius: radius.medium,
+            backgroundColor: colors.lightGray,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Text style={{ fontSize: 20 }}>{item.entry === 'photo' ? '📷' : '🔍'}</Text>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: '700' }} numberOfLines={1}>
+              {formatProductTitleText([item.brand, item.queryName].filter(Boolean).join(' ')) || 'Food Photos'}
             </Text>
-          ) : null}
+            <Text style={[typography.bodySmall, { color: colors.textSecondary }]} numberOfLines={1}>
+              {formatRequestedAt(item.createdAt)}
+            </Text>
+          </View>
+          <View style={[{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: radius.full }, statusPill(item.status)]}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: statusPill(item.status).color }}>
+              {STATUS_LABEL[item.status]}
+            </Text>
+          </View>
         </Pressable>
       ))}
     </ScrollView>

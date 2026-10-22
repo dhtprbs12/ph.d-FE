@@ -49,12 +49,12 @@ export type HomeStackParamList = {
   ProductSearch: undefined;
   Result: ResultParams;
   TwoStepScan: undefined;
-  QuickScan: { mode?: 'analyze' | 'selectFood'; petId?: string } | undefined;
+  QuickScan: { mode?: 'analyze' | 'selectFood'; petId?: string; firstFood?: boolean } | undefined;
   ManualIngredients: ManualIngredientsParams | undefined;
   FoodCheck: undefined;
   AddPet: undefined;
   ProductRegister: { barcode?: string } | undefined;
-  LookupPhotos: { mode: 'search' | 'barcode'; barcode?: string; barcodePhotoUri?: string; email?: string };
+  LookupPhotos: { mode: 'search' | 'barcode'; barcode?: string; barcodePhotoUri?: string; email?: string; setAsCurrentFood?: boolean; productName?: string };
   CheckIn: { petId: string; petName?: string; foodName?: string; daysOnFood?: number };
   Character: undefined;
   Passport: { petId: string; petName?: string };

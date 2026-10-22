@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -6,6 +6,7 @@ import type { RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { HistoryStackParamList } from '../navigation/types';
+import type { Product } from '../types';
 import { colors, radius, spacing, typography } from '../theme';
 import {
   ackLookup,
@@ -59,11 +60,21 @@ export function LookupRequestScreen() {
     void load();
   }, [load]));
 
-  const openReport = async () => {
-    if (!detail?.scanResult) return;
-    await ackLookup(detail.id);
-    navigation.navigate('Result', { scanResult: detail.scanResult });
-  };
+  useEffect(() => {
+    if (!detail || detail.status !== 'ready' || !detail.productId) return;
+    const productId = detail.productId;
+    const name = [detail.brand, detail.queryName].filter(Boolean).join(' ') || 'Food';
+    void ackLookup(detail.id).catch(() => {});
+    navigation.replace('Result', {
+      productId,
+      product: {
+        id: productId,
+        name,
+        ...(detail.brand ? { brand: detail.brand } : {}),
+      } as Product,
+      preloadedScore: { score: 0 },
+    });
+  }, [detail, navigation]);
 
   const title = detail
     ? ([detail.brand, detail.queryName].filter(Boolean).join(' ') || 'Food photos')
@@ -98,29 +109,31 @@ export function LookupRequestScreen() {
               {detail.status === 'failed' ? (
                 <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>{failureCopy(detail)}</Text>
               ) : null}
-              {detail.status === 'ready' && detail.scanResult ? (
-                <Pressable
-                  onPress={openReport}
-                  style={{ backgroundColor: colors.primary, borderRadius: radius.medium, padding: spacing.md, alignItems: 'center' }}
-                >
-                  <Text style={{ color: colors.white, fontWeight: '700' }}>Open report</Text>
-                </Pressable>
+              {detail.status === 'ready' && detail.productId ? (
+                <ActivityIndicator color={colors.primary} />
               ) : null}
-              {detail.entry === 'photo' && photos.length === 0 ? (
+              {detail.status === 'ready' && !detail.productId ? (
+                <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>
+                  This report isn't available yet.
+                </Text>
+              ) : null}
+              {detail.status !== 'ready' && detail.entry === 'photo' && photos.length === 0 ? (
                 <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>
                   Photos for this request weren't saved.
                 </Text>
               ) : null}
-              {photos.map((slot) => (
-                <View key={slot.label} style={{ gap: spacing.xs }}>
-                  <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>{slot.label}</Text>
-                  <Image
-                    source={{ uri: slot.url! }}
-                    style={{ width: '100%', height: 220, borderRadius: radius.medium, backgroundColor: colors.lightGray }}
-                    resizeMode="cover"
-                  />
-                </View>
-              ))}
+              {detail.status !== 'ready'
+                ? photos.map((slot) => (
+                  <View key={slot.label} style={{ gap: spacing.xs }}>
+                    <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>{slot.label}</Text>
+                    <Image
+                      source={{ uri: slot.url! }}
+                      style={{ width: '100%', height: 220, borderRadius: radius.medium, backgroundColor: colors.lightGray }}
+                      resizeMode="cover"
+                    />
+                  </View>
+                ))
+                : null}
             </>
           ) : null}
         </ScrollView>

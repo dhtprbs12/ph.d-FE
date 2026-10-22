@@ -25,14 +25,16 @@ interface Props {
   petType?: string;
   onSelect: (food: FoodSelection) => void;
   onScanBarcode?: () => void;
+  onMiss?: (query: string) => void;
   placeholder?: string;
   initialValue?: string;
 }
 
-export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarcode, placeholder, initialValue }: Props) {
+export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarcode, onMiss, placeholder, initialValue }: Props) {
   const [text, setText] = useState(initialValue || '');
   const [results, setResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [looked, setLooked] = useState(false);
   const timer = useRef<NodeJS.Timeout | null>(null);
 
   const handleChange = useCallback((val: string) => {
@@ -40,6 +42,7 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
     if (timer.current) clearTimeout(timer.current);
     if (val.trim().length < 2) {
       setResults([]);
+      setLooked(false);
       return;
     }
     timer.current = setTimeout(async () => {
@@ -49,8 +52,10 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
           params: { q: val.trim(), petType, limit: 5 },
         });
         setResults(data.products || []);
+        setLooked(true);
       } catch {
         setResults([]);
+        setLooked(true);
       } finally {
         setSearching(false);
       }
@@ -106,13 +111,25 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
         </View>
       )}
 
+      {onMiss && looked && !searching && results.length === 0 && text.trim().length >= 2 && (
+        <View style={{ gap: 6, marginTop: 8 }}>
+          <Text style={{ fontSize: 13, color: colors.textSecondary }}>This food isn't in the app yet.</Text>
+          <Pressable
+            onPress={() => onMiss(text.trim())}
+            style={{ backgroundColor: colors.primary, borderRadius: radius.medium, paddingVertical: 14, alignItems: 'center' }}
+          >
+            <Text style={{ color: colors.white, fontSize: 16, fontWeight: '600' }}>Request analysis</Text>
+          </Pressable>
+        </View>
+      )}
+
       <View style={styles.actions}>
-        {text.trim().length > 0 && (
+        {text.trim().length > 0 && !onMiss ? (
           <Pressable onPress={handleFreeText} style={styles.actionBtn}>
             <Ionicons name="create-outline" size={14} color={colors.textSecondary} />
             <Text style={styles.freeTextLabel}>Save "{text.trim()}" as-is</Text>
           </Pressable>
-        )}
+        ) : null}
         {onScanBarcode && (
           <Pressable onPress={onScanBarcode} style={styles.actionBtn}>
             <Ionicons name="barcode-outline" size={14} color={colors.primary} />

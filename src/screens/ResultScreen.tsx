@@ -46,6 +46,7 @@ import {
 import type { AlternativeProduct, ConditionWarning, IngredientAnalysis, ScanResult } from '../types';
 import { formatCommunityScans } from '../types';
 import { buildImageUrl, buildThumbUrl, formatLifeStage, formatProductTitleText, productTypeLabel, toIngredientTitleCase } from '../utils/helpers';
+import { useApp } from '../context/AppContext';
 import { useToast } from '../components/common/Toast';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 

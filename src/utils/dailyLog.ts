@@ -22,18 +22,48 @@ export function vomitLabel(value?: string | null): string | null {
 export function stoolLabel(score?: number | null): string | null {
   const names = ['', 'Very Bad', 'Bad', 'Normal', 'Good', 'Great'];
   if (!score || score < 1 || score > 5) return null;
-  return `${score} ${names[score]}`;
+  return names[score];
 }
+
+const MEAL_LINE: Record<string, string> = {
+  morning: '☀️ Morning Meal Logged',
+  lunch: '🍖 Lunch Meal Logged',
+  evening: '🌙 Evening Meal Logged',
+  snack: '🍪 Snack Meal Logged',
+};
 
 export function logSummary(entry: DailyLog): string {
   if (entry.logType === 'meal') {
-    const slot = entry.mealSlot ? `${entry.mealSlot[0].toUpperCase()}${entry.mealSlot.slice(1)} meal` : 'Meal';
+    const title = (entry.mealSlot && MEAL_LINE[entry.mealSlot]) || 'Meal Logged';
     const appetite = appetiteLabel(entry.appetite);
-    return appetite ? `${slot} · ${appetite}` : slot;
+    return appetite ? `${title} (Appetite: ${appetite})` : title;
   }
-  const parts = [stoolLabel(entry.stoolScore), itchLabel(entry.itching), vomitLabel(entry.vomiting)].filter(Boolean);
-  if (entry.notes && parts.length === 0) return 'Note';
-  return parts.join(' · ') || 'Health';
+
+  const bits: string[] = [];
+  const stool = stoolLabel(entry.stoolScore);
+  if (stool) bits.push(`💩 Poop Status Logged (${stool})`);
+  const itch = itchLabel(entry.itching);
+  if (itch) bits.push(itch === 'Licking' ? `👅 ${itch}` : `🐾 ${itch}`);
+  const vomit = vomitLabel(entry.vomiting);
+  if (vomit) bits.push(`🤮 Vomit Alert! (${vomit})`);
+  return bits.join(' · ') || 'Health';
+}
+
+function laterLog(current: DailyLog | null, row: DailyLog): DailyLog {
+  if (!current) return row;
+  return String(row.loggedAt || '') > String(current.loggedAt || '') ? row : current;
+}
+
+export function latestMealAndHealth(rows: DailyLog[]): DailyLog[] {
+  let meal: DailyLog | null = null;
+  let health: DailyLog | null = null;
+  for (const row of rows) {
+    if (row.logType === 'meal') meal = laterLog(meal, row);
+    else health = laterLog(health, row);
+  }
+  return [meal, health]
+    .filter((row): row is DailyLog => row != null)
+    .sort((a, b) => String(b.loggedAt || '').localeCompare(String(a.loggedAt || '')));
 }
 
 export function isVomitLog(entry: DailyLog): boolean {

@@ -32,8 +32,10 @@ import checkinService, { DailyLog } from '../services/checkinService';
 import DailyLogSheets from '../components/DailyLogSheets';
 import { scheduleDailyReminders } from '../services/dailyReminders';
 import { calendarDaysOnFood, formatFoodDay, formatLogTime, phoneYmd } from '../utils/foodTime';
-import { isVomitLog, logSummary } from '../utils/dailyLog';
+import { isVomitLog, latestMealAndHealth, logSummary } from '../utils/dailyLog';
 import { useToast } from '../components/common/Toast';
+import { LookupRequestCard } from '../components/LookupRequestCard';
+import { createNameLookup } from '../services/lookupService';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 import api from '../services/api';
 import { toTitleCase, buildThumbUrl } from '../utils/helpers';
@@ -286,6 +288,8 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchDone, setSearchDone] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [recentLogs, setRecentLogs] = useState<DailyLog[]>([]);
   const [logSheet, setLogSheet] = useState<'meal' | 'health' | null>(null);
   const toast = useToast();
@@ -295,7 +299,9 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const loadFoodAndLogs = useCallback(() => {
     if (!pet?.id) return;
     petFoodService.getCurrentFood(pet.id).then(setCurrentFood).catch(console.warn);
-    checkinService.getRecent(pet.id, 2).then(r => setRecentLogs(r.checkins || [])).catch(() => setRecentLogs([]));
+    checkinService.getCheckins(pet.id, '2020-01-01', phoneYmd())
+      .then(r => setRecentLogs(latestMealAndHealth(r.checkins || [])))
+      .catch(() => setRecentLogs([]));
     const today = phoneYmd();
     checkinService.getCheckins(pet.id, today, today)
       .then(r => scheduleDailyReminders(pet.name, (r.checkins?.length ?? 0) > 0))
@@ -311,6 +317,8 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (text.trim().length < 2) {
       setSearchResults([]);
+      setSearchDone(false);
+      setRequestOpen(false);
       return;
     }
     searchTimer.current = setTimeout(async () => {
@@ -318,8 +326,10 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
       try {
         const { data } = await api.get('/products/search', { params: { q: text.trim(), petType: pet.pet_type, limit: 5 } });
         setSearchResults(data.products || []);
+        setSearchDone(true);
       } catch {
         setSearchResults([]);
+        setSearchDone(true);
       } finally {
         setSearching(false);
       }
@@ -355,29 +365,13 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
     }
   };
 
-  const handleSaveFreeText = async () => {
-    if (!foodNameInput.trim()) return;
-    setSaving(true);
-    try {
-      await petFoodService.setCurrentFood(pet.id, { productName: foodNameInput.trim() });
-      const updated = await petFoodService.getCurrentFood(pet.id);
-      setCurrentFood(updated);
-      setShowFoodInput(false);
-      setFoodNameInput('');
-      setSearchResults([]);
-    } catch (e) {
-      console.warn('Failed to save food:', e);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const hasProductId = currentFood?.productId != null;
 
   return (
     <View style={[styles.card, shadows.card]}>
       {currentFood ? (
         <View style={{ gap: spacing.sm }}>
+          <Text style={[typography.titleLarge, { color: colors.textPrimary }]}>Eating now</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             {currentFood.imageUrl ? (
               <Pressable onPress={() => setZoomImageUri(currentFood.imageUrl)}>
@@ -392,6 +386,9 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
               <Text style={[typography.labelLarge, { color: colors.textPrimary }]} numberOfLines={1}>
                 {toTitleCase(currentFood.productName)}
               </Text>
+              {currentFood.analysisPending ? (
+                <Text style={[typography.bodySmall, { color: colors.primary, fontWeight: '600' }]}>Analysis in progress</Text>
+              ) : null}
               {currentFood.manufacturer ? (
                 <Text style={[typography.labelMedium, { color: colors.textSecondary }]} numberOfLines={1}>
                   {toTitleCase(currentFood.manufacturer)}
@@ -403,24 +400,39 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
             </View>
           </View>
           <View style={styles.logActions}>
-            <Pressable onPress={() => setLogSheet('meal')} style={styles.logBtn}>
-              <Text style={styles.logBtnText}>🍖 Log a Meal</Text>
+            <Pressable
+              onPress={() => setLogSheet('meal')}
+              style={({ pressed }) => [styles.logBtn, pressed && { opacity: 0.7 }]}
+            >
+              <View style={styles.logBtnIcon}>
+                <Ionicons name="restaurant-outline" size={18} color={colors.white} />
+              </View>
+              <Text style={styles.logBtnText}>Log a Meal</Text>
             </Pressable>
-            <Pressable onPress={() => setLogSheet('health')} style={styles.logBtn}>
-              <Text style={styles.logBtnText}>🩺 Log Pet Health</Text>
+            <Pressable
+              onPress={() => setLogSheet('health')}
+              style={({ pressed }) => [styles.logBtn, pressed && { opacity: 0.7 }]}
+            >
+              <View style={[styles.logBtnIcon, { backgroundColor: colors.warning }]}>
+                <Ionicons name="paw-outline" size={18} color={colors.white} />
+              </View>
+              <Text style={styles.logBtnText}>Log Pet Health</Text>
             </Pressable>
           </View>
+          {recentLogs.length > 0 && (
+            <Text style={[typography.titleLarge, { color: colors.textPrimary }]}>Latest logs</Text>
+          )}
           {recentLogs.map(entry => (
             <Text
               key={entry.id}
-              style={[typography.labelMedium, { color: isVomitLog(entry) ? colors.danger : colors.textSecondary }]}
-              numberOfLines={1}
+              style={[typography.labelMedium, { color: isVomitLog(entry) ? colors.danger : colors.textPrimary }]}
+              numberOfLines={2}
             >
-              {formatLogTime(entry.loggedAt)}  {logSummary(entry)}
+              {formatLogTime(entry.loggedAt)} - {logSummary(entry)}
             </Text>
           ))}
           {/* Scan nudge for free-text food */}
-          {!hasProductId && (
+          {!hasProductId && !currentFood.analysisPending && (
             <Pressable
               onPress={() => navigation.navigate('QuickScan', { mode: 'selectFood', petId: pet.id })}
               style={styles.scanNudge}
@@ -480,24 +492,70 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
             </View>
           )}
           {searching && <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 4 }} />}
-          {/* Free text save + barcode option */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-            {foodNameInput.trim().length > 0 && (
-              <Pressable onPress={handleSaveFreeText} disabled={saving} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="create-outline" size={14} color={colors.textSecondary} />
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  {saving ? 'Saving...' : `Save "${foodNameInput.trim()}" as-is`}
-                </Text>
+          {searchDone && !searching && searchResults.length === 0 && foodNameInput.trim().length >= 2 && !requestOpen && (
+            <View style={{ gap: 6, marginTop: 4 }}>
+              <Text style={{ fontSize: 13, color: colors.textSecondary }}>This food isn't in the app yet.</Text>
+              <Pressable
+                onPress={() => setRequestOpen(true)}
+                style={{ backgroundColor: colors.primary, borderRadius: radius.medium, paddingVertical: 14, alignItems: 'center' }}
+              >
+                <Text style={{ color: colors.white, fontSize: 16, fontWeight: '600' }}>Request analysis</Text>
               </Pressable>
-            )}
-            <Pressable
-              onPress={() => { setShowFoodInput(false); setSearchResults([]); navigation.navigate('QuickScan', { mode: 'selectFood', petId: pet.id }); }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-            >
-              <Ionicons name="barcode-outline" size={14} color={colors.primary} />
-              <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600' }}>Scan barcode</Text>
-            </Pressable>
-          </View>
+            </View>
+          )}
+          {requestOpen && (
+            <LookupRequestCard
+              petName={pet.name}
+              searchQuery={foodNameInput.trim()}
+              submitting={saving}
+              onBack={() => setRequestOpen(false)}
+              onRequest={async (input) => {
+                setSaving(true);
+                try {
+                  await createNameLookup({
+                    petId: pet.id,
+                    petName: pet.name,
+                    petType: pet.pet_type,
+                    brand: input.brand,
+                    queryName: input.queryName,
+                    pastedUrl: input.pastedUrl,
+                    email: input.email,
+                    setAsCurrentFood: true,
+                  });
+                  setShowFoodInput(false);
+                  setFoodNameInput('');
+                  setSearchResults([]);
+                  setRequestOpen(false);
+                  setSearchDone(false);
+                  toast.show({ message: `We'll look this up for ${pet.name}`, type: 'info' });
+                  loadFoodAndLogs();
+                } catch (e: any) {
+                  toast.show({ message: e?.message || 'Could not send the request', type: 'error' });
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            />
+          )}
+          {!requestOpen && (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.divider }} />
+                <Text style={{ fontSize: 13, color: colors.textSecondary, fontWeight: '500' }}>or</Text>
+                <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.divider }} />
+              </View>
+              <Pressable
+                onPress={() => { setShowFoodInput(false); setSearchResults([]); navigation.navigate('QuickScan', { mode: 'selectFood', petId: pet.id, firstFood: true }); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderWidth: 1, borderColor: colors.primary + '33', backgroundColor: colors.primary + '0D', borderRadius: radius.large }}
+              >
+                <Ionicons name="barcode-outline" size={22} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Scan barcode</Text>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>If you have one, scan it.</Text>
+                </View>
+              </Pressable>
+            </>
+          )}
         </View>
       )}
 
@@ -1045,9 +1103,6 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
           const startLabel = formatFoodDay(entry.startedAt);
           const endLabel = entry.isCurrent || !entry.endedAt ? 'now' : formatFoodDay(entry.endedAt);
           const thumb = buildThumbUrl(entry.imageUrl) || entry.imageUrl;
-          const stool = entry.stats.checkinCount > 0 && entry.stats.avgStoolScore != null
-            ? (entry.stats.avgStoolScore >= 3.5 ? '🙂' : entry.stats.avgStoolScore >= 2.5 ? '😐' : '😕')
-            : null;
           const dayWord = daysOnFood === 1 ? 'day' : 'days';
 
           return (
@@ -1074,7 +1129,6 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
                   {daysOnFood} {dayWord} · {startLabel} – {endLabel}
                 </Text>
               </View>
-              {stool ? <Text style={{ fontSize: 18 }}>{stool}</Text> : null}
             </Pressable>
           );
         })}
@@ -1689,18 +1743,31 @@ const styles = StyleSheet.create({
   },
   logActions: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   logBtn: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.white,
     borderRadius: radius.medium,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+  },
+  logBtnIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logBtnText: {
-    ...typography.labelSmall,
-    color: colors.white,
+    ...typography.labelLarge,
+    color: colors.textPrimary,
+    textAlign: 'center',
   },
   foodImage: {
     width: 48,

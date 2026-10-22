@@ -29,6 +29,7 @@ export interface LookupSummary {
 }
 
 export interface LookupDetail extends LookupSummary {
+  productId?: string | null;
   scanResult?: ScanResult | null;
   tokensAwarded?: number;
   frontImageUrl?: string | null;
@@ -44,6 +45,7 @@ export async function createNameLookup(body: {
   queryName: string;
   pastedUrl?: string;
   email?: string;
+  setAsCurrentFood?: boolean;
 }) {
   const response = await fetch(`${BASE_URL}/lookups`, {
     method: 'POST',
@@ -76,27 +78,31 @@ async function fileToBlob(uri: string) {
 export async function createPhotoLookup(params: {
   frontImageUri: string;
   ingredientImageUri: string;
-  barcodeImageUri: string;
+  barcodeImageUri?: string;
   barcode?: string;
   petId?: string;
   petName?: string;
   petType?: string;
   email?: string;
+  setAsCurrentFood?: boolean;
+  productName?: string;
 }) {
-  const [front, ingredient, barcode] = await Promise.all([
+  const [front, ingredient, barcodeImage] = await Promise.all([
     optimize(params.frontImageUri),
     optimize(params.ingredientImageUri),
-    optimize(params.barcodeImageUri),
+    params.barcodeImageUri ? optimize(params.barcodeImageUri) : Promise.resolve(''),
   ]);
   const form = new FormData();
   form.append('frontImage', await fileToBlob(front), 'front.jpg');
   form.append('ingredientImage', await fileToBlob(ingredient), 'ingredients.jpg');
-  form.append('barcodeImage', await fileToBlob(barcode), 'barcode.jpg');
+  if (barcodeImage) form.append('barcodeImage', await fileToBlob(barcodeImage), 'barcode.jpg');
   if (params.barcode) form.append('barcode', params.barcode);
   if (params.petId) form.append('petId', params.petId);
   if (params.petName) form.append('petName', params.petName);
   if (params.petType) form.append('petType', params.petType);
   if (params.email) form.append('email', params.email);
+  if (params.setAsCurrentFood) form.append('setAsCurrentFood', '1');
+  if (params.productName) form.append('productName', params.productName);
 
   const response = await fetch(`${BASE_URL}/lookups/photo`, {
     method: 'POST',

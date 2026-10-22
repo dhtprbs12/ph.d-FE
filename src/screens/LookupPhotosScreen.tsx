@@ -91,6 +91,8 @@ export function LookupPhotosScreen() {
         petName: selectedPet.name,
         petType: selectedPet.pet_type,
         email: email.trim() || undefined,
+        setAsCurrentFood: route.params?.setAsCurrentFood === true,
+        productName: route.params?.productName,
       });
       openAnalysisRequests(navigation);
     } catch (error: any) {

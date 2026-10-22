@@ -152,7 +152,6 @@ export default function NomNomDetailScreen() {
                   </Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.logTitle, isVomitLog(entry) && { color: colors.danger }]}>{logSummary(entry)}</Text>
-                    {entry.notes ? <Text style={styles.logNote}>{entry.notes}</Text> : null}
                   </View>
                 </View>
               )) : (
@@ -278,11 +277,6 @@ const styles = StyleSheet.create({
   logTitle: {
     ...typography.labelLarge,
     color: colors.textPrimary,
-  },
-  logNote: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginTop: 2,
   },
   sectionTitle: {
     ...typography.titleMedium,

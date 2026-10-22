@@ -89,7 +89,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     translateY.value = withSpring(0, { damping: 18, stiffness: 200 });
     opacity.value = withTiming(1, { duration: 200 });
 
-    const dur = config.duration ?? 2500;
+    const dur = config.duration ?? 5000;
     timerRef.current = setTimeout(() => dismiss(), dur);
   }, [dismiss, opacity, translateY]);
 

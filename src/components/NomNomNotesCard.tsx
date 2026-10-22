@@ -231,7 +231,7 @@ export default function NomNomNotesCard({ petId, onViewDetail }: Props) {
                 <View key={entry.id} style={styles.previewRow}>
                   <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
                   <Text style={styles.previewText}>
-                    {formatLogTime(entry.loggedAt)} {logSummary(entry)}
+                    {formatLogTime(entry.loggedAt)} - {logSummary(entry)}
                   </Text>
                 </View>
               )) : (

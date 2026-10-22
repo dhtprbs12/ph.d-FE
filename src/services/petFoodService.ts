@@ -11,6 +11,7 @@ export interface CurrentFood {
   barcode: string | null;
   startedAt: string;
   daysOnFood: number;
+  analysisPending?: boolean;
 }
 
 export interface FoodHistoryItem {

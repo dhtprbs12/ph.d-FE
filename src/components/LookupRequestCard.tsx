@@ -8,17 +8,21 @@ import api from '../services/api';
 export function LookupRequestCard({
   petName,
   searchQuery,
-  submitting,
+  submitting = false,
   scrollRef,
   onRequest,
   onUploadPhotos,
+  onBack,
+  actionLabel = 'Request analysis',
 }: {
   petName: string;
   searchQuery: string;
-  submitting: boolean;
+  submitting?: boolean;
   scrollRef?: React.RefObject<ScrollView | null>;
   onRequest: (input: { brand: string; queryName: string; pastedUrl: string; email: string }) => void;
-  onUploadPhotos: (email: string) => void;
+  onUploadPhotos?: (email: string) => void;
+  onBack?: () => void;
+  actionLabel?: string;
 }) {
   const [brand, setBrand] = useState('');
   const [queryName, setQueryName] = useState(searchQuery);
@@ -60,6 +64,12 @@ export function LookupRequestCard({
 
   return (
     <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md, gap: spacing.sm }}>
+      {onBack ? (
+        <Pressable onPress={onBack} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, paddingVertical: 6 }}>
+          <Ionicons name="chevron-back" size={28} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontSize: 22, fontWeight: '700' }}>Go Back</Text>
+        </Pressable>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
         <Ionicons name="search" size={26} color={colors.textPrimary} />
         <Text style={{ fontSize: 22, fontWeight: '700', color: colors.textPrimary, flex: 1 }}>
@@ -129,8 +139,9 @@ export function LookupRequestCard({
           alignItems: 'center',
         }}
       >
-        <Text style={{ color: colors.white, fontWeight: '700' }}>{submitting ? 'Sending...' : 'Request analysis'}</Text>
+        <Text style={{ color: colors.white, fontWeight: '700' }}>{submitting ? 'Sending...' : actionLabel}</Text>
       </Pressable>
+      {onUploadPhotos ? (
       <Pressable
         onPress={() => onUploadPhotos(email.trim())}
         style={{
@@ -153,6 +164,7 @@ export function LookupRequestCard({
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.primary} />
       </Pressable>
+      ) : null}
     </View>
   );
 }
