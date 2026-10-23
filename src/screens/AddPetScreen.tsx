@@ -280,7 +280,7 @@ export default function AddPetScreen() {
       >
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ paddingBottom: currentStep === 0 ? insets.bottom + spacing.lg : insets.bottom + 100 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -388,6 +388,19 @@ export default function AddPetScreen() {
                 </View>
               )}
             </View>
+
+            <Pressable
+              onPress={goNext}
+              disabled={!canProceed}
+              style={({ pressed }) => [
+                styles.nextBtn,
+                { flex: 0, marginTop: spacing.sm },
+                !canProceed && styles.btnDisabled,
+                pressed && canProceed && { transform: [{ scale: 0.98 }], opacity: 0.95 },
+              ]}
+            >
+              <Text style={styles.nextBtnText}>Next</Text>
+            </Pressable>
           </View>
         )}
 
@@ -615,7 +628,7 @@ export default function AddPetScreen() {
       </KeyboardAvoidingView>
 
       {/* Bottom buttons */}
-      {!keyboardVisible && (
+      {!keyboardVisible && currentStep > 0 && (
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
           {currentStep > 0 && (

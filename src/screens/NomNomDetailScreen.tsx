@@ -152,6 +152,9 @@ export default function NomNomDetailScreen() {
                   </Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.logTitle, isVomitLog(entry) && { color: colors.danger }]}>{logSummary(entry)}</Text>
+                    {entry.logType === 'health' && entry.notes ? (
+                      <Text style={[typography.bodySmall, { color: colors.textSecondary, marginTop: 2 }]}>{entry.notes}</Text>
+                    ) : null}
                   </View>
                 </View>
               )) : (

@@ -131,7 +131,7 @@ export function AnalysisRequestsList({ onPendingChange }: { onPendingChange?: (c
               {formatProductTitleText([item.brand, item.queryName].filter(Boolean).join(' ')) || 'Food Photos'}
             </Text>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]} numberOfLines={1}>
-              {formatRequestedAt(item.createdAt)}
+              {[item.petName ? `For ${item.petName}` : '', formatRequestedAt(item.createdAt)].filter(Boolean).join(' · ')}
             </Text>
           </View>
           <View style={[{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: radius.full }, statusPill(item.status)]}>

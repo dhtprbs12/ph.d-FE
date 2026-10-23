@@ -24,6 +24,7 @@ export interface LookupSummary {
   brand?: string | null;
   queryName?: string | null;
   entry: 'name' | 'photo';
+  petName?: string | null;
   failureReason?: string | null;
   createdAt: string;
 }

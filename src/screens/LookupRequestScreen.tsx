@@ -101,6 +101,9 @@ export function LookupRequestScreen() {
           {detail ? (
             <>
               <Text style={{ color: colors.primary, fontWeight: '700' }}>{STATUS_LABEL[detail.status]}</Text>
+              {detail.petName ? (
+                <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>For {detail.petName}</Text>
+              ) : null}
               {detail.status === 'queued' || detail.status === 'searching' ? (
                 <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>
                   We'll notify you within 24 hours.
