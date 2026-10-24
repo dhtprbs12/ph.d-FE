@@ -92,6 +92,7 @@ export function LookupPhotosScreen() {
         petType: selectedPet.pet_type,
         email: email.trim() || undefined,
         setAsCurrentFood: route.params?.setAsCurrentFood === true,
+        replaceCurrentFood: route.params?.replaceCurrentFood === true,
         productName: route.params?.productName,
       });
       openAnalysisRequests(navigation);

@@ -47,6 +47,7 @@ export async function createNameLookup(body: {
   pastedUrl?: string;
   email?: string;
   setAsCurrentFood?: boolean;
+  replaceCurrentFood?: boolean;
 }) {
   const response = await fetch(`${BASE_URL}/lookups`, {
     method: 'POST',
@@ -86,6 +87,7 @@ export async function createPhotoLookup(params: {
   petType?: string;
   email?: string;
   setAsCurrentFood?: boolean;
+  replaceCurrentFood?: boolean;
   productName?: string;
 }) {
   const [front, ingredient, barcodeImage] = await Promise.all([
@@ -103,6 +105,7 @@ export async function createPhotoLookup(params: {
   if (params.petType) form.append('petType', params.petType);
   if (params.email) form.append('email', params.email);
   if (params.setAsCurrentFood) form.append('setAsCurrentFood', '1');
+  if (params.replaceCurrentFood) form.append('replaceCurrentFood', '1');
   if (params.productName) form.append('productName', params.productName);
 
   const response = await fetch(`${BASE_URL}/lookups/photo`, {

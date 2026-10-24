@@ -215,6 +215,7 @@ export function QuickScanScreen() {
                   barcode: missedScan.barcode,
                   barcodePhotoUri: missedScan.photoUri,
                   setAsCurrentFood: route.params?.firstFood === true,
+                  replaceCurrentFood: route.params?.replaceCurrentFood === true,
                 })}
                 style={s.registerBtn}
               >

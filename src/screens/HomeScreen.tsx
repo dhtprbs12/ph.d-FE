@@ -344,6 +344,14 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
     await doSetFood(product);
   };
 
+  const toggleFoodSearch = () => {
+    setShowFoodInput(open => !open);
+    setRequestOpen(false);
+    setSearchResults([]);
+    setSearchDone(false);
+    setFoodNameInput('');
+  };
+
   const doSetFood = async (product: any) => {
     setSaving(true);
     try {
@@ -398,7 +406,12 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
                 {pet.name} · Day {foodDays}
               </Text>
             </View>
+            <Pressable onPress={toggleFoodSearch} hitSlop={8} style={{ flexShrink: 0 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>Switch</Text>
+            </Pressable>
           </View>
+          {!showFoodInput && (
+          <>
           <View style={styles.logActions}>
             <Pressable
               onPress={() => setLogSheet('meal')}
@@ -442,6 +455,8 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
               <Ionicons name="chevron-forward" size={14} color={colors.accent} />
             </Pressable>
           )}
+          </>
+          )}
         </View>
       ) : (
         <Pressable
@@ -470,7 +485,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
               autoCapitalize="words"
               autoFocus
             />
-            <Pressable onPress={() => { setShowFoodInput(false); setSearchResults([]); }}>
+            <Pressable onPress={() => { setShowFoodInput(false); setRequestOpen(false); setSearchResults([]); setSearchDone(false); setFoodNameInput(''); }}>
               <Ionicons name="close-circle" size={24} color={colors.textSecondary} />
             </Pressable>
           </View>
@@ -521,6 +536,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
                     pastedUrl: input.pastedUrl,
                     email: input.email,
                     setAsCurrentFood: true,
+                    replaceCurrentFood: !!currentFood,
                   });
                   setShowFoodInput(false);
                   setFoodNameInput('');
@@ -545,7 +561,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
                 <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.divider }} />
               </View>
               <Pressable
-                onPress={() => { setShowFoodInput(false); setSearchResults([]); navigation.navigate('QuickScan', { mode: 'selectFood', petId: pet.id, firstFood: true }); }}
+                onPress={() => { setShowFoodInput(false); setSearchResults([]); navigation.navigate('QuickScan', { mode: 'selectFood', petId: pet.id, firstFood: true, replaceCurrentFood: !!currentFood }); }}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderWidth: 1, borderColor: colors.primary + '33', backgroundColor: colors.primary + '0D', borderRadius: radius.large }}
               >
                 <Ionicons name="barcode-outline" size={22} color={colors.primary} />
