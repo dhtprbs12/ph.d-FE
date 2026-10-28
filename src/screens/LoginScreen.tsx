@@ -38,6 +38,8 @@ export default function LoginScreen({ navigation }: Props) {
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('userId', user.id);
       await AsyncStorage.setItem('userNickname', nickname.trim());
+      const { configureRevenueCat } = await import('../services/billingService');
+      await configureRevenueCat(user.id);
       await authenticateAndSync();
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (e: any) {

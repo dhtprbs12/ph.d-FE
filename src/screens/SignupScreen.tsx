@@ -23,7 +23,7 @@ import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
 import { LookupRequestCard } from '../components/LookupRequestCard';
 import { BarcodeRegisterFields } from '../components/BarcodeRegisterFields';
 import { AnalysisNotice } from '../components/AnalysisNotice';
-import { createNameLookup, createPhotoLookup } from '../services/lookupService';
+import { createNameLookup, createPhotoLookup, type NameLookupInput } from '../services/lookupService';
 import { useToast } from '../components/common/Toast';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { buildThumbUrl, buildImageUrl } from '../utils/helpers';
@@ -69,7 +69,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
   const [currentFoodSelection, setCurrentFoodSelection] = useState<FoodSelection | null>(null);
-  const [nameRequest, setNameRequest] = useState<{ brand: string; queryName: string; pastedUrl: string; email: string } | null>(null);
+  const [nameRequest, setNameRequest] = useState<NameLookupInput | null>(null);
   const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; requested?: boolean } | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [missQuery, setMissQuery] = useState('');
@@ -222,6 +222,8 @@ export default function SignupScreen({ navigation }: Props) {
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('userId', user.id);
       await AsyncStorage.setItem('userNickname', nickname.trim());
+      const { configureRevenueCat } = await import('../services/billingService');
+      await configureRevenueCat(user.id);
 
       const totalAgeMonths = (parseInt(ageYears || '0') * 12) + parseInt(ageMonthsVal || '0');
       const lbs = parseFloat(weightLbs);
@@ -272,6 +274,9 @@ export default function SignupScreen({ navigation }: Props) {
             petType: createdPet.pet_type || petType,
             brand: nameRequest.brand,
             queryName: nameRequest.queryName,
+            protein: nameRequest.protein,
+            lifeStage: nameRequest.lifeStage,
+            foodForm: nameRequest.foodForm,
             pastedUrl: nameRequest.pastedUrl,
             email: nameRequest.email || email.trim() || undefined,
             setAsCurrentFood: true,
@@ -688,6 +693,7 @@ export default function SignupScreen({ navigation }: Props) {
             ) : requestOpen ? (
               <LookupRequestCard
                 petName={petName.trim() || 'your pet'}
+                petType={petType}
                 searchQuery={missQuery}
                 onBack={() => setRequestOpen(false)}
                 actionLabel="Use this food"

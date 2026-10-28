@@ -26,6 +26,7 @@ interface Props {
   onClose: () => void;
   title?: string;
   subtitle?: string;
+  onBuyBones?: () => void;
 }
 
 export default function TokenEarnSheet({
@@ -33,6 +34,7 @@ export default function TokenEarnSheet({
   onClose,
   title = 'How to earn tokens',
   subtitle,
+  onBuyBones,
 }: Props) {
   const insets = useSafeAreaInsets();
 
@@ -53,6 +55,15 @@ export default function TokenEarnSheet({
               {way.reward ? <Text style={styles.reward}>{way.reward}</Text> : null}
             </View>
           ))}
+          {onBuyBones && (
+            <Pressable
+              onPress={() => { onClose(); setTimeout(onBuyBones, 350); }}
+              style={({ pressed }) => [styles.buyBonesBtn, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.buyBonesText}>🦴 Buy Bones</Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={onClose}
             style={({ pressed }) => [styles.doneBtn, pressed && { opacity: 0.85 }]}
@@ -127,8 +138,22 @@ const styles = StyleSheet.create({
     ...typography.labelLarge,
     color: colors.accent,
   },
-  doneBtn: {
+  buyBonesBtn: {
     marginTop: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    backgroundColor: colors.accent,
+    borderRadius: radius.medium,
+    minHeight: 48,
+  },
+  buyBonesText: {
+    ...typography.labelLarge,
+    color: colors.white,
+    fontWeight: '700',
+  },
+  doneBtn: {
+    marginTop: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,

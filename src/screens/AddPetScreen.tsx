@@ -31,7 +31,7 @@ import FoodSearchInput from '../components/FoodSearchInput';
 import { LookupRequestCard } from '../components/LookupRequestCard';
 import { BarcodeRegisterFields } from '../components/BarcodeRegisterFields';
 import { AnalysisNotice } from '../components/AnalysisNotice';
-import { createNameLookup, createPhotoLookup } from '../services/lookupService';
+import { createNameLookup, createPhotoLookup, type NameLookupInput } from '../services/lookupService';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 
@@ -64,7 +64,7 @@ export default function AddPetScreen() {
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
   const [breedDropdownVisible, setBreedDropdownVisible] = useState(false);
   const [scannedFood, setScannedFood] = useState<{ productName: string; productId?: string; brand?: string } | null>(null);
-  const [nameRequest, setNameRequest] = useState<{ brand: string; queryName: string; pastedUrl: string; email: string } | null>(null);
+  const [nameRequest, setNameRequest] = useState<NameLookupInput | null>(null);
   const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; requested?: boolean } | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [missQuery, setMissQuery] = useState('');
@@ -147,6 +147,9 @@ export default function AddPetScreen() {
         petType: created.pet_type,
         brand: nameRequest.brand,
         queryName: nameRequest.queryName,
+        protein: nameRequest.protein,
+        lifeStage: nameRequest.lifeStage,
+        foodForm: nameRequest.foodForm,
         pastedUrl: nameRequest.pastedUrl,
         email: nameRequest.email,
         setAsCurrentFood: true,
@@ -592,6 +595,7 @@ export default function AddPetScreen() {
             ) : requestOpen ? (
               <LookupRequestCard
                 petName={name.trim() || 'your pet'}
+                petType={petType}
                 searchQuery={missQuery}
                 onBack={() => setRequestOpen(false)}
                 actionLabel="Use this food"

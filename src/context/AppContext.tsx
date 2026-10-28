@@ -122,6 +122,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       if (token) {
         dispatch({ type: 'SET_AUTHENTICATED', value: true });
+        try {
+          const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+          const userId = await AsyncStorage.getItem('userId');
+          if (userId) {
+            const { configureRevenueCat } = await import('../services/billingService');
+            await configureRevenueCat(userId);
+          }
+        } catch {}
       }
       dispatch({ type: 'SET_LOADING', value: false });
       if (token) await authenticateAndSync();
@@ -289,6 +297,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const resetApp = useCallback(async () => {
     dispatch({ type: 'RESET' });
     await clearAllData();
+    try {
+      const { logoutRevenueCat } = await import('../services/billingService');
+      await logoutRevenueCat();
+    } catch {}
   }, []);
 
   return (

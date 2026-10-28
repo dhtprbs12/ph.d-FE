@@ -1,24 +1,77 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Sharing from 'expo-sharing';
 import { colors, spacing, radius, typography } from '../theme';
 import type { InsightData } from '../services/passportService';
+
+let Print: any = null;
+try { Print = require('expo-print'); } catch {}
+
+function buildPdfHtml(insight: InsightData): string {
+  const w = insight.data!.withIngredient;
+  const wo = insight.data!.withoutIngredient;
+  const foodList = (foods: { name: string }[]) => foods.map(f => `<li>${f.name}</li>`).join('');
+  return `
+    <html><head><meta charset="utf-8"><style>
+      body { font-family: -apple-system, Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
+      h1 { font-size: 22px; margin-bottom: 4px; }
+      h2 { font-size: 16px; color: #555; margin-top: 24px; }
+      .summary { font-size: 14px; color: #666; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 13px; }
+      th { background: #f5f5f5; }
+      .disclaimer { margin-top: 24px; padding: 12px; background: #FFF8E1; border-radius: 8px; font-size: 12px; color: #666; }
+      .date { font-size: 12px; color: #999; }
+    </style></head><body>
+      <h1>🐾 Insight: ${insight.label}</h1>
+      <p class="date">Generated ${new Date().toLocaleDateString()}</p>
+      <p class="summary">${insight.summary}</p>
+
+      <h2>Foods with ${insight.label}</h2>
+      <ul>${foodList(w.foods)}</ul>
+      <table><tr><th>Avg Stool</th><th>Itch Rate</th><th>Vomit Rate</th></tr>
+      <tr><td>${w.avgStoolScore}</td><td>${w.avgItchRate}%</td><td>${w.avgVomitRate}%</td></tr></table>
+
+      <h2>Foods without ${insight.label}</h2>
+      <ul>${foodList(wo.foods)}</ul>
+      <table><tr><th>Avg Stool</th><th>Itch Rate</th><th>Vomit Rate</th></tr>
+      <tr><td>${wo.avgStoolScore}</td><td>${wo.avgItchRate}%</td><td>${wo.avgVomitRate}%</td></tr></table>
+
+      <div class="disclaimer">⚠️ ${insight.disclaimer}</div>
+    </body></html>`;
+}
 
 export default function InsightDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<any>();
   const insight: InsightData = route.params?.insight;
+  const [generating, setGenerating] = useState(false);
 
-  if (!insight) {
+  const handleDownloadPdf = async () => {
+    if (!Print || !insight.data) return;
+    setGenerating(true);
+    try {
+      const { uri } = await Print.printToFileAsync({ html: buildPdfHtml(insight) });
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share insight report' });
+    } catch (e: any) {
+      Alert.alert('Error', 'Could not generate the PDF. Please try again.');
+    }
+    setGenerating(false);
+  };
+
+  if (!insight || !insight.data) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }, styles.center]}>
         <Text>No insight data</Text>
@@ -121,6 +174,24 @@ export default function InsightDetailScreen() {
             {insight.disclaimer}
           </Text>
         </View>
+
+        {/* Download for vet */}
+        {Print && (
+          <Pressable
+            onPress={handleDownloadPdf}
+            disabled={generating}
+            style={[styles.downloadBtn, generating && { opacity: 0.6 }]}
+          >
+            {generating ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={18} color={colors.white} />
+                <Text style={styles.downloadBtnText}>Download for your vet</Text>
+              </>
+            )}
+          </Pressable>
+        )}
       </ScrollView>
     </View>
   );
@@ -195,5 +266,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent + '14',
     borderRadius: radius.medium,
     padding: spacing.md,
+  },
+  downloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: radius.medium,
+  },
+  downloadBtnText: {
+    ...typography.labelLarge,
+    color: colors.white,
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

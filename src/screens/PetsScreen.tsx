@@ -17,6 +17,7 @@ import { colors, spacing, radius, typography, shadows, getPetTypeIcon } from '..
 import type { Pet, HealthCondition } from '../types';
 import { formatAge, formatWeight, getConditionLabel } from '../types';
 import { useApp } from '../context/AppContext';
+import { petAvatarUri } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<PetsStackParamList>;
 
@@ -87,15 +88,9 @@ function PetCard({
       {/* Header */}
       <View style={styles.headerRow}>
         <View style={[styles.avatarCircle, { backgroundColor: avatarBg }]}>
-          {pet.photoData ? (
+          {petAvatarUri(pet.photoData) ? (
             <Image
-              source={{
-                uri: pet.photoData.startsWith('data:')
-                  ? pet.photoData
-                  : pet.photoData.startsWith('file://') || pet.photoData.startsWith('http')
-                    ? pet.photoData
-                    : `data:image/jpeg;base64,${pet.photoData}`,
-              }}
+              source={{ uri: petAvatarUri(pet.photoData)! }}
               style={styles.avatarImage}
             />
           ) : (

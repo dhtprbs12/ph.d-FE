@@ -14,6 +14,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
+import { SubscriptionSheet } from '../components/SubscriptionSheet';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { buildImageUrl, buildThumbUrl } from '../utils/helpers';
 import { calendarDaysOnFood, formatFoodDay } from '../utils/foodTime';
@@ -146,8 +147,8 @@ function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressIm
   );
 }
 
-function InsightCard({ insight, onPress }: { insight: InsightData; onPress: () => void }) {
-  const typeColors = {
+function InsightCard({ insight, isPlus, onPress }: { insight: InsightData; isPlus: boolean; onPress: () => void }) {
+  const typeColors: Record<string, string> = {
     itch_correlation: '#E74C3C',
     vomit_correlation: colors.danger,
     stool_negative: '#E67E22',
@@ -163,11 +164,11 @@ function InsightCard({ insight, onPress }: { insight: InsightData; onPress: () =
           <Text style={[typography.labelMedium, { color: typeColors[insight.type] || colors.textPrimary }]}>
             {insight.summary}
           </Text>
-          <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-            Tap to see details
+          <Text style={[typography.bodySmall, { color: isPlus ? colors.textSecondary : colors.primary }]}>
+            {isPlus ? 'Tap to see details' : 'Subscribe to see details'}
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+        <Ionicons name={isPlus ? 'chevron-forward' : 'lock-closed'} size={16} color={isPlus ? colors.textSecondary : colors.primary} />
       </View>
     </Pressable>
   );
@@ -182,25 +183,28 @@ export default function PassportScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [insights, setInsights] = useState<InsightData[]>([]);
+  const [isPlus, setIsPlus] = useState(false);
+  const [showSubscription, setShowSubscription] = useState(false);
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [howItWorksVisible, setHowItWorksVisible] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!petId) return;
-      setIsLoading(true);
-      Promise.all([
-        passportService.getPassport(petId),
-        passportService.getInsights(petId),
-      ])
-        .then(([passportData, insightData]) => {
-          setTimeline(passportData.timeline);
-          setInsights(insightData.insights);
-        })
-        .catch(console.warn)
-        .finally(() => setIsLoading(false));
-    }, [petId])
-  );
+  const loadData = useCallback(() => {
+    if (!petId) return;
+    setIsLoading(true);
+    Promise.all([
+      passportService.getPassport(petId),
+      passportService.getInsights(petId),
+    ])
+      .then(([passportData, insightData]) => {
+        setTimeline(passportData.timeline);
+        setInsights(insightData.insights);
+        setIsPlus(!!insightData.plus);
+      })
+      .catch(console.warn)
+      .finally(() => setIsLoading(false));
+  }, [petId]);
+
+  useFocusEffect(loadData);
 
   const filteredTimeline = [...timeline]
     .filter(e => e.isCurrent || e.daysOnFood > 0)
@@ -312,7 +316,14 @@ export default function PassportScreen() {
                 <InsightCard
                   key={i}
                   insight={insight}
-                  onPress={() => navigation.navigate('InsightDetail', { insight })}
+                  isPlus={isPlus}
+                  onPress={() => {
+                    if (isPlus && insight.data) {
+                      navigation.navigate('InsightDetail', { insight });
+                    } else {
+                      setShowSubscription(true);
+                    }
+                  }}
                 />
               ))}
               <Text style={[typography.bodySmall, { color: colors.textSecondary, fontStyle: 'italic', marginTop: spacing.sm }]}>
@@ -322,6 +333,14 @@ export default function PassportScreen() {
           )}
         </ScrollView>
       )}
+      <SubscriptionSheet
+        visible={showSubscription}
+        onClose={() => setShowSubscription(false)}
+        onSubscribed={() => {
+          setShowSubscription(false);
+          loadData();
+        }}
+      />
       <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
       <Modal
         visible={howItWorksVisible}

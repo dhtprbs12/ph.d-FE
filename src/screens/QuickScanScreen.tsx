@@ -11,6 +11,8 @@ import { colors } from '../theme';
 import api from '../services/api';
 import petFoodService from '../services/petFoodService';
 import { toTitleCase } from '../utils/helpers';
+import { calendarDaysOnFood } from '../utils/foodTime';
+import { SwitchFoodDialog } from '../components/SwitchFoodDialog';
 import { useToast } from '../components/common/Toast';
 import { lookupByBarcode, ackLookup } from '../services/lookupService';
 
@@ -30,7 +32,7 @@ export function QuickScanScreen() {
   const [notFound, setNotFound] = useState(false);
   const [missedScan, setMissedScan] = useState<{ barcode: string; photoUri?: string } | null>(null);
   const [foodSetInfo, setFoodSetInfo] = useState<{ name: string } | null>(null);
-  const [pendingSwitch, setPendingSwitch] = useState<{ name: string; productId: string; brand?: string; currentName?: string } | null>(null);
+  const [pendingSwitch, setPendingSwitch] = useState<{ name: string; productId: string; brand?: string; currentName?: string; days?: number } | null>(null);
 
   useEffect(() => {
     if (!permission?.granted) requestPermission();
@@ -65,12 +67,19 @@ export function QuickScanScreen() {
         if (mode === 'selectFood' && foodPetId) {
           try {
             const currentFood = await petFoodService.getCurrentFood(foodPetId);
+            if (currentFood?.productId && currentFood.productId === result.product.id) {
+              toast.show({ message: 'Already eating this food', type: 'info' });
+              scannedRef.current = false;
+              setLooking(false);
+              return;
+            }
             if (currentFood) {
               setPendingSwitch({
                 name: result.product.name,
                 productId: result.product.id,
                 brand: result.product.brand || undefined,
                 currentName: currentFood.productName,
+                days: calendarDaysOnFood(currentFood.startedAt, null, true),
               });
               setLooking(false);
               return;
@@ -250,53 +259,28 @@ export function QuickScanScreen() {
       )}
 
       {/* Switch Food Confirmation Modal */}
-      {pendingSwitch && (
-        <Modal transparent animationType="fade">
-          <View style={s.loadingModal}>
-            <View style={s.successCard}>
-              <Text style={{ fontSize: 32 }}>🔄</Text>
-              <Text style={s.successTitle}>Switch Food?</Text>
-              <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>Current</Text>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>{toTitleCase(pendingSwitch.currentName || '')}</Text>
-              </View>
-              <Ionicons name="arrow-down" size={20} color={colors.textSecondary} />
-              <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>New</Text>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.primary }}>{toTitleCase(pendingSwitch.name)}</Text>
-              </View>
-              <Text style={s.successSub}>This will end tracking for the current food and start a new period.</Text>
-              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12, width: '100%' }}>
-                <Pressable
-                  onPress={() => { setPendingSwitch(null); scannedRef.current = false; setLooking(false); }}
-                  style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#f0f0f0', alignItems: 'center' }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={async () => {
-                    try {
-                      await petFoodService.setCurrentFood(foodPetId!, {
-                        productId: pendingSwitch.productId,
-                        productName: pendingSwitch.name,
-                        brand: pendingSwitch.brand,
-                      });
-                      setPendingSwitch(null);
-                      setFoodSetInfo({ name: pendingSwitch.name });
-                    } catch {
-                      toast.show({ message: 'Failed to switch food', type: 'error' });
-                      setPendingSwitch(null);
-                    }
-                  }}
-                  style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Switch</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
+      <SwitchFoodDialog
+        visible={!!pendingSwitch}
+        currentName={pendingSwitch?.currentName || ''}
+        dayCount={pendingSwitch?.days}
+        newName={pendingSwitch?.name || ''}
+        onCancel={() => { setPendingSwitch(null); scannedRef.current = false; setLooking(false); }}
+        onConfirm={async () => {
+          if (!pendingSwitch) return;
+          try {
+            await petFoodService.setCurrentFood(foodPetId!, {
+              productId: pendingSwitch.productId,
+              productName: pendingSwitch.name,
+              brand: pendingSwitch.brand,
+            });
+            setFoodSetInfo({ name: pendingSwitch.name });
+            setPendingSwitch(null);
+          } catch {
+            toast.show({ message: 'Failed to switch food', type: 'error' });
+            setPendingSwitch(null);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }

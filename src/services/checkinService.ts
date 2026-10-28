@@ -27,6 +27,7 @@ export interface DailyLog {
   vomiting: VomitValue | null;
   itching: ItchValue | null;
   notes: string | null;
+  petFoodId: string | null;
   foodName: string | null;
   foodImageUrl: string | null;
 }

@@ -19,6 +19,8 @@ import { getBaseCharacter, getItemLayer, getItemThumb } from '../utils/character
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/common/Toast';
 import TokenEarnSheet from '../components/TokenEarnSheet';
+import { BonePackSheet } from '../components/BonePackSheet';
+import { isRevenueCatAvailable } from '../services/billingService';
 
 const CATEGORIES: { key: SlotName; label: string; emoji: string }[] = [
   { key: 'hat', label: 'Hats', emoji: '🎩' },
@@ -45,6 +47,7 @@ export default function CharacterScreen() {
   const [character, setCharacter] = useState<CharacterState | null>(cachedChar);
   const [tokenBalance, setTokenBalance] = useState(0);
   const [earnSheet, setEarnSheet] = useState<'how' | 'short' | null>(null);
+  const [bonePackVisible, setBonePackVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<SlotName>('hat');
   const [items, setItems] = useState<ShopItem[]>(shopService.getCachedItems('hat') || []);
   const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
@@ -394,7 +397,20 @@ export default function CharacterScreen() {
         onClose={() => setEarnSheet(null)}
         title={earnSheet === 'short' ? 'Not enough tokens' : 'How to earn tokens'}
         subtitle={earnSheet === 'short' ? "You don't have enough for this item." : undefined}
+        onBuyBones={isRevenueCatAvailable() ? () => setBonePackVisible(true) : undefined}
       />
+      {isRevenueCatAvailable() && (
+        <BonePackSheet
+          visible={bonePackVisible}
+          onClose={() => setBonePackVisible(false)}
+          currentBalance={tokenBalance}
+          getBalance={async () => {
+            const t = await gamificationService.getTokens();
+            return t.balance;
+          }}
+          onBalanceUpdated={(newBalance) => setTokenBalance(newBalance)}
+        />
+      )}
     </View>
   );
 }

@@ -26,7 +26,7 @@ import type { CachedScore, Product, ProductFilterParams } from '../types';
 import { buildImageUrl, buildThumbUrl, formatProductTitleText } from '../utils/helpers';
 import { LookupRequestCard } from '../components/LookupRequestCard';
 import { PushOptInModal, notificationPermissionStatus, registerPushToken } from '../components/PushOptInModal';
-import { createNameLookup, openAnalysisRequests } from '../services/lookupService';
+import { createNameLookup, openAnalysisRequests, type NameLookupInput } from '../services/lookupService';
 
 const PAGE = 20;
 const DEBOUNCE_MS = 600;
@@ -301,7 +301,7 @@ export function ProductSearchScreen() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
   const [askPush, setAskPush] = useState(false);
-  const pendingLookup = useRef<{ brand: string; queryName: string; pastedUrl: string; email: string } | null>(null);
+  const pendingLookup = useRef<NameLookupInput | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   const hasFilters = !!petType || !!foodType || !!lifeStage || !!diet || !!protein || query.length > 0;
@@ -467,6 +467,9 @@ export function ProductSearchScreen() {
         petType: selectedPet.pet_type,
         brand: pending.brand,
         queryName: pending.queryName,
+        protein: pending.protein,
+        lifeStage: pending.lifeStage,
+        foodForm: pending.foodForm,
         pastedUrl: pending.pastedUrl || undefined,
         email: pending.email || undefined,
       });
@@ -566,6 +569,7 @@ export function ProductSearchScreen() {
         ) : showEmpty && query.trim() ? (
           <LookupRequestCard
             petName={selectedPet?.name || 'your pet'}
+            petType={selectedPet?.pet_type}
             searchQuery={query.trim()}
             submitting={lookupBusy}
             scrollRef={scrollRef}

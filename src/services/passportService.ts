@@ -18,14 +18,21 @@ export interface TimelineEntry {
   hasIngredients: boolean;
 }
 
+export interface InsightGroupData {
+  foods: { name: string; isCurrent: boolean }[];
+  avgItchRate: number;
+  avgVomitRate: number;
+  avgStoolScore: number;
+}
+
 export interface InsightData {
   ingredient: string;
   label: string;
   type: 'itch_correlation' | 'vomit_correlation' | 'stool_negative' | 'stool_positive' | 'mixed';
   summary: string;
-  data: {
-    withIngredient: { foods: { name: string; isCurrent: boolean }[]; avgItchRate: number; avgVomitRate: number; avgStoolScore: number };
-    withoutIngredient: { foods: { name: string; isCurrent: boolean }[]; avgItchRate: number; avgVomitRate: number; avgStoolScore: number };
+  data?: {
+    withIngredient: InsightGroupData;
+    withoutIngredient: InsightGroupData;
   };
   disclaimer: string;
 }
@@ -36,8 +43,8 @@ const passportService = {
     return data;
   },
 
-  async getInsights(petId: string): Promise<{ insights: InsightData[]; message?: string }> {
-    const { data } = await api.get<{ insights: InsightData[]; message?: string }>(`/pets/${petId}/insights`);
+  async getInsights(petId: string): Promise<{ insights: InsightData[]; plus?: boolean; message?: string }> {
+    const { data } = await api.get<{ insights: InsightData[]; plus?: boolean; message?: string }>(`/pets/${petId}/insights`);
     return data;
   },
 };

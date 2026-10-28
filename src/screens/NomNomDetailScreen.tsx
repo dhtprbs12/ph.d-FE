@@ -17,7 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import type { HomeStackParamList } from '../navigation/types';
 import checkinService, { DailyLog } from '../services/checkinService';
-import { formatLogTime } from '../utils/foodTime';
+import passportService, { TimelineEntry } from '../services/passportService';
+import { formatLogTime, phoneYmd } from '../utils/foodTime';
 import { isVomitLog, logSummary } from '../utils/dailyLog';
 import notesService from '../services/notesService';
 import { toTitleCase, buildThumbUrl, buildImageUrl } from '../utils/helpers';
@@ -25,6 +26,15 @@ import { useToast } from '../components/common/Toast';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 
 type ScreenRoute = RouteProp<HomeStackParamList, 'NomNomDetail'>;
+
+function localFoodYmd(raw?: string | null): string {
+  if (!raw) return '';
+  const text = String(raw);
+  const hasTime = text.includes('T') || text.includes(' ');
+  const parsed = new Date(hasTime ? text.replace(' ', 'T') : `${text.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return phoneYmd(parsed);
+}
 
 export default function NomNomDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -36,6 +46,7 @@ export default function NomNomDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const noteInputRef = useRef<View>(null);
   const [logs, setLogs] = useState<DailyLog[]>([]);
+  const [switches, setSwitches] = useState<TimelineEntry[]>([]);
   const [note, setNote] = useState('');
   const [originalNote, setOriginalNote] = useState('');
   const [loading, setLoading] = useState(true);
@@ -51,14 +62,20 @@ export default function NomNomDetailScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [cRes, nRes] = await Promise.allSettled([
+      const [cRes, nRes, foodRes] = await Promise.allSettled([
         checkinService.getCheckins(petId, date, date),
         notesService.getNotes(petId, date, date),
+        passportService.getPassport(petId),
       ]);
 
       if (cRes.status === 'fulfilled') {
         const rows = [...(cRes.value.checkins || [])].sort((a, b) => String(a.loggedAt || '').localeCompare(String(b.loggedAt || '')));
         setLogs(rows);
+      }
+      if (foodRes.status === 'fulfilled') {
+        const foods = [...(foodRes.value.timeline || [])].sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
+        const firstId = foods[0]?.id;
+        setSwitches(foods.filter((food, index) => index > 0 && food.id !== firstId && localFoodYmd(food.startedAt) === date));
       }
       if (nRes.status === 'fulfilled' && nRes.value.length > 0) {
         setNote(nRes.value[0].note);
@@ -72,6 +89,11 @@ export default function NomNomDetailScreen() {
   }, [petId, date]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const dayEvents = [
+    ...logs.map(log => ({ kind: 'log' as const, at: log.loggedAt || '', id: log.id, log })),
+    ...switches.map(food => ({ kind: 'switch' as const, at: food.startedAt, id: food.id, name: food.productName })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
 
   const hasChanges = note.trim() !== originalNote;
 
@@ -145,15 +167,22 @@ export default function NomNomDetailScreen() {
             {/* Check-in Section */}
             <View style={[styles.section, shadows.card]}>
               <Text style={styles.sectionTitle}>Daily log</Text>
-              {logs.length > 0 ? logs.map(entry => (
-                <View key={entry.id} style={styles.logRow}>
-                  <Text style={[styles.logTime, isVomitLog(entry) && { color: colors.danger }]}>
-                    {formatLogTime(entry.loggedAt)}
+              {dayEvents.length > 0 ? dayEvents.map(event => event.kind === 'switch' ? (
+                <View key={`switch-${event.id}`} style={styles.logRow}>
+                  <Text style={styles.logTime}>{formatLogTime(event.at)}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.logTitle}>Switched to {toTitleCase(event.name)}</Text>
+                  </View>
+                </View>
+              ) : (
+                <View key={event.log.id} style={styles.logRow}>
+                  <Text style={[styles.logTime, isVomitLog(event.log) && { color: colors.danger }]}>
+                    {formatLogTime(event.log.loggedAt)}
                   </Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.logTitle, isVomitLog(entry) && { color: colors.danger }]}>{logSummary(entry)}</Text>
-                    {entry.logType === 'health' && entry.notes ? (
-                      <Text style={[typography.bodySmall, { color: colors.textSecondary, marginTop: 2 }]}>{entry.notes}</Text>
+                    <Text style={[styles.logTitle, isVomitLog(event.log) && { color: colors.danger }]}>{logSummary(event.log)}</Text>
+                    {event.log.logType === 'health' && event.log.notes ? (
+                      <Text style={[typography.bodySmall, { color: colors.textSecondary, marginTop: 2 }]}>{event.log.notes}</Text>
                     ) : null}
                   </View>
                 </View>

@@ -19,13 +19,14 @@ import MiniCharacter from '../components/MiniCharacter';
 import { useToast } from '../components/common/Toast';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import * as authService from '../services/authService';
+import * as billingService from '../services/billingService';
 import { resetToLogin } from '../navigation/navigationRef';
 
 /** Mirrors `expo.version` from app.json; falls back after native build */
 const APP_VERSION =
   Constants.expoConfig?.version ??
   Constants.nativeApplicationVersion ??
-  '2.0.4';
+  '2.0.8';
 const PRIVACY_URL = 'https://phd-be-production.up.railway.app/privacy';
 const TERMS_URL = 'https://phd-be-production.up.railway.app/terms';
 
@@ -203,6 +204,11 @@ export default function SettingsScreen() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [plusStatus, setPlusStatus] = useState<billingService.BillingStatus | null>(null);
+
+  useEffect(() => {
+    billingService.getStatus().then(setPlusStatus).catch(() => {});
+  }, []);
 
   const handleLogout = async () => {
     setShowLogoutConfirm(false);
@@ -261,6 +267,53 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         <View style={styles.sectionGap} />
+
+        {/* PHD Plus */}
+        {plusStatus && (
+          <>
+            <SettingsSection title="PHD Plus" style={fadeStyles[3]}>
+              <SettingsRow
+                icon="diamond"
+                iconColor={colors.accent}
+                title="PHD Plus"
+                value={
+                  plusStatus.plus
+                    ? plusStatus.willRenew
+                      ? `Renews ${plusStatus.expiresAt ? new Date(plusStatus.expiresAt).toLocaleDateString() : ''}`
+                      : `Ends ${plusStatus.expiresAt ? new Date(plusStatus.expiresAt).toLocaleDateString() : ''}`
+                    : 'Not subscribed'
+                }
+              />
+              {plusStatus.plus && (
+                <>
+                  <SectionDivider />
+                  <SettingsRow
+                    icon="settings-outline"
+                    title="Manage Subscription"
+                    showChevron
+                    onPress={() => Linking.openURL(billingService.getManageSubscriptionUrl())}
+                  />
+                </>
+              )}
+              <SectionDivider />
+              <SettingsRow
+                icon="refresh"
+                title="Restore Purchases"
+                showChevron
+                onPress={async () => {
+                  const restored = await billingService.restorePurchases();
+                  const newStatus = await billingService.getStatus();
+                  setPlusStatus(newStatus);
+                  toast.show({
+                    message: restored && newStatus.plus ? 'Purchases restored!' : 'No purchases found.',
+                    type: restored && newStatus.plus ? 'success' : 'info',
+                  });
+                }}
+              />
+            </SettingsSection>
+            <View style={styles.sectionGap} />
+          </>
+        )}
 
         {/* About */}
         <SettingsSection title="About" style={fadeStyles[3]}>
@@ -332,7 +385,7 @@ export default function SettingsScreen() {
         visible={showDeleteConfirm}
         icon="⚠️"
         title="Delete Account?"
-        message="This will permanently delete your account, all pets, check-in history, and scan data. This cannot be undone."
+        message="This will permanently delete your account, all pets, check-in history, and scan data. This cannot be undone. If you have an active subscription, cancel it in your App Store or Google Play settings — deleting your account does not cancel your subscription."
         confirmLabel={deleting ? 'Deleting...' : 'Delete Forever'}
         confirmColor={colors.danger}
         onCancel={() => !deleting && setShowDeleteConfirm(false)}

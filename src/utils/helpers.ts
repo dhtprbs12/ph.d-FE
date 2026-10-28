@@ -15,6 +15,14 @@ export function buildThumbUrl(imageUrl?: string | null): string | null {
   return full.slice(0, dotIdx) + '_thumb' + full.slice(dotIdx);
 }
 
+/** Avatar-sized pet photo. Remote photos use the 200px thumb. Local picks stay as-is. */
+export function petAvatarUri(photo?: string | null): string | null {
+  if (!photo) return null;
+  if (photo.startsWith('https://') || photo.startsWith('http://')) return buildThumbUrl(photo);
+  if (photo.startsWith('data:') || photo.startsWith('file://')) return photo;
+  return `data:image/jpeg;base64,${photo}`;
+}
+
 export function toTitleCase(str?: string | null): string {
   if (!str) return '';
   return str

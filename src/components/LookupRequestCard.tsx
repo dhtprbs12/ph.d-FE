@@ -4,9 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { colors, radius, spacing, typography } from '../theme';
 import api from '../services/api';
+import type { NameLookupInput } from '../services/lookupService';
 
 export function LookupRequestCard({
   petName,
+  petType,
   searchQuery,
   submitting = false,
   scrollRef,
@@ -16,16 +18,20 @@ export function LookupRequestCard({
   actionLabel = 'Request analysis',
 }: {
   petName: string;
+  petType?: string;
   searchQuery: string;
   submitting?: boolean;
   scrollRef?: React.RefObject<ScrollView | null>;
-  onRequest: (input: { brand: string; queryName: string; pastedUrl: string; email: string }) => void;
+  onRequest: (input: NameLookupInput) => void;
   onUploadPhotos?: (email: string) => void;
   onBack?: () => void;
   actionLabel?: string;
 }) {
   const [brand, setBrand] = useState('');
   const [queryName, setQueryName] = useState(searchQuery);
+  const [protein, setProtein] = useState('');
+  const [lifeStage, setLifeStage] = useState<string | null>(null);
+  const [foodForm, setFoodForm] = useState<string | null>(null);
   const [pastedUrl, setPastedUrl] = useState('');
   const [email, setEmail] = useState('');
   const [linkOffer, setLinkOffer] = useState<string | null>(null);
@@ -41,7 +47,10 @@ export function LookupRequestCard({
     }).catch(() => {});
   }, []);
 
-  const ready = brand.trim().length > 0 && queryName.trim().length > 0;
+  const ready = brand.trim().length > 0 && queryName.trim().length > 0 && protein.trim().length > 0;
+  const stages = petType === 'cat'
+    ? [{ id: 'kitten', label: 'Kitten' }, { id: 'adult', label: 'Adult' }, { id: 'senior', label: 'Senior' }, { id: 'all', label: 'All' }]
+    : [{ id: 'puppy', label: 'Puppy' }, { id: 'adult', label: 'Adult' }, { id: 'senior', label: 'Senior' }, { id: 'all', label: 'All' }];
 
   const revealField = (target: number) => {
     setTimeout(() => {
@@ -80,7 +89,7 @@ export function LookupRequestCard({
         We'll look this up for {petName}
       </Text>
       <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>
-        Write every word you see for the brand and the product name.
+        Write the brand, the product name, and the protein as they appear on the package.
       </Text>
       <TextInput
         value={brand}
@@ -98,9 +107,29 @@ export function LookupRequestCard({
         placeholderTextColor={colors.textSecondary}
         style={inputStyle}
       />
+      <TextInput
+        value={protein}
+        onChangeText={setProtein}
+        onFocus={(event) => revealField(event.target)}
+        placeholder="Protein"
+        placeholderTextColor={colors.textSecondary}
+        style={inputStyle}
+      />
       {!ready ? (
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Brand and product name are both required</Text>
+        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Brand, product name, and protein are required</Text>
       ) : null}
+      <ChoiceRow
+        label="Life stage"
+        options={stages}
+        selected={lifeStage}
+        onSelect={(id) => setLifeStage(current => current === id ? null : id)}
+      />
+      <ChoiceRow
+        label="Dry or wet"
+        options={[{ id: 'dry', label: 'Dry' }, { id: 'wet', label: 'Wet' }]}
+        selected={foodForm}
+        onSelect={(id) => setFoodForm(current => current === id ? null : id)}
+      />
       <TextInput
         value={pastedUrl}
         onChangeText={setPastedUrl}
@@ -130,7 +159,15 @@ export function LookupRequestCard({
       />
       <Pressable
         disabled={!ready || submitting}
-        onPress={() => onRequest({ brand: brand.trim(), queryName: queryName.trim(), pastedUrl: pastedUrl.trim(), email: email.trim() })}
+        onPress={() => onRequest({
+          brand: brand.trim(),
+          queryName: queryName.trim(),
+          protein: protein.trim(),
+          lifeStage: lifeStage || '',
+          foodForm: foodForm || '',
+          pastedUrl: pastedUrl.trim(),
+          email: email.trim(),
+        })}
         style={{
           backgroundColor: colors.primary,
           opacity: ready && !submitting ? 1 : 0.45,
@@ -165,6 +202,45 @@ export function LookupRequestCard({
         <Ionicons name="chevron-forward" size={18} color={colors.primary} />
       </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+function ChoiceRow({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  options: { id: string; label: string }[];
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <View style={{ gap: spacing.xs }}>
+      <Text style={[typography.labelMedium, { color: colors.textSecondary }]}>{label}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+        {options.map(option => {
+          const on = option.id === selected;
+          return (
+            <Pressable
+              key={option.id}
+              onPress={() => onSelect(option.id)}
+              style={{
+                borderWidth: 1,
+                borderColor: on ? colors.primary : colors.divider,
+                borderRadius: radius.full,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: spacing.xs,
+                backgroundColor: on ? colors.primary : colors.white,
+              }}
+            >
+              <Text style={[typography.labelMedium, { color: on ? colors.white : colors.textPrimary }]}>{option.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }

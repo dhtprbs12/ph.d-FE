@@ -38,12 +38,25 @@ export interface LookupDetail extends LookupSummary {
   barcodeImageUrl?: string | null;
 }
 
+export type NameLookupInput = {
+  brand: string;
+  queryName: string;
+  protein: string;
+  lifeStage: string;
+  foodForm: string;
+  pastedUrl: string;
+  email: string;
+};
+
 export async function createNameLookup(body: {
   petId?: string;
   petName?: string;
   petType?: string;
   brand: string;
   queryName: string;
+  protein?: string;
+  lifeStage?: string;
+  foodForm?: string;
   pastedUrl?: string;
   email?: string;
   setAsCurrentFood?: boolean;

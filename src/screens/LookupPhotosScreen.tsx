@@ -21,8 +21,11 @@ import type { HomeStackParamList } from '../navigation/types';
 import { useApp } from '../context/AppContext';
 import { colors, radius, spacing, typography } from '../theme';
 import api from '../services/api';
+import petFoodService from '../services/petFoodService';
 import { createPhotoLookup, openAnalysisRequests } from '../services/lookupService';
 import { PushOptInModal, notificationPermissionStatus, registerPushToken } from '../components/PushOptInModal';
+import { calendarDaysOnFood } from '../utils/foodTime';
+import { SwitchFoodDialog } from '../components/SwitchFoodDialog';
 
 type Slot = 'front' | 'ingredients' | 'barcode';
 
@@ -46,7 +49,20 @@ export function LookupPhotosScreen() {
   const [email, setEmail] = useState(route.params?.email || '');
   const [busy, setBusy] = useState(false);
   const [askPush, setAskPush] = useState(false);
+  const [confirmSwitch, setConfirmSwitch] = useState(false);
+  const [currentFoodName, setCurrentFoodName] = useState('');
+  const [foodDays, setFoodDays] = useState(1);
   const scrollRef = useRef<ScrollView>(null);
+  const replacing = route.params?.replaceCurrentFood === true;
+
+  useEffect(() => {
+    if (!replacing || !selectedPet?.id) return;
+    petFoodService.getCurrentFood(selectedPet.id).then((food) => {
+      if (!food) return;
+      setCurrentFoodName(food.productName || '');
+      setFoodDays(calendarDaysOnFood(food.startedAt, null, true));
+    }).catch(() => {});
+  }, [replacing, selectedPet?.id]);
 
   useEffect(() => {
     if (route.params?.email) return;
@@ -193,7 +209,13 @@ export function LookupPhotosScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <Pressable
           disabled={!ready || busy}
-          onPress={askThenSubmit}
+          onPress={() => {
+            if (replacing) {
+              setConfirmSwitch(true);
+              return;
+            }
+            askThenSubmit();
+          }}
           style={[styles.submit, (!ready || busy) && styles.submitOff]}
         >
           {busy ? (
@@ -204,6 +226,17 @@ export function LookupPhotosScreen() {
         </Pressable>
       </View>
       <PushOptInModal visible={askPush} onAllow={() => submit(true)} onSkip={() => submit(false)} />
+      <SwitchFoodDialog
+        visible={confirmSwitch}
+        currentName={currentFoodName}
+        dayCount={foodDays}
+        newName={route.params?.barcode || 'Scanned food'}
+        onCancel={() => setConfirmSwitch(false)}
+        onConfirm={() => {
+          setConfirmSwitch(false);
+          askThenSubmit();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

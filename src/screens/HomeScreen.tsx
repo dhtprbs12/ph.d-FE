@@ -35,15 +35,18 @@ import { calendarDaysOnFood, formatFoodDay, formatLogTime, phoneYmd } from '../u
 import { isVomitLog, latestMealAndHealth, logSummary } from '../utils/dailyLog';
 import { useToast } from '../components/common/Toast';
 import { LookupRequestCard } from '../components/LookupRequestCard';
-import { createNameLookup } from '../services/lookupService';
+import { SwitchFoodDialog } from '../components/SwitchFoodDialog';
+import { createNameLookup, type NameLookupInput } from '../services/lookupService';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 import api from '../services/api';
-import { toTitleCase, buildThumbUrl } from '../utils/helpers';
+import { toTitleCase, buildThumbUrl, petAvatarUri } from '../utils/helpers';
 import { getBaseCharacter, getItemLayer } from '../utils/characterAssets';
 import shopService, { CharacterState } from '../services/shopService';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import NomNomNotesCard from '../components/NomNomNotesCard';
 import TokenEarnSheet from '../components/TokenEarnSheet';
+import { BonePackSheet } from '../components/BonePackSheet';
+import { isRevenueCatAvailable } from '../services/billingService';
 
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
@@ -108,15 +111,11 @@ function PetAvatar({ pet, size = 56 }: { pet: Pet; size?: number }) {
     : withOpacity(colors.primary, 0.2);
   const emoji = isDog ? '🐕' : '🐱';
 
-  if (pet.photoData) {
-    const uri = pet.photoData.startsWith('data:')
-      ? pet.photoData
-      : pet.photoData.startsWith('file://') || pet.photoData.startsWith('http')
-        ? pet.photoData
-        : `data:image/jpeg;base64,${pet.photoData}`;
+  const avatarUri = petAvatarUri(pet.photoData);
+  if (avatarUri) {
     return (
       <Image
-        source={{ uri }}
+        source={{ uri: avatarUri }}
         style={{ width: size, height: size, borderRadius: size / 2 }}
       />
     );
@@ -145,6 +144,7 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
   const [summary, setSummary] = useState<GamificationSummary | null>(null);
   const [equipped, setEquipped] = useState<CharacterState['equipped'] | null>(null);
   const [earnVisible, setEarnVisible] = useState(false);
+  const [bonePackVisible, setBonePackVisible] = useState(false);
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('phd-bones-refresh', () => {
@@ -236,7 +236,25 @@ function GamificationHeader({ onCharacterPress, petName, petId }: { onCharacterP
         </Pressable>
       </View>
     </View>
-    <TokenEarnSheet visible={earnVisible} onClose={() => setEarnVisible(false)} />
+    <TokenEarnSheet
+      visible={earnVisible}
+      onClose={() => setEarnVisible(false)}
+      onBuyBones={isRevenueCatAvailable() ? () => setBonePackVisible(true) : undefined}
+    />
+    {isRevenueCatAvailable() && summary && (
+      <BonePackSheet
+        visible={bonePackVisible}
+        onClose={() => setBonePackVisible(false)}
+        currentBalance={summary.tokens.balance}
+        getBalance={async () => {
+          const s = await gamificationService.getSummary();
+          return s.tokens.balance;
+        }}
+        onBalanceUpdated={(newBalance) => {
+          setSummary(prev => prev ? { ...prev, tokens: { ...prev.tokens, balance: newBalance } } : prev);
+        }}
+      />
+    )}
     </>
   );
 }
@@ -285,6 +303,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const [foodNameInput, setFoodNameInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<any>(null);
+  const [pendingLookup, setPendingLookup] = useState<NameLookupInput | null>(null);
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
@@ -298,10 +317,15 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
 
   const loadFoodAndLogs = useCallback(() => {
     if (!pet?.id) return;
-    petFoodService.getCurrentFood(pet.id).then(setCurrentFood).catch(console.warn);
-    checkinService.getCheckins(pet.id, '2020-01-01', phoneYmd())
-      .then(r => setRecentLogs(latestMealAndHealth(r.checkins || [])))
-      .catch(() => setRecentLogs([]));
+    petFoodService.getCurrentFood(pet.id).then(food => {
+      setCurrentFood(food);
+      return checkinService.getCheckins(pet.id, '2020-01-01', phoneYmd()).then(logs => {
+        const rows = logs.checkins || [];
+        const tagged = rows.some(row => row.petFoodId);
+        const onThisFood = food && tagged ? rows.filter(row => row.petFoodId === food.id) : rows;
+        setRecentLogs(latestMealAndHealth(onThisFood));
+      });
+    }).catch(() => setRecentLogs([]));
     const today = phoneYmd();
     checkinService.getCheckins(pet.id, today, today)
       .then(r => scheduleDailyReminders(pet.name, (r.checkins?.length ?? 0) > 0))
@@ -336,7 +360,19 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
     }, 400);
   };
 
+  const alreadyEating = (name?: string | null, productId?: string | null) => {
+    if (!currentFood) return false;
+    if (productId && currentFood.productId && productId === currentFood.productId) return true;
+    const currentName = (currentFood.productName || '').trim().toLowerCase();
+    const nextName = (name || '').trim().toLowerCase();
+    return currentName.length > 0 && currentName === nextName;
+  };
+
   const handleSelectProduct = async (product: any) => {
+    if (currentFood && alreadyEating(product.name, product.id)) {
+      toast.show({ message: 'Already eating this food', type: 'info' });
+      return;
+    }
     if (currentFood) {
       setPendingProduct(product);
       return;
@@ -350,6 +386,39 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
     setSearchResults([]);
     setSearchDone(false);
     setFoodNameInput('');
+    setPendingLookup(null);
+  };
+
+  const sendNameLookup = async (input: NameLookupInput) => {
+    setSaving(true);
+    try {
+      await createNameLookup({
+        petId: pet.id,
+        petName: pet.name,
+        petType: pet.pet_type,
+        brand: input.brand,
+        queryName: input.queryName,
+        protein: input.protein,
+        lifeStage: input.lifeStage,
+        foodForm: input.foodForm,
+        pastedUrl: input.pastedUrl,
+        email: input.email,
+        setAsCurrentFood: true,
+        replaceCurrentFood: !!currentFood,
+      });
+      setShowFoodInput(false);
+      setFoodNameInput('');
+      setSearchResults([]);
+      setRequestOpen(false);
+      setSearchDone(false);
+      setPendingLookup(null);
+      toast.show({ message: `We'll look this up for ${pet.name}`, type: 'info' });
+      loadFoodAndLogs();
+    } catch (e: any) {
+      toast.show({ message: e?.message || 'Could not send the request', type: 'error' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const doSetFood = async (product: any) => {
@@ -406,8 +475,8 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
                 {pet.name} · Day {foodDays}
               </Text>
             </View>
-            <Pressable onPress={toggleFoodSearch} hitSlop={8} style={{ flexShrink: 0 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>Switch</Text>
+            <Pressable onPress={toggleFoodSearch} hitSlop={8} style={[styles.switchBadge, { flexShrink: 0 }]}>
+              <Text style={styles.switchBadgeText}>Switch</Text>
             </Pressable>
           </View>
           {!showFoodInput && (
@@ -521,35 +590,20 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
           {requestOpen && (
             <LookupRequestCard
               petName={pet.name}
+              petType={pet.pet_type}
               searchQuery={foodNameInput.trim()}
               submitting={saving}
               onBack={() => setRequestOpen(false)}
               onRequest={async (input) => {
-                setSaving(true);
-                try {
-                  await createNameLookup({
-                    petId: pet.id,
-                    petName: pet.name,
-                    petType: pet.pet_type,
-                    brand: input.brand,
-                    queryName: input.queryName,
-                    pastedUrl: input.pastedUrl,
-                    email: input.email,
-                    setAsCurrentFood: true,
-                    replaceCurrentFood: !!currentFood,
-                  });
-                  setShowFoodInput(false);
-                  setFoodNameInput('');
-                  setSearchResults([]);
-                  setRequestOpen(false);
-                  setSearchDone(false);
-                  toast.show({ message: `We'll look this up for ${pet.name}`, type: 'info' });
-                  loadFoodAndLogs();
-                } catch (e: any) {
-                  toast.show({ message: e?.message || 'Could not send the request', type: 'error' });
-                } finally {
-                  setSaving(false);
+                if (currentFood && alreadyEating(input.queryName)) {
+                  toast.show({ message: 'Already eating this food', type: 'info' });
+                  return;
                 }
+                if (currentFood) {
+                  setPendingLookup(input);
+                  return;
+                }
+                await sendNameLookup(input);
               }}
             />
           )}
@@ -576,35 +630,18 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
       )}
 
       {/* Switch Food Confirmation Modal */}
-      {pendingProduct && (
-        <Modal transparent animationType="fade">
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ backgroundColor: colors.white, borderRadius: 20, padding: 24, marginHorizontal: 32, alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 32 }}>🔄</Text>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary }}>Switch Food?</Text>
-              <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>Current</Text>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>{toTitleCase(currentFood?.productName || '')}</Text>
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>Day {foodDays}</Text>
-              </View>
-              <Ionicons name="arrow-down" size={20} color={colors.textSecondary} />
-              <View style={{ alignItems: 'center', gap: 2, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>New</Text>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.primary }}>{toTitleCase(pendingProduct.name)}</Text>
-              </View>
-              <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginTop: 4 }}>This will end tracking for the current food and start a new period.</Text>
-              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12, width: '100%' }}>
-                <Pressable onPress={() => setPendingProduct(null)} style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.lightGray, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Cancel</Text>
-                </Pressable>
-                <Pressable onPress={() => doSetFood(pendingProduct)} style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Switch</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
+      <SwitchFoodDialog
+        visible={!!(pendingProduct || pendingLookup)}
+        currentName={currentFood?.productName || ''}
+        dayCount={foodDays}
+        newName={pendingProduct?.name || pendingLookup?.queryName || ''}
+        busy={saving}
+        onCancel={() => { setPendingProduct(null); setPendingLookup(null); }}
+        onConfirm={() => {
+          if (pendingProduct) doSetFood(pendingProduct);
+          else if (pendingLookup) sendNameLookup(pendingLookup);
+        }}
+      />
       <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
       <DailyLogSheets
         petId={pet.id}
@@ -1176,7 +1213,8 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
 
       <Pressable
         onPress={openHistory}
-        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: spacing.sm }}
+        hitSlop={8}
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: spacing.xs, minHeight: 44, paddingVertical: 10 }}
       >
         <Text style={[typography.labelMedium, { color: colors.primary }]}>
           {extraCount > 0 ? `View all · ${newestFirst.length} foods` : 'View all'}
@@ -1808,8 +1846,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.divider,
   },
-  historyCurrentBadge: {
+  switchBadge: {
     backgroundColor: colors.primary,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  switchBadgeText: {
+    ...typography.labelSmall,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  historyCurrentBadge: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.primary,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: radius.full,
@@ -1817,7 +1868,7 @@ const styles = StyleSheet.create({
   historyCurrentText: {
     ...typography.labelSmall,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.primary,
   },
   scanNudge: {
     flexDirection: 'row',
