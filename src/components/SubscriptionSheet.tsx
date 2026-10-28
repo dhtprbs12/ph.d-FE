@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
   View,
   Text,
@@ -21,6 +22,7 @@ import {
 
 const PRIVACY_URL = 'https://phd-be-production.up.railway.app/privacy';
 const TERMS_URL = 'https://phd-be-production.up.railway.app/terms';
+const SHEET_OFFSET = 640;
 
 interface Props {
   visible: boolean;
@@ -34,9 +36,31 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const translateY = useRef(new Animated.Value(SHEET_OFFSET)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const closing = useRef(false);
+
+  const requestClose = () => {
+    if (closing.current) return;
+    closing.current = true;
+    Animated.parallel([
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: SHEET_OFFSET, duration: 200, useNativeDriver: true }),
+    ]).start(() => {
+      closing.current = false;
+      onClose();
+    });
+  };
 
   useEffect(() => {
     if (!visible) return;
+    closing.current = false;
+    translateY.setValue(SHEET_OFFSET);
+    backdropOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 280, useNativeDriver: true }),
+    ]).start();
     setLoading(true);
     getOfferings()
       .then(pkgs => {
@@ -46,7 +70,7 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [visible]);
+  }, [visible, backdropOpacity, translateY]);
 
   const handlePurchase = async () => {
     const pkg = packages.find(p => p.identifier === selected);
@@ -74,12 +98,15 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
   const isAnnual = (id: string) => id === '$rc_annual';
 
   return (
-    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={requestClose}>
+      <View style={styles.root} pointerEvents="box-none">
+        <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={requestClose} accessibilityLabel="Close" />
+        </Animated.View>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
           {/* Header */}
           <View style={styles.header}>
-            <Pressable onPress={onClose} hitSlop={16}>
+            <Pressable onPress={requestClose} hitSlop={16}>
               <Ionicons name="close" size={24} color={colors.textSecondary} />
             </Pressable>
           </View>
@@ -170,17 +197,20 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
               </View>
             </>
           )}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  root: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
     backgroundColor: colors.white,

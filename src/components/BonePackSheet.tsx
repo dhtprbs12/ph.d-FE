@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
   View,
   Text,
@@ -17,6 +18,8 @@ import {
   type PackageInfo,
 } from '../services/billingService';
 import { useToast } from './common/Toast';
+
+const SHEET_OFFSET = 640;
 
 interface Props {
   visible: boolean;
@@ -38,15 +41,37 @@ export function BonePackSheet({ visible, onClose, currentBalance, getBalance, on
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const toast = useToast();
+  const translateY = useRef(new Animated.Value(SHEET_OFFSET)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const closing = useRef(false);
+
+  const requestClose = () => {
+    if (closing.current) return;
+    closing.current = true;
+    Animated.parallel([
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: SHEET_OFFSET, duration: 200, useNativeDriver: true }),
+    ]).start(() => {
+      closing.current = false;
+      onClose();
+    });
+  };
 
   useEffect(() => {
     if (!visible) return;
+    closing.current = false;
+    translateY.setValue(SHEET_OFFSET);
+    backdropOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 280, useNativeDriver: true }),
+    ]).start();
     setLoading(true);
     getOfferings()
       .then(pkgs => setPackages(getBonePackages(pkgs)))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [visible]);
+  }, [visible, backdropOpacity, translateY]);
 
   const handleBuy = async (pkg: PackageInfo) => {
     setPurchasing(pkg.identifier);
@@ -70,12 +95,15 @@ export function BonePackSheet({ visible, onClose, currentBalance, getBalance, on
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={requestClose}>
+      <View style={styles.root} pointerEvents="box-none">
+        <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={requestClose} accessibilityLabel="Close" />
+        </Animated.View>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
           <View style={styles.header}>
             <Text style={styles.title}>🦴 Get Bones</Text>
-            <Pressable onPress={onClose} hitSlop={16}>
+            <Pressable onPress={requestClose} hitSlop={16}>
               <Ionicons name="close" size={24} color={colors.textSecondary} />
             </Pressable>
           </View>
@@ -116,17 +144,20 @@ export function BonePackSheet({ visible, onClose, currentBalance, getBalance, on
               })}
             </View>
           )}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  root: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
     backgroundColor: colors.white,
