@@ -95,7 +95,7 @@ export function LookupRequestCard({
         value={brand}
         onChangeText={setBrand}
         onFocus={(event) => revealField(event.target)}
-        placeholder="Brand"
+        placeholder="Brand (Required)"
         placeholderTextColor={colors.textSecondary}
         style={inputStyle}
       />
@@ -103,7 +103,7 @@ export function LookupRequestCard({
         value={queryName}
         onChangeText={setQueryName}
         onFocus={(event) => revealField(event.target)}
-        placeholder="Product name"
+        placeholder="Product name (Required)"
         placeholderTextColor={colors.textSecondary}
         style={inputStyle}
       />
@@ -111,7 +111,7 @@ export function LookupRequestCard({
         value={protein}
         onChangeText={setProtein}
         onFocus={(event) => revealField(event.target)}
-        placeholder="Protein"
+        placeholder="Protein (Required)"
         placeholderTextColor={colors.textSecondary}
         style={inputStyle}
       />
