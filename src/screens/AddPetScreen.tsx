@@ -32,6 +32,7 @@ import { LookupRequestCard } from '../components/LookupRequestCard';
 import { BarcodeRegisterFields } from '../components/BarcodeRegisterFields';
 import { AnalysisNotice } from '../components/AnalysisNotice';
 import { createNameLookup, createPhotoLookup, type NameLookupInput } from '../services/lookupService';
+import { registerPushToken } from '../components/PushOptInModal';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
 
@@ -141,6 +142,7 @@ export default function AddPetScreen() {
         brand: scannedFood.brand || undefined,
       });
     } else if (nameRequest) {
+      await registerPushToken();
       await createNameLookup({
         petId: created.id,
         petName: created.name,
@@ -155,6 +157,7 @@ export default function AddPetScreen() {
         setAsCurrentFood: true,
       });
     } else if (barcodeMiss?.requested && barcodeMiss.barcode && barcodeMiss.front && barcodeMiss.ingredients) {
+      await registerPushToken();
       await createPhotoLookup({
         frontImageUri: barcodeMiss.front,
         ingredientImageUri: barcodeMiss.ingredients,

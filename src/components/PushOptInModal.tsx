@@ -72,15 +72,23 @@ export async function notificationPermissionStatus(): Promise<'granted' | 'denie
 
 export async function registerPushToken() {
   try {
+    console.log('[Push] registerPushToken() called');
     const Notifications = await import('expo-notifications');
     const current = await Notifications.getPermissionsAsync();
+    console.log('[Push] current permission:', current.status, 'granted:', current.granted);
     const granted = current.granted
       ? current
       : await Notifications.requestPermissionsAsync();
-    if (!granted.granted) return;
+    if (!granted.granted) {
+      console.log('[Push] permission not granted, skipping token save');
+      return;
+    }
+    console.log('[Push] fetching expo push token...');
     const token = await Notifications.getExpoPushTokenAsync();
+    console.log('[Push] got token:', token.data?.slice(0, 30) + '...');
     const { savePushToken } = await import('../services/lookupService');
     await savePushToken(token.data);
+    console.log('[Push] token saved to server ✓');
   } catch (error) {
     console.warn('[Push] registration skipped', error);
   }

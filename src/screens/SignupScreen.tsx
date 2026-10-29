@@ -24,6 +24,7 @@ import { LookupRequestCard } from '../components/LookupRequestCard';
 import { BarcodeRegisterFields } from '../components/BarcodeRegisterFields';
 import { AnalysisNotice } from '../components/AnalysisNotice';
 import { createNameLookup, createPhotoLookup, type NameLookupInput } from '../services/lookupService';
+import { registerPushToken } from '../components/PushOptInModal';
 import { useToast } from '../components/common/Toast';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { buildThumbUrl, buildImageUrl } from '../utils/helpers';
@@ -268,6 +269,7 @@ export default function SignupScreen({ navigation }: Props) {
         }
       } else if (createdPet?.id && nameRequest) {
         try {
+          await registerPushToken();
           await createNameLookup({
             petId: createdPet.id,
             petName: createdPet.name,
@@ -286,6 +288,7 @@ export default function SignupScreen({ navigation }: Props) {
         }
       } else if (createdPet?.id && barcodeMiss?.requested && barcodeMiss.front && barcodeMiss.ingredients) {
         try {
+          await registerPushToken();
           await createPhotoLookup({
             frontImageUri: barcodeMiss.front,
             ingredientImageUri: barcodeMiss.ingredients,
