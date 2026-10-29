@@ -132,7 +132,7 @@ export function LookupPhotosScreen() {
         'Turn on notifications in Settings so we can ping you when the report is ready.',
         [
           { text: 'Not now', style: 'cancel', onPress: () => submit(false) },
-          { text: 'Open Settings', onPress: () => { Linking.openSettings(); submit(false); } },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
         ],
       );
       return;

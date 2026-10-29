@@ -587,7 +587,7 @@ export function ProductSearchScreen() {
                   'Turn on notifications in Settings so we can ping you when the report is ready.',
                   [
                     { text: 'Not now', style: 'cancel', onPress: () => sendLookup(false) },
-                    { text: 'Open Settings', onPress: () => { Linking.openSettings(); sendLookup(false); } },
+                    { text: 'Open Settings', onPress: () => Linking.openSettings() },
                   ],
                 );
                 return;
