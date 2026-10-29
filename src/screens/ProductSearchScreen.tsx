@@ -620,7 +620,12 @@ export function ProductSearchScreen() {
           </View>
         ) : null}
       </ScrollView>
-      <PushOptInModal visible={askPush} onAllow={() => sendLookup(true)} onSkip={() => sendLookup(false)} />
+      <PushOptInModal
+        visible={askPush}
+        onClose={() => setAskPush(false)}
+        onAllow={() => sendLookup(true)}
+        onSkip={() => sendLookup(false)}
+      />
     </SafeAreaView>
   );
 }

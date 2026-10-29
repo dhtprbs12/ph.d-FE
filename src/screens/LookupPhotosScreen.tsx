@@ -225,7 +225,12 @@ export function LookupPhotosScreen() {
           )}
         </Pressable>
       </View>
-      <PushOptInModal visible={askPush} onAllow={() => submit(true)} onSkip={() => submit(false)} />
+      <PushOptInModal
+        visible={askPush}
+        onClose={() => setAskPush(false)}
+        onAllow={() => submit(true)}
+        onSkip={() => submit(false)}
+      />
       <SwitchFoodDialog
         visible={confirmSwitch}
         currentName={currentFoodName}

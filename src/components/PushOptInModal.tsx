@@ -1,18 +1,43 @@
-import React from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Modal, Platform, Pressable, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../theme';
 
 export function PushOptInModal({
   visible,
   onAllow,
   onSkip,
+  onClose,
 }: {
   visible: boolean;
   onAllow: () => void;
   onSkip: () => void;
+  onClose: () => void;
 }) {
+  const pending = useRef<'allow' | 'skip' | null>(null);
+
+  const choose = (action: 'allow' | 'skip') => {
+    pending.current = action;
+    onClose();
+    if (Platform.OS === 'ios') return;
+    pending.current = null;
+    setTimeout(() => {
+      if (action === 'allow') onAllow();
+      else onSkip();
+    }, 350);
+  };
+
   return (
-    <Modal transparent visible={visible} animationType="fade">
+    <Modal
+      transparent
+      visible={visible}
+      animationType="fade"
+      onDismiss={() => {
+        const action = pending.current;
+        pending.current = null;
+        if (action === 'allow') onAllow();
+        else if (action === 'skip') onSkip();
+      }}
+    >
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: spacing.lg }}>
         <View style={{ backgroundColor: colors.white, borderRadius: radius.large, padding: spacing.lg, gap: spacing.md }}>
           <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>
@@ -21,10 +46,10 @@ export function PushOptInModal({
           <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>
             You can leave the app. We'll send a notification when the analysis is done.
           </Text>
-          <Pressable onPress={onAllow} style={{ backgroundColor: colors.primary, borderRadius: radius.medium, padding: spacing.md, alignItems: 'center' }}>
+          <Pressable onPress={() => choose('allow')} style={{ backgroundColor: colors.primary, borderRadius: radius.medium, padding: spacing.md, alignItems: 'center' }}>
             <Text style={{ color: colors.white, fontWeight: '700' }}>Allow notifications</Text>
           </Pressable>
-          <Pressable onPress={onSkip} style={{ alignItems: 'center', padding: spacing.sm }}>
+          <Pressable onPress={() => choose('skip')} style={{ alignItems: 'center', padding: spacing.sm }}>
             <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Not now</Text>
           </Pressable>
         </View>
