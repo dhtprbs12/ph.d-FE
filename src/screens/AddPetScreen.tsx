@@ -66,7 +66,7 @@ export default function AddPetScreen() {
   const [breedDropdownVisible, setBreedDropdownVisible] = useState(false);
   const [scannedFood, setScannedFood] = useState<{ productName: string; productId?: string; brand?: string } | null>(null);
   const [nameRequest, setNameRequest] = useState<NameLookupInput | null>(null);
-  const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; requested?: boolean } | null>(null);
+  const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; email?: string; requested?: boolean } | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [missQuery, setMissQuery] = useState('');
 
@@ -166,6 +166,7 @@ export default function AddPetScreen() {
         petId: created.id,
         petName: created.name,
         petType: created.pet_type,
+        email: barcodeMiss.email,
         setAsCurrentFood: true,
       });
     }

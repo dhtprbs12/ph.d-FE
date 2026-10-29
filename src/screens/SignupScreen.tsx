@@ -71,7 +71,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
   const [currentFoodSelection, setCurrentFoodSelection] = useState<FoodSelection | null>(null);
   const [nameRequest, setNameRequest] = useState<NameLookupInput | null>(null);
-  const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; requested?: boolean } | null>(null);
+  const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; email?: string; requested?: boolean } | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [missQuery, setMissQuery] = useState('');
 
@@ -297,7 +297,7 @@ export default function SignupScreen({ navigation }: Props) {
             petId: createdPet.id,
             petName: createdPet.name,
             petType: createdPet.pet_type || petType,
-            email: email.trim() || undefined,
+            email: barcodeMiss.email || email.trim() || undefined,
             setAsCurrentFood: true,
           });
         } catch (e) {

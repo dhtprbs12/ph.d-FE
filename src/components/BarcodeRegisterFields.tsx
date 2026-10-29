@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Image, Pressable, Text, View } from 'react-native';
+import { Alert, Image, Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, radius, spacing, typography } from '../theme';
@@ -23,10 +23,11 @@ export function BarcodeRegisterFields({
   onBack: () => void;
   requested?: boolean;
   onRequest: () => void;
-  onChange: (photos: { front: string | null; ingredients: string | null }) => void;
+  onChange: (photos: { front: string | null; ingredients: string | null; email?: string }) => void;
 }) {
   const [front, setFront] = useState<string | null>(null);
   const [ingredients, setIngredients] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
 
   const shoot = async (slot: 'front' | 'ingredients') => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -41,7 +42,7 @@ export function BarcodeRegisterFields({
     const nextIngredients = slot === 'ingredients' ? uri : ingredients;
     if (slot === 'front') setFront(uri);
     if (slot === 'ingredients') setIngredients(uri);
-    onChange({ front: nextFront, ingredients: nextIngredients });
+    onChange({ front: nextFront, ingredients: nextIngredients, email: email.trim() || undefined });
   };
 
   const photoFor = (slot: 'front' | 'ingredients') => (slot === 'front' ? front : ingredients);
@@ -82,6 +83,23 @@ export function BarcodeRegisterFields({
           </Pressable>
         );
       })}
+      <TextInput
+        value={email}
+        onChangeText={(v) => { setEmail(v); onChange({ front, ingredients, email: v.trim() || undefined }); }}
+        placeholder="Email me too. Optional."
+        placeholderTextColor={colors.textSecondary}
+        autoCapitalize="none"
+        keyboardType="email-address"
+        style={{
+          borderWidth: 1,
+          borderColor: colors.divider,
+          borderRadius: radius.medium,
+          paddingHorizontal: spacing.md,
+          paddingVertical: 12,
+          color: colors.textPrimary,
+          backgroundColor: colors.card,
+        }}
+      />
       {requested ? (
         <AnalysisNotice />
       ) : (
