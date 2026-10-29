@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -126,7 +127,14 @@ export function LookupPhotosScreen() {
       return;
     }
     if (status === 'denied') {
-      await submit(false);
+      Alert.alert(
+        'Notifications are off',
+        'Turn on notifications in Settings so we can ping you when the report is ready.',
+        [
+          { text: 'Not now', style: 'cancel', onPress: () => submit(false) },
+          { text: 'Open Settings', onPress: () => { Linking.openSettings(); submit(false); } },
+        ],
+      );
       return;
     }
     setAskPush(true);

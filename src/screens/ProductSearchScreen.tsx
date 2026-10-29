@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
@@ -581,7 +582,14 @@ export function ProductSearchScreen() {
                 return;
               }
               if (status === 'denied') {
-                sendLookup(false);
+                Alert.alert(
+                  'Notifications are off',
+                  'Turn on notifications in Settings so we can ping you when the report is ready.',
+                  [
+                    { text: 'Not now', style: 'cancel', onPress: () => sendLookup(false) },
+                    { text: 'Open Settings', onPress: () => { Linking.openSettings(); sendLookup(false); } },
+                  ],
+                );
                 return;
               }
               setAskPush(true);

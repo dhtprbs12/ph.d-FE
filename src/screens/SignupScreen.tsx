@@ -297,6 +297,7 @@ export default function SignupScreen({ navigation }: Props) {
             petId: createdPet.id,
             petName: createdPet.name,
             petType: createdPet.pet_type || petType,
+            email: email.trim() || undefined,
             setAsCurrentFood: true,
           });
         } catch (e) {
