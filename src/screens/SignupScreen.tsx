@@ -27,6 +27,7 @@ import { createNameLookup, createPhotoLookup, type NameLookupInput } from '../se
 import { registerPushToken } from '../components/PushOptInModal';
 import { useToast } from '../components/common/Toast';
 import ZoomableImageModal from '../components/ZoomableImageModal';
+import { FoodPreviewSheet } from '../components/FoodPreviewSheet';
 import { buildThumbUrl, buildImageUrl } from '../utils/helpers';
 
 const CATEGORIES_ORDER = ['Allergies', 'Digestive', 'Organ Health', 'Metabolic', 'Physical'];
@@ -70,6 +71,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
   const [currentFoodSelection, setCurrentFoodSelection] = useState<FoodSelection | null>(null);
+  const [previewFood, setPreviewFood] = useState<FoodSelection | null>(null);
   const [nameRequest, setNameRequest] = useState<NameLookupInput | null>(null);
   const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; email?: string; requested?: boolean } | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -99,15 +101,18 @@ export default function SignupScreen({ navigation }: Props) {
       });
       const result = res.data;
       if (result?.product && result.product.name && !result.product.name.toLowerCase().includes('unknown')) {
-        setCurrentFoodSelection({
+        const food: FoodSelection = {
           productId: result.product.id,
           productName: result.product.name,
           brand: result.product.brand || undefined,
+          manufacturer: result.product.manufacturer || null,
+          lifeStage: result.product.target_life_stage || result.product.life_stage || null,
           imageUrl: result.product.imageUrl || result.product.image_url || null,
-        });
+        };
         setScannerOpen(false);
         setNameRequest(null);
         setRequestOpen(false);
+        setPreviewFood(food);
       } else {
         setScannerOpen(false);
         setCurrentFoodSelection(null);
@@ -706,7 +711,10 @@ export default function SignupScreen({ navigation }: Props) {
             ) : (
               <FoodSearchInput
                 petType={petType}
-                onSelect={(food) => setCurrentFoodSelection(food)}
+                onSelect={(food) => {
+                  if (food.productId) { setPreviewFood(food); }
+                  else { setCurrentFoodSelection(food); }
+                }}
                 onMiss={(query) => { setMissQuery(query); setRequestOpen(true); }}
                 placeholder="Search food name..."
               />
@@ -759,6 +767,7 @@ export default function SignupScreen({ navigation }: Props) {
           <CameraView
             ref={cameraRef}
             style={{ flex: 1 }}
+            autofocus="on"
             barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
             onBarcodeScanned={scanLooking ? undefined : handleBarcodeScan}
           />
@@ -781,6 +790,15 @@ export default function SignupScreen({ navigation }: Props) {
       </Modal>
     </KeyboardAvoidingView>
 
+      <FoodPreviewSheet
+        visible={!!previewFood}
+        food={previewFood}
+        onClose={() => setPreviewFood(null)}
+        onConfirm={() => {
+          if (previewFood) setCurrentFoodSelection(previewFood);
+          setPreviewFood(null);
+        }}
+      />
       <ZoomableImageModal
         visible={!!zoomUri}
         uri={zoomUri}

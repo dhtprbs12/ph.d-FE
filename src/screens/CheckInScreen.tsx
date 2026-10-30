@@ -7,7 +7,6 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
-  Modal,
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +16,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import checkinService from '../services/checkinService';
 import petFoodService from '../services/petFoodService';
 import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
+import { FoodPreviewSheet } from '../components/FoodPreviewSheet';
 import { toTitleCase, buildThumbUrl } from '../utils/helpers';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { useToast } from '../components/common/Toast';
@@ -48,7 +48,8 @@ export default function CheckInScreen() {
   const [currentFoodManufacturer, setCurrentFoodManufacturer] = useState<string | null>(null);
   const [currentFoodImage, setCurrentFoodImage] = useState<string | undefined>(foodImage);
   const [showFoodChange, setShowFoodChange] = useState(false);
-  const [pendingFood, setPendingFood] = useState<FoodSelection | null>(null);
+  const [currentFoodProductId, setCurrentFoodProductId] = useState<string | null>(null);
+  const [previewFood, setPreviewFood] = useState<FoodSelection | null>(null);
   const [stoolScore, setStoolScore] = useState<number>(3);
   const [appetite, setAppetite] = useState<'low' | 'normal' | 'high'>('normal');
   const [vomiting, setVomiting] = useState(false);
@@ -63,6 +64,7 @@ export default function CheckInScreen() {
       petFoodService.getCurrentFood(petId).then(food => {
         if (food) {
           setCurrentFoodName(food.productName);
+          setCurrentFoodProductId(food.productId);
           setCurrentFoodManufacturer(food.manufacturer);
           setCurrentFoodImage(food.imageUrl || undefined);
         }
@@ -91,12 +93,14 @@ export default function CheckInScreen() {
   const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   const handleFoodSelect = useCallback((food: FoodSelection) => {
-    if (currentFoodName) {
-      setPendingFood(food);
-    } else {
-      confirmFoodChange(food);
+    const sameId = food.productId && currentFoodProductId && food.productId === currentFoodProductId;
+    const sameName = (currentFoodName || '').trim().toLowerCase() === food.productName.trim().toLowerCase();
+    if (currentFoodName && (sameId || sameName)) {
+      toast.show({ message: 'Already eating this food', type: 'info' });
+      return;
     }
-  }, [currentFoodName]);
+    setPreviewFood(food);
+  }, [currentFoodName, currentFoodProductId, toast]);
 
   const confirmFoodChange = useCallback(async (food: FoodSelection) => {
     try {
@@ -106,13 +110,11 @@ export default function CheckInScreen() {
         brand: food.brand,
       });
       setCurrentFoodName(food.productName);
-      setCurrentFoodManufacturer(null);
+      setCurrentFoodProductId(food.productId || null);
+      setCurrentFoodManufacturer(food.manufacturer || null);
       setCurrentFoodImage(food.imageUrl || undefined);
-      petFoodService.getCurrentFood(petId).then(next => {
-        if (next) setCurrentFoodManufacturer(next.manufacturer);
-      }).catch(() => {});
       setShowFoodChange(false);
-      setPendingFood(null);
+      setPreviewFood(null);
     } catch (e) {
       console.warn('Failed to change food:', e);
       toast.show({ message: 'Failed to change food', type: 'error' });
@@ -359,36 +361,13 @@ export default function CheckInScreen() {
         </View>
       </KeyboardSafe>
 
-      {/* Switch Food Confirmation Modal */}
-      {pendingFood && (
-        <Modal transparent animationType="fade">
-          <View style={styles.modalBackdrop}>
-            <View style={styles.confirmCard}>
-              <Text style={{ fontSize: 32 }}>🔄</Text>
-              <Text style={styles.confirmTitle}>Switch Food?</Text>
-              <View style={styles.confirmFoodRow}>
-                <Text style={styles.confirmLabel}>Current</Text>
-                <Text style={styles.confirmFoodName}>{toTitleCase(currentFoodName || '')}</Text>
-                {daysOnFood != null && <Text style={styles.confirmDays}>Day {daysOnFood}</Text>}
-              </View>
-              <Ionicons name="arrow-down" size={20} color={colors.textSecondary} />
-              <View style={styles.confirmFoodRow}>
-                <Text style={styles.confirmLabel}>New</Text>
-                <Text style={[styles.confirmFoodName, { color: colors.primary }]}>{toTitleCase(pendingFood.productName)}</Text>
-              </View>
-              <Text style={styles.confirmSub}>This will end tracking for the current food and start a new period.</Text>
-              <View style={styles.confirmBtns}>
-                <Pressable onPress={() => { setPendingFood(null); setShowFoodChange(false); }} style={styles.confirmCancelBtn}>
-                  <Text style={styles.confirmCancelText}>Cancel</Text>
-                </Pressable>
-                <Pressable onPress={() => confirmFoodChange(pendingFood)} style={styles.confirmSwitchBtn}>
-                  <Text style={styles.confirmSwitchText}>Switch</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
+      <FoodPreviewSheet
+        visible={!!previewFood}
+        food={previewFood}
+        switching={!!currentFoodName}
+        onClose={() => setPreviewFood(null)}
+        onConfirm={() => { if (previewFood) confirmFoodChange(previewFood); }}
+      />
 
       <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
     </View>

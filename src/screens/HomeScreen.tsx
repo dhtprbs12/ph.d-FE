@@ -570,6 +570,10 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
                   )}
                 </Pressable>
               ))}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6 }}>
+                <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>Tap to preview</Text>
+              </View>
             </View>
           )}
           {searching && <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 4 }} />}

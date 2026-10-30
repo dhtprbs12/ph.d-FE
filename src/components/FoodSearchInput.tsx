@@ -18,6 +18,8 @@ export interface FoodSelection {
   productId?: string;
   productName: string;
   brand?: string;
+  manufacturer?: string | null;
+  lifeStage?: string | null;
   imageUrl?: string | null;
 }
 
@@ -65,7 +67,14 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
   const handleSelectProduct = (p: any) => {
     setText(p.name);
     setResults([]);
-    onSelect({ productId: p.id, productName: p.name, brand: p.brand || undefined, imageUrl: p.imageUrl || p.image_url || null });
+    onSelect({
+      productId: p.id,
+      productName: p.name,
+      brand: p.brand || undefined,
+      manufacturer: p.manufacturer || null,
+      lifeStage: p.target_life_stage || p.life_stage || null,
+      imageUrl: p.imageUrl || p.image_url || null,
+    });
   };
 
   const handleFreeText = () => {
@@ -100,7 +109,7 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
                 );
               })()}
               <View style={{ flex: 1 }}>
-                    <Text style={styles.itemName} numberOfLines={1}>{toTitleCase(p.name)}</Text>
+                <Text style={styles.itemName} numberOfLines={1}>{toTitleCase(p.name)}</Text>
                 {p.brand && <Text style={styles.itemBrand}>{toTitleCase(p.brand)}</Text>}
               </View>
               {p.base_dog_score && (
@@ -108,6 +117,10 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
               )}
             </Pressable>
           ))}
+          <View style={styles.previewHint}>
+            <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+            <Text style={styles.previewHintText}>Tap to preview</Text>
+          </View>
         </View>
       )}
 
@@ -181,4 +194,12 @@ const styles = StyleSheet.create({
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   freeTextLabel: { fontSize: 12, color: colors.textSecondary },
   scanLabel: { fontSize: 12, color: colors.primary, fontWeight: '600' },
+  previewHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+  },
+  previewHintText: { fontSize: 11, color: colors.textSecondary },
 });

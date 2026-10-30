@@ -27,7 +27,8 @@ import { useApp } from '../context/AppContext';
 import { DOG_BREEDS, CAT_BREEDS } from '../data/breeds';
 import api from '../services/api';
 import { useToast } from '../components/common/Toast';
-import FoodSearchInput from '../components/FoodSearchInput';
+import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
+import { FoodPreviewSheet } from '../components/FoodPreviewSheet';
 import { LookupRequestCard } from '../components/LookupRequestCard';
 import { BarcodeRegisterFields } from '../components/BarcodeRegisterFields';
 import { AnalysisNotice } from '../components/AnalysisNotice';
@@ -64,7 +65,8 @@ export default function AddPetScreen() {
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
   const [selectedConditions, setSelectedConditions] = useState<Set<string>>(new Set());
   const [breedDropdownVisible, setBreedDropdownVisible] = useState(false);
-  const [scannedFood, setScannedFood] = useState<{ productName: string; productId?: string; brand?: string } | null>(null);
+  const [scannedFood, setScannedFood] = useState<FoodSelection | null>(null);
+  const [previewFood, setPreviewFood] = useState<FoodSelection | null>(null);
   const [nameRequest, setNameRequest] = useState<NameLookupInput | null>(null);
   const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; email?: string; requested?: boolean } | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -209,12 +211,16 @@ export default function AddPetScreen() {
       });
       const result = res.data;
       if (result?.product && result.product.name && !result.product.name.toLowerCase().includes('unknown')) {
-        setScannedFood({
+        const food: FoodSelection = {
           productId: result.product.id,
           productName: result.product.name,
           brand: result.product.brand || undefined,
-        });
+          manufacturer: result.product.manufacturer || null,
+          lifeStage: result.product.target_life_stage || result.product.life_stage || null,
+          imageUrl: result.product.imageUrl || result.product.image_url || null,
+        };
         setScannerOpen(false);
+        setPreviewFood(food);
       } else {
         setScannerOpen(false);
         setBarcodeMiss({ barcode: data, photoUri, front: null, ingredients: null });
@@ -609,7 +615,10 @@ export default function AddPetScreen() {
               <View style={{ gap: spacing.md }}>
                 <FoodSearchInput
                   petType={petType}
-                  onSelect={(food) => setScannedFood(food)}
+                  onSelect={(food) => {
+                    if (food.productId) { setPreviewFood(food); }
+                    else { setScannedFood(food); }
+                  }}
                   onMiss={(query) => { setMissQuery(query); setRequestOpen(true); }}
                 />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
@@ -686,6 +695,7 @@ export default function AddPetScreen() {
           <CameraView
             ref={cameraRef}
             style={{ flex: 1 }}
+            autofocus="on"
             barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
             onBarcodeScanned={scanLooking ? undefined : handleBarcodeScan}
           />
@@ -706,6 +716,15 @@ export default function AddPetScreen() {
           </View>
         </View>
       </Modal>
+      <FoodPreviewSheet
+        visible={!!previewFood}
+        food={previewFood}
+        onClose={() => setPreviewFood(null)}
+        onConfirm={() => {
+          if (previewFood) setScannedFood(previewFood);
+          setPreviewFood(null);
+        }}
+      />
     </View>
   );
 }

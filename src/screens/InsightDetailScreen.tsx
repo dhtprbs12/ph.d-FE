@@ -188,32 +188,35 @@ function buildPdfHtml(insight: InsightData, petName?: string, petType?: string):
 
   return `
     <html><head><meta charset="utf-8"><style>
-      body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1B2B27; margin: 0; padding: 32px; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1B2B27; margin: 0; padding: 32px; background: #ffffff; }
+      .brand { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: #2D6A4F; margin: 0 0 6px; }
       h1 { font-size: 22px; line-height: 1.25; margin: 0; font-weight: 700; }
       h2 { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #5C6B66; margin: 0 0 8px; font-weight: 700; }
       h3 { font-size: 16px; margin: 0; font-weight: 700; }
       p { margin: 0; }
       .who { color: #5C6B66; font-size: 13px; margin-top: 6px; }
-      .finding { margin-top: 20px; padding: 14px 16px; background: #F5F3EF; border-radius: 12px; font-size: 15px; line-height: 1.45; }
+      .finding { margin-top: 20px; padding: 14px 16px; background: #F5F3EF; box-shadow: inset 0 0 0 999px #F5F3EF; border-radius: 12px; font-size: 15px; line-height: 1.45; }
       .section { margin-top: 22px; }
       .watch { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #E8E4DD; }
-      .bar { width: 4px; background: #E76F51; border-radius: 2px; }
-      .pill { display: inline-block; font-size: 10px; letter-spacing: 0.06em; background: #F5F3EF; color: #5C6B66; padding: 2px 8px; border-radius: 99px; font-weight: 700; }
+      .bar { width: 0; border-left: 4px solid #E76F51; border-radius: 2px; }
+      .pill { display: inline-block; font-size: 10px; letter-spacing: 0.06em; background: #F5F3EF; box-shadow: inset 0 0 0 999px #F5F3EF; color: #5C6B66; padding: 2px 8px; border-radius: 99px; font-weight: 700; }
       .watch-name { font-size: 16px; font-weight: 700; margin-top: 4px; }
       .watch-cap { font-size: 12px; color: #5C6B66; margin-top: 2px; }
       .compare { display: flex; gap: 10px; }
       .group, .food { border: 1px solid #E8E4DD; border-radius: 12px; padding: 12px; }
       .group { flex: 1; }
       .food { margin-top: 10px; }
-      .current { display: inline-block; margin-left: 8px; background: #2D6A4F; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; vertical-align: middle; }
+      .current { display: inline-block; margin-left: 8px; background: #2D6A4F; box-shadow: inset 0 0 0 999px #2D6A4F; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; vertical-align: middle; }
       .quiet { color: #5C6B66; font-size: 12px; margin-top: 4px; }
       .stats { display: flex; gap: 8px; margin-top: 12px; }
-      .stat { flex: 1; background: #F5F3EF; border-radius: 10px; padding: 10px; }
+      .stat { flex: 1; background: #F5F3EF; box-shadow: inset 0 0 0 999px #F5F3EF; border-radius: 10px; padding: 10px; }
       .k { font-size: 11px; color: #5C6B66; }
       .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
       .ingredients { margin-top: 10px; font-size: 11px; line-height: 1.45; color: #5C6B66; }
-      .disclaimer { margin-top: 22px; padding: 12px 14px; background: #FFF6E8; border-radius: 10px; font-size: 12px; line-height: 1.45; color: #5C6B66; }
+      .disclaimer { margin-top: 22px; padding: 12px 14px; background: #FFF6E8; box-shadow: inset 0 0 0 999px #FFF6E8; border-radius: 10px; font-size: 12px; line-height: 1.45; color: #5C6B66; }
     </style></head><body>
+      <p class="brand">PHD Plus</p>
       <h1>Food summary for your veterinarian</h1>
       <p class="who">${esc(who)}</p>
       ${insight.summary ? `<div class="finding">${esc(insight.summary)}</div>` : ''}

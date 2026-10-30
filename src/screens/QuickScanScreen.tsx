@@ -11,8 +11,7 @@ import { colors } from '../theme';
 import api from '../services/api';
 import petFoodService from '../services/petFoodService';
 import { toTitleCase } from '../utils/helpers';
-import { calendarDaysOnFood } from '../utils/foodTime';
-import { SwitchFoodDialog } from '../components/SwitchFoodDialog';
+import { FoodPreviewSheet, type FoodPreview } from '../components/FoodPreviewSheet';
 import { useToast } from '../components/common/Toast';
 import { lookupByBarcode, ackLookup } from '../services/lookupService';
 
@@ -32,7 +31,7 @@ export function QuickScanScreen() {
   const [notFound, setNotFound] = useState(false);
   const [missedScan, setMissedScan] = useState<{ barcode: string; photoUri?: string } | null>(null);
   const [foodSetInfo, setFoodSetInfo] = useState<{ name: string } | null>(null);
-  const [pendingSwitch, setPendingSwitch] = useState<{ name: string; productId: string; brand?: string; currentName?: string; days?: number } | null>(null);
+  const [foodPreview, setFoodPreview] = useState<(FoodPreview & { productId: string; brand?: string; replacing?: boolean }) | null>(null);
 
   useEffect(() => {
     if (!permission?.granted) requestPermission();
@@ -73,23 +72,17 @@ export function QuickScanScreen() {
               setLooking(false);
               return;
             }
-            if (currentFood) {
-              setPendingSwitch({
-                name: result.product.name,
-                productId: result.product.id,
-                brand: result.product.brand || undefined,
-                currentName: currentFood.productName,
-                days: calendarDaysOnFood(currentFood.startedAt, null, true),
-              });
-              setLooking(false);
-              return;
-            }
-            await petFoodService.setCurrentFood(foodPetId, {
+            setFoodPreview({
               productId: result.product.id,
               productName: result.product.name,
               brand: result.product.brand || undefined,
+              manufacturer: result.product.manufacturer,
+              lifeStage: result.product.target_life_stage,
+              imageUrl: result.product.image_url,
+              replacing: !!currentFood,
             });
-            setFoodSetInfo({ name: result.product.name });
+            setLooking(false);
+            return;
           } catch {
             toast.show({ message: 'Failed to set current food', type: 'error' });
           }
@@ -181,7 +174,7 @@ export function QuickScanScreen() {
             style={s.camera}
             facing="back"
             mode="picture"
-            autofocus="off"
+            autofocus="on"
             barcodeScannerSettings={{
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'code93', 'itf14', 'qr'],
             }}
@@ -259,25 +252,24 @@ export function QuickScanScreen() {
       )}
 
       {/* Switch Food Confirmation Modal */}
-      <SwitchFoodDialog
-        visible={!!pendingSwitch}
-        currentName={pendingSwitch?.currentName || ''}
-        dayCount={pendingSwitch?.days}
-        newName={pendingSwitch?.name || ''}
-        onCancel={() => { setPendingSwitch(null); scannedRef.current = false; setLooking(false); }}
+      <FoodPreviewSheet
+        visible={!!foodPreview}
+        food={foodPreview}
+        switching={!!foodPreview?.replacing}
+        onClose={() => { setFoodPreview(null); scannedRef.current = false; }}
         onConfirm={async () => {
-          if (!pendingSwitch) return;
+          if (!foodPreview) return;
           try {
             await petFoodService.setCurrentFood(foodPetId!, {
-              productId: pendingSwitch.productId,
-              productName: pendingSwitch.name,
-              brand: pendingSwitch.brand,
+              productId: foodPreview.productId,
+              productName: foodPreview.productName,
+              brand: foodPreview.brand,
             });
-            setFoodSetInfo({ name: pendingSwitch.name });
-            setPendingSwitch(null);
+            setFoodSetInfo({ name: foodPreview.productName });
+            setFoodPreview(null);
           } catch {
-            toast.show({ message: 'Failed to switch food', type: 'error' });
-            setPendingSwitch(null);
+            toast.show({ message: 'Failed to set current food', type: 'error' });
+            setFoodPreview(null);
           }
         }}
       />
