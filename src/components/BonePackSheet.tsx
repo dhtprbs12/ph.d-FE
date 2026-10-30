@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  DeviceEventEmitter,
   Modal,
   View,
   Text,
@@ -30,11 +31,13 @@ interface Props {
 }
 
 const BONE_LABELS: Record<string, string> = {
-  bones_small: '50 Bones',
-  bones_100: '100 Bones',
-  bones_medium: '200 Bones',
-  bones_large: '500 Bones',
+  bones_small: '50 bones',
+  bones_100: '100 bones',
+  bones_medium: '200 bones',
+  bones_large: '500 bones',
 };
+
+const BEST_VALUE = 'bones_medium';
 
 export function BonePackSheet({ visible, onClose, currentBalance, getBalance, onBalanceUpdated }: Props) {
   const [packages, setPackages] = useState<PackageInfo[]>([]);
@@ -75,21 +78,48 @@ export function BonePackSheet({ visible, onClose, currentBalance, getBalance, on
 
   const handleBuy = async (pkg: PackageInfo) => {
     setPurchasing(pkg.identifier);
+    let finished = false;
+
+    const succeed = (newBalance: number) => {
+      if (finished) return;
+      finished = true;
+      const gained = newBalance - currentBalance;
+      onBalanceUpdated(newBalance);
+      DeviceEventEmitter.emit('phd-bones-refresh');
+      toast.show({ message: `🦴×${gained}`, type: 'success' });
+      onClose();
+      setPurchasing(null);
+    };
+
+    const watch = pollForBoneUpdate(currentBalance, getBalance, 20, 1000)
+      .then(result => {
+        if (result.updated) succeed(result.newBalance);
+        return result;
+      })
+      .catch(() => ({ updated: false, newBalance: currentBalance }));
+
+    let failed = false;
     try {
       const result = await purchase(pkg);
-      if (result.success) {
-        const { updated, newBalance } = await pollForBoneUpdate(currentBalance, getBalance);
-        if (updated) {
-          const gained = newBalance - currentBalance;
-          toast.show({ message: `🦴×${gained}`, type: 'success' });
-          onBalanceUpdated(newBalance);
-        } else {
-          toast.show({ message: 'Your bones will appear shortly.', type: 'info' });
-        }
-        onClose();
+      if (result.cancelled) {
+        finished = true;
+        setPurchasing(null);
+        return;
       }
+      failed = !result.success;
     } catch {
+      failed = true;
+    }
+
+    if (finished) return;
+
+    const result = await watch;
+    if (finished || result.updated) return;
+
+    if (failed) {
       toast.show({ message: 'Purchase failed. Please try again.', type: 'error' });
+    } else {
+      onClose();
     }
     setPurchasing(null);
   };
@@ -101,14 +131,12 @@ export function BonePackSheet({ visible, onClose, currentBalance, getBalance, on
           <Pressable style={StyleSheet.absoluteFill} onPress={requestClose} accessibilityLabel="Close" />
         </Animated.View>
         <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
-          <View style={styles.header}>
-            <Text style={styles.title}>🦴 Get Bones</Text>
-            <Pressable onPress={requestClose} hitSlop={16}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-
-          <Text style={styles.balance}>Current balance: {currentBalance} 🦴</Text>
+          <View style={styles.handle} />
+          <Pressable onPress={requestClose} hitSlop={16} style={styles.closeBtn} accessibilityLabel="Close">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </Pressable>
+          <Text style={styles.title}>Get bones</Text>
+          <Text style={styles.balance}>Current balance {currentBalance}</Text>
 
           {loading ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.xl }} />
@@ -121,25 +149,34 @@ export function BonePackSheet({ visible, onClose, currentBalance, getBalance, on
               {packages.map(pkg => {
                 const label = BONE_LABELS[pkg.identifier] || pkg.product.title;
                 const isBuying = purchasing === pkg.identifier;
+                const best = pkg.identifier === BEST_VALUE;
                 return (
-                  <Pressable
+                  <View
                     key={pkg.identifier}
-                    onPress={() => handleBuy(pkg)}
-                    disabled={!!purchasing}
-                    style={[styles.packCard, !!purchasing && { opacity: 0.6 }]}
+                    style={[styles.packCard, best && styles.packCardBest, !!purchasing && !isBuying && { opacity: 0.6 }]}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.packLabel}>{label}</Text>
-                      <Text style={styles.packPrice}>{pkg.priceString}</Text>
-                    </View>
-                    {isBuying ? (
-                      <ActivityIndicator color={colors.primary} />
-                    ) : (
-                      <View style={styles.buyBtn}>
-                        <Text style={styles.buyBtnText}>Buy</Text>
+                    {best ? (
+                      <View style={styles.bestPill}>
+                        <Text style={styles.bestPillText}>Best value</Text>
                       </View>
-                    )}
-                  </Pressable>
+                    ) : null}
+                    <Text style={styles.boneMark}>🦴</Text>
+                    <Text style={styles.packLabel}>{label}</Text>
+                    <Text style={styles.packPrice}>{pkg.priceString}</Text>
+                    <Pressable
+                      onPress={() => handleBuy(pkg)}
+                      disabled={!!purchasing}
+                      style={[styles.buyBtn, best && styles.buyBtnBest, !!purchasing && { opacity: 0.6 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Buy ${label}`}
+                    >
+                      {isBuying ? (
+                        <ActivityIndicator color={best ? colors.white : colors.primary} />
+                      ) : (
+                        <Text style={[styles.buyBtnText, best && styles.buyBtnTextBest]}>Buy</Text>
+                      )}
+                    </Pressable>
+                  </View>
                 );
               })}
             </View>
@@ -160,60 +197,108 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingBottom: 40,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.divider,
     marginBottom: spacing.sm,
   },
+  closeBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
-    ...typography.titleLarge,
+    ...typography.displaySmall,
     color: colors.textPrimary,
     fontWeight: '700',
+    textAlign: 'center',
   },
   balance: {
     ...typography.bodyMedium,
-    color: colors.textSecondary,
+    color: colors.primary,
     textAlign: 'center',
+    marginTop: spacing.xs,
     marginBottom: spacing.lg,
+    fontWeight: '600',
   },
   packs: {
     gap: spacing.sm,
   },
   packCard: {
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: radius.medium,
-    backgroundColor: colors.lightGray,
-    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.large,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.divider,
+    gap: 2,
+  },
+  packCardBest: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '0C',
+  },
+  bestPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary + '16',
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginBottom: 2,
+  },
+  bestPillText: {
+    ...typography.labelSmall,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  boneMark: {
+    fontSize: 22,
+    marginBottom: 2,
   },
   packLabel: {
-    ...typography.bodyMedium,
-    fontWeight: '600',
+    ...typography.titleMedium,
+    fontWeight: '700',
     color: colors.textPrimary,
   },
   packPrice: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginBottom: spacing.sm,
   },
   buyBtn: {
+    minWidth: 96,
+    minHeight: 36,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buyBtnBest: {
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.medium,
+    borderColor: colors.primary,
   },
   buyBtnText: {
     ...typography.labelMedium,
-    color: colors.white,
+    color: colors.primary,
     fontWeight: '700',
+  },
+  buyBtnTextBest: {
+    color: colors.white,
   },
 });

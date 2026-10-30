@@ -58,7 +58,7 @@ export type HomeStackParamList = {
   CheckIn: { petId: string; petName?: string; foodName?: string; daysOnFood?: number };
   Character: undefined;
   Passport: { petId: string; petName?: string };
-  InsightDetail: { insight: any };
+  InsightDetail: { insight: any; petName?: string; petType?: string; petId?: string };
   NomNomDetail: { petId: string; date: string; petName?: string };
 };
 

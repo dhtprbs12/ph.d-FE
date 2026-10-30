@@ -1,23 +1,27 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing, typography, shadows } from '../theme';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, radius, spacing, typography } from '../theme';
 
-const WAYS: { title: string; detail: string; reward: string }[] = [
+const WAYS: { title: string; detail: string; reward: string; icon: 'calendar-outline' | 'flame-outline' | 'barcode-outline' }[] = [
   {
-    title: 'Daily check-in',
-    detail: 'Check in once a day.',
+    title: 'Daily log',
+    detail: 'Log once a day.',
     reward: '+5',
+    icon: 'calendar-outline',
   },
   {
     title: 'Streak bonus',
     detail: '7 days +10, 30 days +30, 100 days +50. Each bonus is once.',
-    reward: '',
+    reward: '+10 to +50',
+    icon: 'flame-outline',
   },
   {
     title: 'Register a new product',
-    detail: "Scan a barcode. If it isn't in our database, a register step appears. Finish it.",
+    detail: "Finish a barcode that isn't in the database.",
     reward: '+20',
+    icon: 'barcode-outline',
   },
 ];
 
@@ -32,7 +36,7 @@ interface Props {
 export default function TokenEarnSheet({
   visible,
   onClose,
-  title = 'How to earn tokens',
+  title = 'Get bones',
   subtitle,
   onBuyBones,
 }: Props) {
@@ -46,27 +50,38 @@ export default function TokenEarnSheet({
           <View style={styles.handle} />
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-          {WAYS.map(way => (
-            <View key={way.title} style={styles.row}>
-              <View style={styles.rowText}>
-                <Text style={styles.rowTitle}>{way.title}</Text>
-                <Text style={styles.rowDetail}>{way.detail}</Text>
+
+          <View style={styles.list}>
+            {WAYS.map(way => (
+              <View key={way.title} style={styles.row}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name={way.icon} size={18} color={colors.white} />
+                </View>
+                <View style={styles.rowText}>
+                  <Text style={styles.rowTitle}>{way.title}</Text>
+                  <Text style={styles.rowDetail}>{way.detail}</Text>
+                </View>
+                <View style={styles.rewardPill}>
+                  <Text style={styles.reward}>{way.reward}</Text>
+                </View>
               </View>
-              {way.reward ? <Text style={styles.reward}>{way.reward}</Text> : null}
-            </View>
-          ))}
-          {onBuyBones && (
+            ))}
+          </View>
+
+          {onBuyBones ? (
             <Pressable
               onPress={() => { onClose(); setTimeout(onBuyBones, 350); }}
-              style={({ pressed }) => [styles.buyBonesBtn, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [styles.buyBtn, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
+              accessibilityLabel="Buy bones"
             >
-              <Text style={styles.buyBonesText}>🦴 Buy Bones</Text>
+              <Text style={styles.buyText}>🦴  Buy bones</Text>
             </Pressable>
-          )}
+          ) : null}
+
           <Pressable
             onPress={onClose}
-            style={({ pressed }) => [styles.doneBtn, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.doneBtn, pressed && { opacity: 0.9 }]}
             accessibilityRole="button"
             accessibilityLabel="Done"
           >
@@ -85,15 +100,14 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(27, 43, 39, 0.45)',
   },
   sheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: radius.large,
-    borderTopRightRadius: radius.large,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    ...shadows.card,
   },
   handle: {
     alignSelf: 'center',
@@ -104,22 +118,33 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   title: {
-    ...typography.titleMedium,
+    ...typography.displaySmall,
     color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: spacing.sm,
+    fontWeight: '700',
   },
   subtitle: {
     ...typography.bodyMedium,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: spacing.md,
+    marginTop: spacing.xs,
+  },
+  list: {
+    marginTop: spacing.lg,
+    gap: spacing.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    gap: spacing.md,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rowText: {
     flex: 1,
@@ -128,42 +153,50 @@ const styles = StyleSheet.create({
   rowTitle: {
     ...typography.labelLarge,
     color: colors.textPrimary,
+    fontWeight: '700',
   },
   rowDetail: {
     ...typography.bodySmall,
     color: colors.textSecondary,
     lineHeight: 18,
   },
-  reward: {
-    ...typography.labelLarge,
-    color: colors.accent,
+  rewardPill: {
+    backgroundColor: colors.danger + '18',
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  buyBonesBtn: {
-    marginTop: spacing.md,
+  reward: {
+    ...typography.labelMedium,
+    color: colors.danger,
+    fontWeight: '700',
+  },
+  buyBtn: {
+    marginTop: spacing.lg,
+    minHeight: 48,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    backgroundColor: colors.accent,
-    borderRadius: radius.medium,
-    minHeight: 48,
   },
-  buyBonesText: {
+  buyText: {
     ...typography.labelLarge,
-    color: colors.white,
+    color: colors.primary,
     fontWeight: '700',
   },
   doneBtn: {
     marginTop: spacing.sm,
+    minHeight: 52,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    backgroundColor: colors.primary,
-    borderRadius: radius.medium,
-    minHeight: 48,
   },
   doneText: {
     ...typography.labelLarge,
     color: colors.white,
     fontWeight: '700',
+    fontSize: 16,
   },
 });

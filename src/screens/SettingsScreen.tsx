@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
@@ -206,9 +207,9 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [plusStatus, setPlusStatus] = useState<billingService.BillingStatus | null>(null);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     billingService.getStatus().then(setPlusStatus).catch(() => {});
-  }, []);
+  }, []));
 
   const handleLogout = async () => {
     setShowLogoutConfirm(false);
@@ -298,14 +299,14 @@ export default function SettingsScreen() {
               <SectionDivider />
               <SettingsRow
                 icon="refresh"
-                title="Restore Purchases"
+                title="Restore Subscription"
                 showChevron
                 onPress={async () => {
                   const restored = await billingService.restorePurchases();
                   const newStatus = await billingService.getStatus();
                   setPlusStatus(newStatus);
                   toast.show({
-                    message: restored && newStatus.plus ? 'Purchases restored!' : 'No purchases found.',
+                    message: restored && newStatus.plus ? 'Subscription restored!' : 'No subscription found.',
                     type: restored && newStatus.plus ? 'success' : 'info',
                   });
                 }}

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -75,6 +76,13 @@ export default function CharacterScreen() {
   }, [petId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('phd-bones-refresh', () => {
+      gamificationService.getTokens().then(t => setTokenBalance(t.balance)).catch(console.warn);
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     shopService.getItems(selectedCategory).then(setItems).catch(console.warn);
@@ -395,7 +403,7 @@ export default function CharacterScreen() {
       <TokenEarnSheet
         visible={earnSheet != null}
         onClose={() => setEarnSheet(null)}
-        title={earnSheet === 'short' ? 'Not enough tokens' : 'How to earn tokens'}
+        title={earnSheet === 'short' ? 'Not enough bones' : 'Get bones'}
         subtitle={earnSheet === 'short' ? "You don't have enough for this item." : undefined}
         onBuyBones={isRevenueCatAvailable() ? () => setBonePackVisible(true) : undefined}
       />

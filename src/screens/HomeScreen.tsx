@@ -36,6 +36,7 @@ import { isVomitLog, latestMealAndHealth, logSummary } from '../utils/dailyLog';
 import { useToast } from '../components/common/Toast';
 import { LookupRequestCard } from '../components/LookupRequestCard';
 import { SwitchFoodDialog } from '../components/SwitchFoodDialog';
+import { FoodPreviewSheet } from '../components/FoodPreviewSheet';
 import { createNameLookup, type NameLookupInput } from '../services/lookupService';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
 import api from '../services/api';
@@ -302,7 +303,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const [showFoodInput, setShowFoodInput] = useState(false);
   const [foodNameInput, setFoodNameInput] = useState('');
   const [saving, setSaving] = useState(false);
-  const [pendingProduct, setPendingProduct] = useState<any>(null);
+  const [previewProduct, setPreviewProduct] = useState<any>(null);
   const [pendingLookup, setPendingLookup] = useState<NameLookupInput | null>(null);
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -373,11 +374,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
       toast.show({ message: 'Already eating this food', type: 'info' });
       return;
     }
-    if (currentFood) {
-      setPendingProduct(product);
-      return;
-    }
-    await doSetFood(product);
+    setPreviewProduct(product);
   };
 
   const toggleFoodSearch = () => {
@@ -434,7 +431,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
       setShowFoodInput(false);
       setFoodNameInput('');
       setSearchResults([]);
-      setPendingProduct(null);
+      setPreviewProduct(null);
     } catch (e) {
       console.warn('Failed to save food:', e);
     } finally {
@@ -631,16 +628,29 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
 
       {/* Switch Food Confirmation Modal */}
       <SwitchFoodDialog
-        visible={!!(pendingProduct || pendingLookup)}
+        visible={!!pendingLookup}
         currentName={currentFood?.productName || ''}
         dayCount={foodDays}
-        newName={pendingProduct?.name || pendingLookup?.queryName || ''}
+        newName={pendingLookup?.queryName || ''}
         busy={saving}
-        onCancel={() => { setPendingProduct(null); setPendingLookup(null); }}
+        onCancel={() => { setPendingLookup(null); }}
         onConfirm={() => {
-          if (pendingProduct) doSetFood(pendingProduct);
-          else if (pendingLookup) sendNameLookup(pendingLookup);
+          if (pendingLookup) sendNameLookup(pendingLookup);
         }}
+      />
+      <FoodPreviewSheet
+        visible={!!previewProduct}
+        food={previewProduct ? {
+          productName: previewProduct.name,
+          brand: previewProduct.brand,
+          manufacturer: previewProduct.manufacturer,
+          lifeStage: previewProduct.target_life_stage || previewProduct.lifeStage,
+          imageUrl: previewProduct.image_url || previewProduct.imageUrl,
+        } : null}
+        switching={!!currentFood}
+        busy={saving}
+        onClose={() => setPreviewProduct(null)}
+        onConfirm={() => { if (previewProduct) doSetFood(previewProduct); }}
       />
       <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
       <DailyLogSheets
@@ -1124,7 +1134,7 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
       ])
         .then(([p, i]) => {
           setTimeline(p.timeline);
-          setInsights(i.insights);
+          setInsights(i.singleFoodInsight ? [i.singleFoodInsight] : i.insights);
         })
         .catch(console.warn)
         .finally(() => setLoading(false));
@@ -1138,16 +1148,27 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
   if (filtered.length === 0) return null;
   const newestFirst = [...filtered].reverse();
   const top3 = newestFirst.slice(0, 3);
-  const extraCount = newestFirst.length - top3.length;
   const firstInsight = insights.length > 0 ? insights[0] : null;
   const openHistory = () => navigation.navigate('Passport', { petId, petName });
 
   return (
     <View style={[styles.card, shadows.card]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
-        <Text style={[typography.titleLarge, { color: colors.textPrimary }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, gap: spacing.sm }}>
+        <Text style={[typography.titleLarge, { color: colors.textPrimary, flex: 1 }]}>
           🍽 {petName ? `${petName}'s` : ''} Food history
         </Text>
+        <Pressable
+          onPress={openHistory}
+          hitSlop={12}
+          style={{ minHeight: 44, paddingHorizontal: spacing.sm, justifyContent: 'center' }}
+          accessibilityRole="button"
+          accessibilityLabel="View all food history"
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            <Text style={[typography.labelMedium, { color: colors.primary }]}>View all</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          </View>
+        </Pressable>
       </View>
 
       <View style={{ gap: spacing.sm }}>
@@ -1190,37 +1211,26 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
       {firstInsight && (
         <View style={{
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           gap: spacing.xs,
           marginTop: spacing.sm,
           backgroundColor: colors.accent + '15',
-          padding: spacing.xs,
-          paddingHorizontal: spacing.sm,
+          padding: spacing.sm,
           borderRadius: radius.small,
         }}>
-          <Text style={{ fontSize: 14 }}>💡</Text>
-          <Text style={[typography.caption, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>
+          <Text style={{ fontSize: 14, lineHeight: 18 }}>💡</Text>
+          <Text style={[typography.bodySmall, { color: colors.textPrimary, flex: 1, lineHeight: 18 }]}>
             {firstInsight.summary}
           </Text>
         </View>
       )}
 
-      {filtered.length === 1 && (
+      {filtered.length === 1 && !firstInsight && (
         <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs }]}>
           Log pet health to unlock insights!
         </Text>
       )}
 
-      <Pressable
-        onPress={openHistory}
-        hitSlop={8}
-        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: spacing.xs, minHeight: 44, paddingVertical: 10 }}
-      >
-        <Text style={[typography.labelMedium, { color: colors.primary }]}>
-          {extraCount > 0 ? `View all · ${newestFirst.length} foods` : 'View all'}
-        </Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-      </Pressable>
     </View>
   );
 }

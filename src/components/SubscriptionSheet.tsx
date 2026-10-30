@@ -104,19 +104,15 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
           <Pressable style={StyleSheet.absoluteFill} onPress={requestClose} accessibilityLabel="Close" />
         </Animated.View>
         <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Pressable onPress={requestClose} hitSlop={16}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </Pressable>
-          </View>
+          <View style={styles.handle} />
+          <Pressable onPress={requestClose} hitSlop={16} style={styles.closeBtn} accessibilityLabel="Close">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </Pressable>
 
-          {/* Title */}
           <View style={styles.titleArea}>
-            <Text style={{ fontSize: 40 }}>✨</Text>
             <Text style={styles.title}>PHD Plus</Text>
             <Text style={styles.subtitle}>
-              Unlock detailed ingredient insights and download vet-ready PDF reports.
+              Ingredient details and a vet PDF.
             </Text>
           </View>
 
@@ -139,12 +135,8 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
                       selected === pkg.identifier && styles.planCardSelected,
                     ]}
                   >
-                    <View style={styles.planRadio}>
-                      {selected === pkg.identifier ? (
-                        <View style={styles.radioFilled} />
-                      ) : (
-                        <View style={styles.radioEmpty} />
-                      )}
+                    <View style={[styles.radioEmpty, selected === pkg.identifier && styles.radioSelected]}>
+                      {selected === pkg.identifier ? <View style={styles.radioDot} /> : null}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.planTitle}>
@@ -176,13 +168,13 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
 
               {/* Auto-renew disclosure */}
               <Text style={styles.disclosure}>
-                Payment will be charged to your App Store or Google Play account. Subscription automatically renews unless canceled at least 24 hours before the end of the current period.
+                Auto-renews until you cancel. Payment is charged to your App Store or Google Play account. Cancel at least 24 hours before the period ends to avoid the next charge.
               </Text>
 
               {/* Restore + legal links */}
               <Pressable onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
                 <Text style={styles.restoreBtnText}>
-                  {restoring ? 'Restoring...' : 'Restore Purchases'}
+                  {restoring ? 'Restoring...' : 'Restore Subscription'}
                 </Text>
               </Pressable>
 
@@ -213,22 +205,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingBottom: 40,
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.divider,
+    marginBottom: spacing.sm,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   titleArea: {
     alignItems: 'center',
     gap: spacing.xs,
     marginBottom: spacing.lg,
+    marginTop: spacing.xs,
   },
   title: {
     ...typography.displaySmall,
@@ -249,28 +254,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
-    borderRadius: radius.medium,
-    borderWidth: 2,
+    borderRadius: radius.large,
+    borderWidth: 1.5,
     borderColor: colors.divider,
+    backgroundColor: colors.white,
     gap: spacing.md,
   },
   planCardSelected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '08',
-  },
-  planRadio: {
-    width: 22,
-    height: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioFilled: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: colors.primary,
+    backgroundColor: colors.primary + '0C',
   },
   radioEmpty: {
     width: 22,
@@ -278,6 +270,17 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     borderWidth: 2,
     borderColor: colors.divider,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: {
+    borderColor: colors.primary,
+  },
+  radioDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
   },
   planTitle: {
     ...typography.bodyMedium,
@@ -290,20 +293,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   saveBadge: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentSoft,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.full,
+    paddingVertical: 4,
+    borderRadius: radius.small,
   },
   saveBadgeText: {
     ...typography.labelSmall,
-    color: colors.white,
+    color: colors.textPrimary,
     fontWeight: '700',
   },
   subscribeBtn: {
     backgroundColor: colors.primary,
     paddingVertical: 16,
-    borderRadius: radius.medium,
+    borderRadius: radius.full,
     alignItems: 'center',
     marginBottom: spacing.md,
   },

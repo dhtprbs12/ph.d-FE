@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -58,7 +58,7 @@ function StatTile({
   );
 }
 
-function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressImage: (uri: string) => void }) {
+function TimelineCard({ entry, onPressImage, hideStats }: { entry: TimelineEntry; onPressImage: (uri: string) => void; hideStats?: boolean }) {
   const stool = StoolScoreLabel(entry.stats.avgStoolScore);
   const hasCheckins = entry.stats.checkinCount > 0;
   const daysOnFood = calendarDaysOnFood(entry.startedAt, entry.endedAt, entry.isCurrent);
@@ -110,7 +110,7 @@ function TimelineCard({ entry, onPressImage }: { entry: TimelineEntry; onPressIm
           </View>
         </View>
 
-        {hasCheckins ? (
+        {hideStats ? null : hasCheckins ? (
           <>
             <View style={styles.statRow}>
               <StatTile
@@ -158,10 +158,10 @@ function InsightCard({ insight, isPlus, onPress }: { insight: InsightData; isPlu
 
   return (
     <Pressable onPress={onPress} style={styles.insightCard}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        <Text style={{ fontSize: 20 }}>💡</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+        <Text style={{ fontSize: 20, lineHeight: 22 }}>💡</Text>
         <View style={{ flex: 1 }}>
-          <Text style={[typography.labelMedium, { color: typeColors[insight.type] || colors.textPrimary }]}>
+          <Text style={[typography.bodyMedium, { color: typeColors[insight.type] || colors.textPrimary, lineHeight: 20 }]}>
             {insight.summary}
           </Text>
           <Text style={[typography.bodySmall, { color: isPlus ? colors.textSecondary : colors.primary }]}>
@@ -184,9 +184,29 @@ export default function PassportScreen() {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [insights, setInsights] = useState<InsightData[]>([]);
   const [isPlus, setIsPlus] = useState(false);
+  const [petType, setPetType] = useState<string | null>(null);
+  const [foodCount, setFoodCount] = useState<number>(0);
+  const [singleFoodInsight, setSingleFoodInsight] = useState<InsightData | null>(null);
   const [showSubscription, setShowSubscription] = useState(false);
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const [howItWorksVisible, setHowItWorksVisible] = useState(false);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const applyInsights = useCallback((insightData: Awaited<ReturnType<typeof passportService.getInsights>>) => {
+    if (!alive.current) return;
+    setInsights(insightData.insights);
+    setIsPlus(!!insightData.plus);
+    setPetType(insightData.petType || null);
+    setFoodCount(insightData.foodCount || 0);
+    setSingleFoodInsight(insightData.singleFoodInsight || null);
+  }, []);
 
   const loadData = useCallback(() => {
     if (!petId) return;
@@ -196,13 +216,28 @@ export default function PassportScreen() {
       passportService.getInsights(petId),
     ])
       .then(([passportData, insightData]) => {
+        if (!alive.current) return;
         setTimeline(passportData.timeline);
-        setInsights(insightData.insights);
-        setIsPlus(!!insightData.plus);
+        applyInsights(insightData);
       })
       .catch(console.warn)
-      .finally(() => setIsLoading(false));
-  }, [petId]);
+      .finally(() => {
+        if (alive.current) setIsLoading(false);
+      });
+  }, [petId, applyInsights]);
+
+  const waitForPlus = useCallback(async () => {
+    if (!petId) return;
+    for (let i = 0; i < 15; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 1000));
+      if (!alive.current) return;
+      try {
+        const insightData = await passportService.getInsights(petId);
+        applyInsights(insightData);
+        if (insightData.plus) return;
+      } catch {}
+    }
+  }, [petId, applyInsights]);
 
   useFocusEffect(loadData);
 
@@ -294,7 +329,7 @@ export default function PassportScreen() {
               )}
 
               {filteredTimeline.map((entry) => (
-                <TimelineCard key={entry.id} entry={entry} onPressImage={setZoomImageUri} />
+                <TimelineCard key={entry.id} entry={entry} onPressImage={setZoomImageUri} hideStats={foodCount === 1 && !isPlus} />
               ))}
             </View>
           ) : (
@@ -306,12 +341,37 @@ export default function PassportScreen() {
             </View>
           )}
 
-          {/* Insights */}
-          {insights.length > 0 && (
+          {/* Single-food insight */}
+          {singleFoodInsight && (
             <View>
               <Text style={[typography.labelLarge, { color: colors.textSecondary, marginBottom: spacing.md }]}>
                 💡 Insights
               </Text>
+              <InsightCard
+                insight={singleFoodInsight}
+                isPlus={isPlus}
+                onPress={() => {
+                  if (isPlus && singleFoodInsight.data) {
+                    navigation.navigate('InsightDetail', { insight: singleFoodInsight, petName, petType: petType || undefined, petId });
+                  } else {
+                    setShowSubscription(true);
+                  }
+                }}
+              />
+              <Text style={[typography.bodySmall, { color: colors.textSecondary, fontStyle: 'italic', marginTop: spacing.sm }]}>
+                ⚠️ These are correlations, not proof of causation. Please consult your veterinarian.
+              </Text>
+            </View>
+          )}
+
+          {/* Multi-food insights. A one-food pet already has singleFoodInsight. */}
+          {!singleFoodInsight && insights.length > 0 && (
+            <View>
+              {!singleFoodInsight && (
+                <Text style={[typography.labelLarge, { color: colors.textSecondary, marginBottom: spacing.md }]}>
+                  💡 Insights
+                </Text>
+              )}
               {insights.map((insight, i) => (
                 <InsightCard
                   key={i}
@@ -319,7 +379,7 @@ export default function PassportScreen() {
                   isPlus={isPlus}
                   onPress={() => {
                     if (isPlus && insight.data) {
-                      navigation.navigate('InsightDetail', { insight });
+                      navigation.navigate('InsightDetail', { insight, petName, petType: petType || undefined, petId });
                     } else {
                       setShowSubscription(true);
                     }
@@ -338,7 +398,7 @@ export default function PassportScreen() {
         onClose={() => setShowSubscription(false)}
         onSubscribed={() => {
           setShowSubscription(false);
-          loadData();
+          void waitForPlus();
         }}
       />
       <ZoomableImageModal uri={zoomImageUri} visible={!!zoomImageUri} onClose={() => setZoomImageUri(null)} />
