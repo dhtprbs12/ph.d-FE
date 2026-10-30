@@ -12,6 +12,7 @@ import {
   RefreshControl,
   Modal,
   Animated,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation, useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
@@ -148,12 +149,12 @@ function ProductThumb({
 
 function StaggeredView({ index, children }: { index: number; children: React.ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
+  const translateY = useRef(new Animated.Value(8)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(opacity, { toValue: 1, useNativeDriver: true, delay: index * 50 }),
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, delay: index * 50, damping: 15, stiffness: 100 }),
+      Animated.spring(opacity, { toValue: 1, useNativeDriver: true, delay: Math.min(index, 8) * 40 }),
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, delay: Math.min(index, 8) * 40, damping: 15, stiffness: 100 }),
     ]).start();
   }, []);
 
@@ -181,7 +182,7 @@ function HistoryCard({ item, onPress, isSaved, onToggleSave }: {
       accessibilityRole="button"
       accessibilityLabel={`${formatProductTitleText(item.product_name ?? 'Product')}, ${formatDate(item.created_at)}`}
     >
-      <View style={[styles.card, shadows.card]}>
+      <View style={[styles.card, Platform.OS === 'ios' && shadows.card]}>
         {/* Top section: thumbnail + text + score */}
         <View style={styles.cardTop}>
           <ProductThumb
@@ -276,7 +277,7 @@ function SavedCard({ item, onPress, onUnsave }: {
       accessibilityRole="button"
       accessibilityLabel={formatProductTitleText(item.product_name)}
     >
-      <View style={[styles.card, shadows.card]}>
+      <View style={[styles.card, Platform.OS === 'ios' && shadows.card]}>
         <View style={styles.cardTop}>
           <ProductThumb
             imageUrl={productImageUrl}
@@ -519,7 +520,7 @@ export default function HistoryScreen() {
           <FlatList
             data={savedProducts}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24, gap: spacing.sm }]}
+            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24, gap: spacing.md }]}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
@@ -582,8 +583,8 @@ export default function HistoryScreen() {
               {section.title}
             </Text>
           )}
-          renderItem={({ item, index, section }) => (
-            <StaggeredView key={item.id} index={sections.indexOf(section) * 20 + index}>
+          renderItem={({ item, index }) => (
+            <StaggeredView key={item.id} index={index}>
               <HistoryCard
                 item={item}
                 onPress={() => onCardPress(item)}
@@ -592,6 +593,7 @@ export default function HistoryScreen() {
               />
             </StaggeredView>
           )}
+          ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
           SectionSeparatorComponent={() => <View style={{ height: spacing.lg }} />}
           stickySectionHeadersEnabled={false}
         />
@@ -692,6 +694,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.large,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.divider,
   },
   cardTop: {
     flexDirection: 'row',

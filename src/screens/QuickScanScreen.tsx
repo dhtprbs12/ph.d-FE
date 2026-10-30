@@ -79,6 +79,9 @@ export function QuickScanScreen() {
               manufacturer: result.product.manufacturer,
               lifeStage: result.product.target_life_stage,
               imageUrl: result.product.image_url,
+              dietTags: result.product.diet_tags,
+              productType: result.product.product_type,
+              primaryProteins: result.product.primary_proteins,
               replacing: !!currentFood,
             });
             setLooking(false);

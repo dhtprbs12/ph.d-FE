@@ -650,6 +650,9 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
           manufacturer: previewProduct.manufacturer,
           lifeStage: previewProduct.target_life_stage || previewProduct.lifeStage,
           imageUrl: previewProduct.image_url || previewProduct.imageUrl,
+          dietTags: previewProduct.diet_tags || previewProduct.dietTags,
+          productType: previewProduct.product_type || previewProduct.productType,
+          primaryProteins: previewProduct.primary_proteins || previewProduct.primaryProteins,
         } : null}
         switching={!!currentFood}
         busy={saving}
@@ -1127,11 +1130,12 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [insights, setInsights] = useState<InsightData[]>([]);
   const [loading, setLoading] = useState(true);
+  const loadedForRef = useRef('');
 
   useFocusEffect(
     useCallback(() => {
       if (!petId) return;
-      setLoading(true);
+      if (loadedForRef.current !== petId) setLoading(true);
       Promise.all([
         passportService.getPassport(petId),
         passportService.getInsights(petId),
@@ -1139,6 +1143,7 @@ function FoodJourneyCard({ petId, petName, navigation }: { petId: string; petNam
         .then(([p, i]) => {
           setTimeline(p.timeline);
           setInsights(i.singleFoodInsight ? [i.singleFoodInsight] : i.insights);
+          loadedForRef.current = petId;
         })
         .catch(console.warn)
         .finally(() => setLoading(false));

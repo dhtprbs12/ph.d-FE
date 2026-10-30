@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Image,
@@ -52,6 +53,24 @@ export default function NomNomDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const revealNote = () => {
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, Platform.OS === 'ios' ? 280 : 80);
+  };
 
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
@@ -133,7 +152,7 @@ export default function NomNomDetailScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
-      behavior={undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.header, { paddingTop: insets.top + spacing.xs }]}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}>
@@ -149,10 +168,9 @@ export default function NomNomDetailScreen() {
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 + keyboardHeight }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets
       >
         {/* Date Badge */}
         <View style={styles.dateBadge}>
@@ -202,12 +220,7 @@ export default function NomNomDetailScreen() {
                 value={note}
                 onChangeText={setNote}
                 placeholder="Write about your pet's day, food changes, behavior..."
-                onFocus={() => {
-                  if (Platform.OS === 'ios') return;
-                  setTimeout(() => {
-                    scrollRef.current?.scrollToEnd({ animated: true });
-                  }, 300);
-                }}
+                onFocus={revealNote}
                 placeholderTextColor={colors.textSecondary + '80'}
                 multiline
                 textAlignVertical="top"

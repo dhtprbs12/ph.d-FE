@@ -209,9 +209,10 @@ export default function PassportScreen() {
     setSingleFoodInsight(insightData.singleFoodInsight || null);
   }, []);
 
+  const loadedRef = useRef(false);
   const loadData = useCallback(() => {
     if (!petId) return;
-    setIsLoading(true);
+    if (!loadedRef.current) setIsLoading(true);
     Promise.all([
       passportService.getPassport(petId),
       passportService.getInsights(petId),
@@ -220,6 +221,7 @@ export default function PassportScreen() {
         if (!alive.current) return;
         setTimeline(passportData.timeline);
         applyInsights(insightData);
+        loadedRef.current = true;
       })
       .catch(console.warn)
       .finally(() => {

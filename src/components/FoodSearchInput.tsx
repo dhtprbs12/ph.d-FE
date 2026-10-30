@@ -21,6 +21,9 @@ export interface FoodSelection {
   manufacturer?: string | null;
   lifeStage?: string | null;
   imageUrl?: string | null;
+  dietTags?: string | null;
+  productType?: string | null;
+  primaryProteins?: string | null;
 }
 
 interface Props {
@@ -74,6 +77,9 @@ export default function FoodSearchInput({ petType = 'dog', onSelect, onScanBarco
       manufacturer: p.manufacturer || null,
       lifeStage: p.target_life_stage || p.life_stage || null,
       imageUrl: p.imageUrl || p.image_url || null,
+      dietTags: p.diet_tags || p.dietTags || null,
+      productType: p.product_type || p.productType || null,
+      primaryProteins: p.primary_proteins || p.primaryProteins || null,
     });
   };
 

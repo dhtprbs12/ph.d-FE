@@ -11,7 +11,44 @@ export type FoodPreview = {
   manufacturer?: string | null;
   lifeStage?: string | null;
   imageUrl?: string | null;
+  dietTags?: string | null;
+  productType?: string | null;
+  primaryProteins?: string | null;
 };
+
+function dietPills(tags?: string | null): string[] {
+  if (!tags) return [];
+  const labels: Record<string, string> = {
+    grain_free: 'Grain-free',
+    with_grains: 'With grains',
+    limited_ingredient: 'Limited ingredient',
+  };
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const raw of String(tags).split(/[,+]/)) {
+    const key = raw.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    parts.push(labels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+  }
+  return parts;
+}
+
+function formatForm(productType?: string | null): string {
+  const key = (productType || '').toLowerCase();
+  if (key === 'dry_food' || key === 'dry') return 'Dry';
+  if (key === 'wet_food' || key === 'wet') return 'Wet';
+  if (key === 'treats' || key === 'treat') return 'Treats';
+  if (key === 'supplement') return 'Supplement';
+  return '';
+}
+
+function firstProtein(raw?: string | null): string {
+  if (!raw) return '';
+  const first = String(raw).split(/[,+|]/)[0]?.trim();
+  if (!first) return '';
+  return toTitleCase(first.replace(/_/g, ' '));
+}
 
 export function FoodPreviewSheet({
   visible,
@@ -34,6 +71,9 @@ export function FoodPreviewSheet({
   const fullImage = buildImageUrl(food.imageUrl);
   const thumb = buildThumbUrl(food.imageUrl) || fullImage;
   const lifeStage = formatLifeStage(food.lifeStage);
+  const pills = dietPills(food.dietTags);
+  const form = formatForm(food.productType);
+  const protein = firstProtein(food.primaryProteins);
 
   return (
     <>
@@ -58,10 +98,21 @@ export function FoodPreviewSheet({
               {toTitleCase(food.productName)}
             </Text>
 
+            {pills.length > 0 ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: spacing.sm }}>
+                {pills.map(pill => (
+                  <View key={pill} style={{ backgroundColor: colors.primary + '14', borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <Text style={[typography.labelSmall, { color: colors.primary, fontWeight: '700' }]}>{pill}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
             <View style={{ alignSelf: 'stretch', marginTop: spacing.md, gap: spacing.sm }}>
-              <Fact label="Brand" value={food.brand} />
               <Fact label="Manufacturer" value={food.manufacturer} />
               <Fact label="Life stage" value={lifeStage} />
+              {form ? <Fact label="Form" value={form} /> : null}
+              {protein ? <Fact label="Protein" value={protein} /> : null}
             </View>
 
             {switching ? (

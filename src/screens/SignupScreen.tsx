@@ -108,6 +108,9 @@ export default function SignupScreen({ navigation }: Props) {
           manufacturer: result.product.manufacturer || null,
           lifeStage: result.product.target_life_stage || result.product.life_stage || null,
           imageUrl: result.product.imageUrl || result.product.image_url || null,
+          dietTags: result.product.diet_tags || null,
+          productType: result.product.product_type || null,
+          primaryProteins: result.product.primary_proteins || null,
         };
         setScannerOpen(false);
         setNameRequest(null);

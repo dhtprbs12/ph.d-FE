@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -477,14 +477,19 @@ export default function CommunityScreen() {
     }
   }, [petType, breed, trendType]);
 
+  const loadedKeyRef = useRef('');
   useFocusEffect(
     useCallback(() => {
-      setPotwLoading(true);
-      setBreedLoading(true);
-      setTrendLoading(true);
-      setActivityLoading(true);
-      setScannersLoading(true);
-      setFeedLoading(true);
+      const key = `${petType}|${breed ?? ''}`;
+      if (key !== loadedKeyRef.current) {
+        setPotwLoading(true);
+        setBreedLoading(true);
+        setTrendLoading(true);
+        setActivityLoading(true);
+        setScannersLoading(true);
+        setFeedLoading(true);
+        loadedKeyRef.current = key;
+      }
       loadAll();
     }, [petType, breed])
   );
