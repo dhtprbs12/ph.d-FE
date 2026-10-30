@@ -16,9 +16,11 @@ import {
   getSubscriptionPackages,
   purchase,
   restorePurchases,
+  syncSubscription,
   isRevenueCatAvailable,
   type PackageInfo,
 } from '../services/billingService';
+import { useToast } from './common/Toast';
 
 const PRIVACY_URL = 'https://phd-be-production.up.railway.app/privacy';
 const TERMS_URL = 'https://phd-be-production.up.railway.app/terms';
@@ -31,6 +33,7 @@ interface Props {
 }
 
 export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
+  const toast = useToast();
   const [packages, setPackages] = useState<PackageInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
@@ -79,6 +82,8 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
     try {
       const result = await purchase(pkg);
       if (result.success) {
+        toast.show({ message: 'Welcome to PHD Plus! 🎉', type: 'success' });
+        syncSubscription().catch(() => {});
         onSubscribed();
       }
     } catch {}
@@ -89,7 +94,11 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
     setRestoring(true);
     try {
       const restored = await restorePurchases();
-      if (restored) onSubscribed();
+      if (restored) {
+        toast.show({ message: 'Subscription restored! 🎉', type: 'success' });
+        syncSubscription().catch(() => {});
+        onSubscribed();
+      }
     } catch {}
     setRestoring(false);
   };

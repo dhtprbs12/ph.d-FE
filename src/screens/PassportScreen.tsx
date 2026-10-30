@@ -14,6 +14,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
 import passportService, { TimelineEntry, InsightData } from '../services/passportService';
+import { syncSubscription } from '../services/billingService';
 import { SubscriptionSheet } from '../components/SubscriptionSheet';
 import ZoomableImageModal from '../components/ZoomableImageModal';
 import { buildImageUrl, buildThumbUrl } from '../utils/helpers';
@@ -228,6 +229,8 @@ export default function PassportScreen() {
 
   const waitForPlus = useCallback(async () => {
     if (!petId) return;
+    // Ask server to verify subscription with RevenueCat directly
+    await syncSubscription().catch(() => {});
     for (let i = 0; i < 15; i++) {
       if (i > 0) await new Promise(r => setTimeout(r, 1000));
       if (!alive.current) return;

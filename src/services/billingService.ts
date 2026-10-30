@@ -129,6 +129,20 @@ export function getManageSubscriptionUrl(): string {
 }
 
 /**
+ * Ask the server to check RevenueCat directly and update plus_expires_at.
+ * Call this right after a successful purchase so the user doesn't have to
+ * wait for the webhook.
+ */
+export async function syncSubscription(): Promise<{ synced: boolean; plus?: boolean }> {
+  try {
+    const { data } = await api.post('/billing/sync');
+    return data;
+  } catch {
+    return { synced: false };
+  }
+}
+
+/**
  * Poll billing status until it changes to plus or maxAttempts is reached.
  * Used after a bone pack purchase to wait for the webhook.
  */
