@@ -37,11 +37,19 @@ export function isRevenueCatAvailable(): boolean {
 }
 
 export async function configureRevenueCat(userId: string): Promise<void> {
-  if (!Purchases || _configured) return;
+  if (!Purchases) return;
   const key = Platform.OS === 'ios' ? APPLE_KEY : GOOGLE_KEY;
   if (!key) return;
-  Purchases.configure({ apiKey: key, appUserID: userId });
-  _configured = true;
+
+  if (!_configured) {
+    Purchases.configure({ apiKey: key, appUserID: userId });
+    _configured = true;
+  } else {
+    // SDK already running (e.g. after logout → login). logIn() switches
+    // from the anonymous user back to the identified user and transfers
+    // any purchases made while anonymous.
+    await Purchases.logIn(userId);
+  }
 }
 
 export async function logoutRevenueCat(): Promise<void> {
@@ -49,7 +57,8 @@ export async function logoutRevenueCat(): Promise<void> {
   try {
     await Purchases.logOut();
   } catch {}
-  _configured = false;
+  // _configured stays true — SDK is still initialised, user is just anonymous.
+  // Next configureRevenueCat() call will use logIn() to re-identify.
 }
 
 export async function getStatus(): Promise<BillingStatus> {
@@ -130,7 +139,7 @@ export async function pollForBoneUpdate(
   intervalMs = 2000,
 ): Promise<{ updated: boolean; newBalance: number }> {
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, intervalMs));
+    if (i > 0) await new Promise(r => setTimeout(r, intervalMs));
     const balance = await getBalance();
     if (balance > previousBalance) {
       return { updated: true, newBalance: balance };
