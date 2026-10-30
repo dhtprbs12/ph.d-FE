@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "499689290825",
+    "project_id": "phd-plus-854ab",
+    "storage_bucket": "phd-plus-854ab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:499689290825:android:00a4de70711fe2c11f1398",
+        "android_client_info": {
+          "package_name": "com.petfoodanalyzer.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWtiFRQdaoYZyC386tIXTtzkvetvkwcFo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
