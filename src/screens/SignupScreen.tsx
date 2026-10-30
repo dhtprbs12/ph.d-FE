@@ -73,7 +73,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [currentFoodSelection, setCurrentFoodSelection] = useState<FoodSelection | null>(null);
   const [previewFood, setPreviewFood] = useState<FoodSelection | null>(null);
   const [nameRequest, setNameRequest] = useState<NameLookupInput | null>(null);
-  const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; email?: string; requested?: boolean } | null>(null);
+  const [barcodeMiss, setBarcodeMiss] = useState<{ barcode: string; photoUri?: string | null; front: string | null; ingredients: string | null; barcodePhoto?: string | null; email?: string; requested?: boolean } | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [missQuery, setMissQuery] = useState('');
 
@@ -298,7 +298,7 @@ export default function SignupScreen({ navigation }: Props) {
             frontImageUri: barcodeMiss.front,
             ingredientImageUri: barcodeMiss.ingredients,
             barcode: barcodeMiss.barcode,
-            barcodeImageUri: barcodeMiss.photoUri || undefined,
+            barcodeImageUri: barcodeMiss.barcodePhoto || barcodeMiss.photoUri || undefined,
             petId: createdPet.id,
             petName: createdPet.name,
             petType: createdPet.pet_type || petType,
@@ -695,6 +695,7 @@ export default function SignupScreen({ navigation }: Props) {
                 barcode={barcodeMiss.barcode}
                 petName={petName.trim() || 'your pet'}
                 requested={barcodeMiss.requested === true}
+                initialBarcodePhoto={barcodeMiss.photoUri}
                 onBack={() => setBarcodeMiss(null)}
                 onRequest={() => setBarcodeMiss({ ...barcodeMiss, requested: true })}
                 onChange={(photos) => setBarcodeMiss({ ...barcodeMiss, ...photos })}

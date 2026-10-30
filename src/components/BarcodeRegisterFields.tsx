@@ -8,6 +8,7 @@ import { AnalysisNotice } from './AnalysisNotice';
 const SLOTS = [
   { key: 'front' as const, label: 'Front of the product', hint: 'The name and brand should be readable', icon: 'image-outline' as const },
   { key: 'ingredients' as const, label: 'Ingredient panel', hint: 'The full list, not the marketing side', icon: 'list-outline' as const },
+  { key: 'barcode' as const, label: 'Barcode photo', hint: 'The printed bars, in focus', icon: 'barcode-outline' as const },
 ];
 
 export function BarcodeRegisterFields({
@@ -23,13 +24,15 @@ export function BarcodeRegisterFields({
   onBack: () => void;
   requested?: boolean;
   onRequest: () => void;
-  onChange: (photos: { front: string | null; ingredients: string | null; email?: string }) => void;
+  onChange: (photos: { front: string | null; ingredients: string | null; barcodePhoto?: string | null; email?: string }) => void;
+  initialBarcodePhoto?: string | null;
 }) {
   const [front, setFront] = useState<string | null>(null);
   const [ingredients, setIngredients] = useState<string | null>(null);
+  const [barcodePhoto, setBarcodePhoto] = useState<string | null>(initialBarcodePhoto || null);
   const [email, setEmail] = useState('');
 
-  const shoot = async (slot: 'front' | 'ingredients') => {
+  const shoot = async (slot: 'front' | 'ingredients' | 'barcode') => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Camera needed', 'Allow the camera so we can read the product.');
@@ -40,12 +43,15 @@ export function BarcodeRegisterFields({
     const uri = result.assets[0].uri;
     const nextFront = slot === 'front' ? uri : front;
     const nextIngredients = slot === 'ingredients' ? uri : ingredients;
+    const nextBarcode = slot === 'barcode' ? uri : barcodePhoto;
     if (slot === 'front') setFront(uri);
     if (slot === 'ingredients') setIngredients(uri);
-    onChange({ front: nextFront, ingredients: nextIngredients, email: email.trim() || undefined });
+    if (slot === 'barcode') setBarcodePhoto(uri);
+    onChange({ front: nextFront, ingredients: nextIngredients, barcodePhoto: nextBarcode, email: email.trim() || undefined });
   };
 
-  const photoFor = (slot: 'front' | 'ingredients') => (slot === 'front' ? front : ingredients);
+  const photoFor = (slot: 'front' | 'ingredients' | 'barcode') =>
+    slot === 'front' ? front : slot === 'ingredients' ? ingredients : barcodePhoto;
   const ready = Boolean(front && ingredients);
 
   return (
