@@ -98,6 +98,8 @@ export function SubscriptionSheet({ visible, onClose, onSubscribed }: Props) {
         toast.show({ message: 'Subscription restored! 🎉', type: 'success' });
         syncSubscription().catch(() => {});
         onSubscribed();
+      } else {
+        toast.show({ message: 'No active subscription found', type: 'info' });
       }
     } catch {}
     setRestoring(false);

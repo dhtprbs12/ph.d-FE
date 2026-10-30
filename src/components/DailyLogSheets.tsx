@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -70,6 +72,18 @@ export default function DailyLogSheets({
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [keyboardPad, setKeyboardPad] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) => setKeyboardPad(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardPad(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const reset = () => {
     setMealSlot(null);
@@ -114,8 +128,9 @@ export default function DailyLogSheets({
     <SheetHost visible={visible != null} onClose={closeNow}>
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.dim} onPress={closeNow} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md + (Platform.OS === 'android' ? keyboardPad : 0), maxHeight: '85%' }]}>
           <Text style={styles.title}>{visible === 'meal' ? 'Log a Meal' : 'Log Pet Health'}</Text>
+          <ScrollView bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {visible === 'meal' ? (
             <>
               <ChipRow label="When" options={MEAL_SLOTS} selected={mealSlot} onSelect={id => setMealSlot(prev => prev === id ? null : id)} />
@@ -139,6 +154,7 @@ export default function DailyLogSheets({
               </View>
             </>
           )}
+          </ScrollView>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable
             style={({ pressed }) => [styles.save, (pressed || saving) && { opacity: 0.85 }]}

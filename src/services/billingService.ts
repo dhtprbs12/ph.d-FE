@@ -114,8 +114,9 @@ export async function purchase(pkg: PackageInfo): Promise<{ success: boolean; ca
 export async function restorePurchases(): Promise<boolean> {
   if (!Purchases) return false;
   try {
-    await Purchases.restorePurchases();
-    return true;
+    const { customerInfo } = await Purchases.restorePurchases();
+    const hasActive = Object.keys(customerInfo?.entitlements?.active || {}).length > 0;
+    return hasActive;
   } catch (e) {
     console.warn('[Billing] restore failed:', e);
     return false;
