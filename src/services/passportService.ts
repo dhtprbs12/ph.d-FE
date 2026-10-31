@@ -38,6 +38,8 @@ export interface InsightFoodRecord {
   avgStool: number | null;
   itchDays: number;
   vomitDays: number;
+  itchRate?: number | null;
+  vomitRate?: number | null;
 }
 
 export interface SingleFoodData {
@@ -57,6 +59,7 @@ export interface InsightData {
     withIngredient?: InsightGroupData;
     withoutIngredient?: InsightGroupData;
     records?: InsightFoodRecord[];
+    watchSources?: { source: string; category: string }[];
     food?: SingleFoodData['food'];
     topSources?: SingleFoodData['topSources'];
     hasSymptom?: boolean;

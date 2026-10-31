@@ -72,28 +72,33 @@ function periodLine(food: InsightFoodRecord): string {
 }
 
 function foodsForPdf(insight: InsightData): InsightFoodRecord[] {
-  if (insight.data?.records?.length) return insight.data.records;
-  if (insight.data?.food) return [insight.data.food];
-  const listed = [
-    ...(insight.data?.withIngredient?.foods || []),
-    ...(insight.data?.withoutIngredient?.foods || []),
-  ];
-  const seen = new Set<string>();
-  const foods: InsightFoodRecord[] = [];
-  for (const food of listed) {
-    const key = `${food.name}|${food.isCurrent ? '1' : '0'}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    foods.push({
-      name: food.name,
-      isCurrent: food.isCurrent,
-      imageUrl: food.imageUrl,
-      avgStool: null,
-      itchDays: 0,
-      vomitDays: 0,
-    });
+  let foods: InsightFoodRecord[] = [];
+  if (insight.data?.records?.length) foods = [...insight.data.records];
+  else if (insight.data?.food) foods = [insight.data.food];
+  else {
+    const listed = [
+      ...(insight.data?.withIngredient?.foods || []),
+      ...(insight.data?.withoutIngredient?.foods || []),
+    ];
+    const seen = new Set<string>();
+    for (const food of listed) {
+      const key = `${food.name}|${food.isCurrent ? '1' : '0'}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      foods.push({
+        name: food.name,
+        isCurrent: food.isCurrent,
+        imageUrl: food.imageUrl,
+        avgStool: null,
+        itchDays: 0,
+        vomitDays: 0,
+      });
+    }
   }
-  return foods;
+  return foods.sort((a, b) => {
+    if (!!a.isCurrent !== !!b.isCurrent) return a.isCurrent ? -1 : 1;
+    return String(b.startedAt || '').localeCompare(String(a.startedAt || ''));
+  });
 }
 
 function sourceTitle(source: string): string {
@@ -112,72 +117,74 @@ function reportDate(): string {
   return new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-function statCell(label: string, value: string): string {
-  return `<div class="stat"><div class="k">${esc(label)}</div><div class="v">${esc(value)}</div></div>`;
+function statCell(label: string, value: string, tone?: string): string {
+  return `<div class="stat${tone ? ` ${tone}` : ''}"><div class="k">${esc(label)}</div><div class="v">${esc(value)}</div></div>`;
+}
+
+function stoolTone(score: number | null): string {
+  const word = stoolWords(score);
+  if (word === 'Excellent' || word === 'Good') return 'good';
+  if (word === 'Okay') return 'mid';
+  if (word === 'Poor' || word === 'Bad') return 'bad';
+  return '';
+}
+
+function rateTone(rate: number): string {
+  if (rate <= 0) return 'good';
+  if (rate <= 20) return 'mid';
+  return 'bad';
+}
+
+function percentText(rate?: number | null): string | null {
+  if (rate == null) return null;
+  if (rate <= 0) return 'None';
+  return `${Math.round(rate)}%`;
+}
+
+function watchCaption(insight: InsightData): string {
+  const withCurrent = (insight.data?.withIngredient?.foods || []).some(food => food.isCurrent);
+  const withoutCurrent = (insight.data?.withoutIngredient?.foods || []).some(food => food.isCurrent);
+  if (withCurrent && !withoutCurrent) return 'In the current food, not in the earlier foods';
+  if (withoutCurrent && !withCurrent) return 'In the earlier food, not in the current food';
+  return 'Only in the foods linked to this pattern';
 }
 
 function foodCard(food: InsightFoodRecord, petType?: string): string {
   const meta = [formatDietTags(food.dietTags), formatLifeStage(food.lifeStage, petType)].filter(Boolean).join(' · ');
   const ingredients = (food.ingredients || '').replace(/\s+/g, ' ').trim();
   const stool = stoolWords(food.avgStool);
+  const itch = percentText(food.itchRate) ?? dayCount(food.itchDays);
+  const vomit = percentText(food.vomitRate) ?? dayCount(food.vomitDays);
   return `
-    <article class="food">
+    <article class="food${food.isCurrent ? ' current-card' : ''}">
       <h3>${esc(toTitleCase(food.name))}${food.isCurrent ? '<span class="current">Current</span>' : ''}</h3>
       ${meta ? `<p class="quiet">${esc(meta)}</p>` : ''}
       <p class="quiet">${esc(periodLine(food))}</p>
       <div class="stats">
-        ${statCell('Stool', stool ? `Usually ${stool}` : 'No data')}
-        ${statCell('Itching', dayCount(food.itchDays))}
-        ${statCell('Vomiting', dayCount(food.vomitDays))}
+        ${statCell('Stool', stool ? `Usually ${stool}` : 'No data', stoolTone(food.avgStool))}
+        ${statCell('Itching', itch, food.itchRate == null ? '' : rateTone(food.itchRate))}
+        ${statCell('Vomiting', vomit, food.vomitRate == null ? '' : rateTone(food.vomitRate))}
       </div>
       ${ingredients ? `<p class="ingredients">Ingredients: ${esc(ingredients)}</p>` : ''}
     </article>`;
 }
 
 function watchingBlock(insight: InsightData): string {
-  const sources = insight.data?.topSources || [];
+  const sources = insight.data?.topSources?.length
+    ? insight.data.topSources
+    : (insight.data?.watchSources || []);
   if (!sources.length) return '';
+  const sharedCaption = insight.singleFood ? '' : watchCaption(insight);
   const rows = sources.map(s => `
     <div class="watch">
       <div class="bar"></div>
       <div>
         <span class="pill">${esc(s.category.toUpperCase())}</span>
         <div class="watch-name">${esc(sourceTitle(s.source))}</div>
-        <div class="watch-cap">Largest ${esc(s.category.toLowerCase())} by weight</div>
+        <div class="watch-cap">${esc(sharedCaption || `Largest ${s.category.toLowerCase()} by weight`)}</div>
       </div>
     </div>`).join('');
   return `<section class="section"><h2>Worth watching</h2>${rows}</section>`;
-}
-
-function groupBlock(title: string, group?: { foods: { name: string }[]; avgStoolScore: number | null; avgItchRate: number; avgVomitRate: number }): string {
-  if (!group) return '';
-  const stool = stoolWords(group.avgStoolScore);
-  const names = group.foods.map(f => toTitleCase(f.name)).join(', ');
-  return `
-    <div class="group">
-      <h3>${esc(title)}</h3>
-      ${names ? `<p class="quiet">${esc(names)}</p>` : ''}
-      <div class="stats">
-        ${statCell('Stool', stool ? `Usually ${stool}` : 'No data')}
-        ${statCell('Itching', `${group.avgItchRate}% of days`)}
-        ${statCell('Vomiting', `${group.avgVomitRate}% of days`)}
-      </div>
-    </div>`;
-}
-
-function comparisonBlock(insight: InsightData): string {
-  const withGroup = insight.data?.withIngredient;
-  const withoutGroup = insight.data?.withoutIngredient;
-  if (!withGroup || !withoutGroup) return '';
-  const label = insight.label || 'these ingredients';
-  return `
-    <section class="section">
-      <h2>Compared</h2>
-      <div class="compare">
-        ${groupBlock(`Foods with ${label}`, withGroup)}
-        ${groupBlock(`Foods without ${label}`, withoutGroup)}
-      </div>
-    </section>`;
 }
 
 function buildPdfHtml(insight: InsightData, petName?: string, petType?: string): string {
@@ -204,9 +211,15 @@ function buildPdfHtml(insight: InsightData, petName?: string, petType?: string):
       .watch-name { font-size: 16px; font-weight: 700; margin-top: 4px; }
       .watch-cap { font-size: 12px; color: #5C6B66; margin-top: 2px; }
       .compare { display: flex; gap: 10px; }
-      .group, .food { border: 1px solid #E8E4DD; border-radius: 12px; padding: 12px; }
-      .group { flex: 1; }
-      .food { margin-top: 10px; }
+      .food { border: 1px solid #E8E4DD; border-radius: 12px; padding: 12px; margin-top: 10px; break-inside: avoid; page-break-inside: avoid; }
+      .watch { break-inside: avoid; page-break-inside: avoid; }
+      .current-card { border-color: #2D6A4F; }
+      .stat.good { background: #E7F4EE; box-shadow: inset 0 0 0 999px #E7F4EE; }
+      .stat.good .v { color: #1B6B45; }
+      .stat.mid { background: #FBF3D5; box-shadow: inset 0 0 0 999px #FBF3D5; }
+      .stat.mid .v { color: #7A5B10; }
+      .stat.bad { background: #FDE8E2; box-shadow: inset 0 0 0 999px #FDE8E2; }
+      .stat.bad .v { color: #B23B24; }
       .current { display: inline-block; margin-left: 8px; background: #2D6A4F; box-shadow: inset 0 0 0 999px #2D6A4F; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; vertical-align: middle; }
       .quiet { color: #5C6B66; font-size: 12px; margin-top: 4px; }
       .stats { display: flex; gap: 8px; margin-top: 12px; }
@@ -221,7 +234,6 @@ function buildPdfHtml(insight: InsightData, petName?: string, petType?: string):
       <p class="who">${esc(who)}</p>
       ${insight.summary ? `<div class="finding">${esc(insight.summary)}</div>` : ''}
       ${watchingBlock(insight)}
-      ${comparisonBlock(insight)}
       ${cards ? `<section class="section"><h2>${esc(foodsTitle)}</h2>${cards}</section>` : ''}
       <div class="disclaimer">${esc(insight.disclaimer || 'These are correlations, not proof of causation. Please consult your veterinarian.')}</div>
     </body></html>`;
