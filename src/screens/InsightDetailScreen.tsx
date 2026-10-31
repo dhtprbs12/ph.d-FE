@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -58,6 +59,11 @@ function stoolWords(score: number | null): string | null {
   return 'Bad';
 }
 
+function stoolPhrase(score: number | null): string {
+  const word = stoolWords(score);
+  return word ? `Usually ${word}` : 'No data';
+}
+
 function dayCount(n: number): string {
   if (!n) return 'None';
   return `${n} ${n === 1 ? 'day' : 'days'}`;
@@ -75,25 +81,22 @@ function foodsForPdf(insight: InsightData): InsightFoodRecord[] {
   let foods: InsightFoodRecord[] = [];
   if (insight.data?.records?.length) foods = [...insight.data.records];
   else if (insight.data?.food) foods = [insight.data.food];
-  else {
-    const listed = [
-      ...(insight.data?.withIngredient?.foods || []),
-      ...(insight.data?.withoutIngredient?.foods || []),
-    ];
-    const seen = new Set<string>();
-    for (const food of listed) {
-      const key = `${food.name}|${food.isCurrent ? '1' : '0'}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      foods.push({
-        name: food.name,
-        isCurrent: food.isCurrent,
-        imageUrl: food.imageUrl,
-        avgStool: null,
-        itchDays: 0,
-        vomitDays: 0,
-      });
-    }
+
+  const listed = [
+    ...(insight.data?.withIngredient?.foods || []),
+    ...(insight.data?.withoutIngredient?.foods || []),
+  ];
+  for (const food of listed) {
+    const already = foods.some(row => row.name === food.name && !!row.isCurrent === !!food.isCurrent);
+    if (already) continue;
+    foods.push({
+      name: food.name,
+      isCurrent: food.isCurrent,
+      imageUrl: food.imageUrl,
+      avgStool: null,
+      itchDays: 0,
+      vomitDays: 0,
+    });
   }
   return foods.sort((a, b) => {
     if (!!a.isCurrent !== !!b.isCurrent) return a.isCurrent ? -1 : 1;
@@ -196,38 +199,38 @@ function buildPdfHtml(insight: InsightData, petName?: string, petType?: string):
   return `
     <html><head><meta charset="utf-8"><style>
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1B2B27; margin: 0; padding: 32px; background: #ffffff; }
+      @page { margin: ${Platform.OS === 'ios' ? '0' : '64px 48px'}; }
+      body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1B2B27; margin: 0; padding: 0; background: #ffffff; }
       .brand { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: #2D6A4F; margin: 0 0 6px; }
       h1 { font-size: 22px; line-height: 1.25; margin: 0; font-weight: 700; }
       h2 { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #5C6B66; margin: 0 0 8px; font-weight: 700; }
       h3 { font-size: 16px; margin: 0; font-weight: 700; }
       p { margin: 0; }
       .who { color: #5C6B66; font-size: 13px; margin-top: 6px; }
-      .finding { margin-top: 20px; padding: 14px 16px; background: #F5F3EF; box-shadow: inset 0 0 0 999px #F5F3EF; border-radius: 12px; font-size: 15px; line-height: 1.45; }
+      .finding { margin-top: 20px; padding: 14px 16px; background: #F5F3EF; box-shadow: inset 0 0 0 40px #F5F3EF; border-radius: 12px; font-size: 15px; line-height: 1.45; overflow: hidden; }
       .section { margin-top: 22px; }
       .watch { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #E8E4DD; }
       .bar { width: 0; border-left: 4px solid #E76F51; border-radius: 2px; }
-      .pill { display: inline-block; font-size: 10px; letter-spacing: 0.06em; background: #F5F3EF; box-shadow: inset 0 0 0 999px #F5F3EF; color: #5C6B66; padding: 2px 8px; border-radius: 99px; font-weight: 700; }
+      .pill { display: inline-block; font-size: 10px; letter-spacing: 0.06em; background: #F5F3EF; box-shadow: inset 0 0 0 16px #F5F3EF; color: #5C6B66; padding: 2px 8px; border-radius: 99px; font-weight: 700; overflow: hidden; }
       .watch-name { font-size: 16px; font-weight: 700; margin-top: 4px; }
       .watch-cap { font-size: 12px; color: #5C6B66; margin-top: 2px; }
       .compare { display: flex; gap: 10px; }
-      .food { border: 1px solid #E8E4DD; border-radius: 12px; padding: 12px; margin-top: 10px; break-inside: avoid; page-break-inside: avoid; }
-      .watch { break-inside: avoid; page-break-inside: avoid; }
+      .food { border: 1px solid #E8E4DD; border-radius: 12px; padding: 12px; margin-top: 10px; }
       .current-card { border-color: #2D6A4F; }
-      .stat.good { background: #E7F4EE; box-shadow: inset 0 0 0 999px #E7F4EE; }
+      .stat.good { background: #E7F4EE; box-shadow: inset 0 0 0 48px #E7F4EE; }
       .stat.good .v { color: #1B6B45; }
-      .stat.mid { background: #FBF3D5; box-shadow: inset 0 0 0 999px #FBF3D5; }
+      .stat.mid { background: #FBF3D5; box-shadow: inset 0 0 0 48px #FBF3D5; }
       .stat.mid .v { color: #7A5B10; }
-      .stat.bad { background: #FDE8E2; box-shadow: inset 0 0 0 999px #FDE8E2; }
+      .stat.bad { background: #FDE8E2; box-shadow: inset 0 0 0 48px #FDE8E2; }
       .stat.bad .v { color: #B23B24; }
-      .current { display: inline-block; margin-left: 8px; background: #2D6A4F; box-shadow: inset 0 0 0 999px #2D6A4F; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; vertical-align: middle; }
+      .current { display: inline-block; margin-left: 8px; background: #2D6A4F; box-shadow: inset 0 0 0 16px #2D6A4F; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; vertical-align: middle; overflow: hidden; }
       .quiet { color: #5C6B66; font-size: 12px; margin-top: 4px; }
       .stats { display: flex; gap: 8px; margin-top: 12px; }
-      .stat { flex: 1; background: #F5F3EF; box-shadow: inset 0 0 0 999px #F5F3EF; border-radius: 10px; padding: 10px; }
+      .stat { flex: 1; background: #F5F3EF; box-shadow: inset 0 0 0 48px #F5F3EF; border-radius: 10px; padding: 10px; overflow: hidden; }
       .k { font-size: 11px; color: #5C6B66; }
       .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
       .ingredients { margin-top: 10px; font-size: 11px; line-height: 1.45; color: #5C6B66; }
-      .disclaimer { margin-top: 22px; padding: 12px 14px; background: #FFF6E8; box-shadow: inset 0 0 0 999px #FFF6E8; border-radius: 10px; font-size: 12px; line-height: 1.45; color: #5C6B66; }
+      .disclaimer { margin-top: 22px; padding: 12px 14px; background: #FFF6E8; box-shadow: inset 0 0 0 40px #FFF6E8; border-radius: 10px; font-size: 12px; line-height: 1.45; color: #5C6B66; overflow: hidden; }
     </style></head><body>
       <p class="brand">PHD Plus</p>
       <h1>Food summary for your veterinarian</h1>
@@ -303,7 +306,12 @@ export default function InsightDetailScreen() {
     if (!Print || !insight.data) return;
     setGenerating(true);
     try {
-      const { uri } = await Print.printToFileAsync({ html: buildPdfHtml(insight, petName, petType) });
+      const { uri } = await Print.printToFileAsync({
+        html: buildPdfHtml(insight, petName, petType),
+        margins: Platform.OS === 'ios'
+          ? { top: 48, right: 36, bottom: 48, left: 36 }
+          : undefined,
+      });
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share insight report' });
     } catch (e: any) {
       Alert.alert('Error', 'Could not generate the PDF. Please try again.');
@@ -439,8 +447,8 @@ export default function InsightDetailScreen() {
                 </View>
                 <View style={styles.comparisonStats}>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{insight.data.withIngredient.avgStoolScore}</Text>
-                    <Text style={styles.statLabel}>Avg Stool</Text>
+                    <Text style={styles.stoolStatValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{stoolPhrase(insight.data.withIngredient.avgStoolScore)}</Text>
+                    <Text style={styles.statLabel}>Stool</Text>
                   </View>
                   <View style={styles.statItem}>
                     <Text style={styles.statValue}>{insight.data.withIngredient.avgItchRate}%</Text>
@@ -467,8 +475,8 @@ export default function InsightDetailScreen() {
                 </View>
                 <View style={styles.comparisonStats}>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{insight.data.withoutIngredient.avgStoolScore}</Text>
-                    <Text style={styles.statLabel}>Avg Stool</Text>
+                    <Text style={styles.stoolStatValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{stoolPhrase(insight.data.withoutIngredient.avgStoolScore)}</Text>
+                    <Text style={styles.statLabel}>Stool</Text>
                   </View>
                   <View style={styles.statItem}>
                     <Text style={styles.statValue}>{insight.data.withoutIngredient.avgItchRate}%</Text>
@@ -617,7 +625,7 @@ const styles = StyleSheet.create({
   },
   comparisonStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginTop: spacing.sm,
   },
   healthStats: {
@@ -637,13 +645,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   statItem: {
+    flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     gap: 2,
+    paddingHorizontal: 4,
   },
   statValue: {
+    height: 28,
     fontSize: 24,
+    lineHeight: 28,
     fontWeight: '700',
     color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  stoolStatValue: {
+    width: '100%',
+    height: 28,
+    fontSize: 15,
+    lineHeight: 28,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
   },
   statLabel: {
     fontSize: 12,
