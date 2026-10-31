@@ -25,6 +25,7 @@ import PetsScreen from '../screens/PetsScreen';
 import AddPetScreen from '../screens/AddPetScreen';
 import EditPetScreen from '../screens/EditPetScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ContactScreen from '../screens/ContactScreen';
 import { TwoStepScanScreen } from '../screens/TwoStepScanScreen';
 import { QuickScanScreen } from '../screens/QuickScanScreen';
 import { ManualIngredientsScreen } from '../screens/ManualIngredientsScreen';
@@ -148,6 +149,7 @@ function SettingsStackNavigator() {
   return (
     <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
       <SettingsStack.Screen name="Settings" component={SettingsScreen} />
+      <SettingsStack.Screen name="Contact" component={ContactScreen} />
     </SettingsStack.Navigator>
   );
 }

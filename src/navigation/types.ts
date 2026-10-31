@@ -81,6 +81,7 @@ export type PetsStackParamList = {
 
 export type SettingsStackParamList = {
   Settings: undefined;
+  Contact: undefined;
 };
 
 export type MainTabParamList = {

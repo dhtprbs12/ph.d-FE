@@ -11,7 +11,9 @@ import {
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { SettingsStackParamList } from '../navigation/types';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadows } from '../theme';
@@ -199,6 +201,7 @@ const dividerStyles = StyleSheet.create({
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<SettingsStackParamList>>();
   const { pets, selectedPet, resetApp } = useApp();
   const fadeStyles = useStaggeredFade(6);
   const toast = useToast();
@@ -318,6 +321,14 @@ export default function SettingsScreen() {
 
         {/* About */}
         <SettingsSection title="About" style={fadeStyles[3]}>
+          <SettingsRow
+            icon="mail-outline"
+            iconColor={colors.primary}
+            title="Contact Us"
+            showChevron
+            onPress={() => navigation.navigate('Contact')}
+          />
+          <SectionDivider />
           <SettingsRow
             icon="hand-left"
             iconColor={colors.primary}
