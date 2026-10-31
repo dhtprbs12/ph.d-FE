@@ -17,6 +17,7 @@ import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../theme';
 import api from '../services/api';
+import { useToast } from '../components/common/Toast';
 
 const TOPICS = ['Account', 'PHD Plus', 'A food or scan', 'Something else'] as const;
 const APP_VERSION =
@@ -33,6 +34,7 @@ function usableEmail(value: string): string {
 export default function ContactScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const toast = useToast();
   const scrollRef = useRef<ScrollView>(null);
   const [topic, setTopic] = useState<(typeof TOPICS)[number]>('Account');
   const [message, setMessage] = useState('');
@@ -41,7 +43,6 @@ export default function ContactScreen() {
   const [emailError, setEmailError] = useState('');
   const [sendError, setSendError] = useState('');
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -83,7 +84,8 @@ export default function ContactScreen() {
         appVersion: APP_VERSION,
         platform: Platform.OS,
       });
-      setSent(true);
+      toast.show({ message: "Sent. We'll reply by email.", type: 'success' });
+      navigation.goBack();
     } catch (e: any) {
       const status = e?.response?.status;
       setSendError(status === 429
@@ -104,12 +106,6 @@ export default function ContactScreen() {
         <View style={{ width: 24 }} />
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={undefined}>
-        {sent ? (
-          <View style={styles.sent}>
-            <Text style={styles.sentTitle}>Sent.</Text>
-            <Text style={styles.hint}>We'll reply by email.</Text>
-          </View>
-        ) : (
           <ScrollView
             ref={scrollRef}
             keyboardShouldPersistTaps="handled"
@@ -138,7 +134,7 @@ export default function ContactScreen() {
                 setMessage(value);
                 if (messageError) setMessageError('');
               }}
-              placeholder="My food scan has been pending since yesterday."
+              placeholder="Ex) My food scan has been pending since yesterday."
               placeholderTextColor={colors.textSecondary}
               multiline
               textAlignVertical="top"
@@ -171,7 +167,6 @@ export default function ContactScreen() {
               )}
             </Pressable>
           </ScrollView>
-        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -232,6 +227,4 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   sendText: { ...typography.titleMedium, color: colors.white },
-  sent: { padding: spacing.lg, paddingTop: spacing.xl },
-  sentTitle: { ...typography.displaySmall, color: colors.textPrimary, marginBottom: spacing.xs },
 });
