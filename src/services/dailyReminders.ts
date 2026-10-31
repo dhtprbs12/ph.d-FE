@@ -1,8 +1,27 @@
+import { Linking, PermissionsAndroid, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 const MORNING_ID = 'phd-log-morning';
 const LUNCH_ID = 'phd-log-lunch';
 const EVENING_ID = 'phd-log-evening';
+const EXACT_ALARM = 'android.permission.SCHEDULE_EXACT_ALARM';
+
+let askedExactAlarm = false;
+
+async function ensureExactAlarmPermission() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 31) return;
+  if (askedExactAlarm) return;
+  try {
+    const allowed = await PermissionsAndroid.check(
+      EXACT_ALARM as Parameters<typeof PermissionsAndroid.check>[0],
+    );
+    if (allowed) return;
+    askedExactAlarm = true;
+    await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+  } catch {
+    askedExactAlarm = true;
+  }
+}
 
 async function scheduleDaily(id: string, hour: number, body: string) {
   await Notifications.scheduleNotificationAsync({
@@ -21,6 +40,8 @@ export async function scheduleDailyReminders(petName: string, earnedToday: boole
   const current = await Notifications.getPermissionsAsync();
   const permission = current.status === 'granted' ? current : await Notifications.requestPermissionsAsync();
   if (permission.status !== 'granted') return;
+
+  await ensureExactAlarmPermission();
 
   await Notifications.setNotificationChannelAsync('daily-log', {
     name: 'Daily log',
