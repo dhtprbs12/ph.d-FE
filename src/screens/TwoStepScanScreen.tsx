@@ -32,6 +32,7 @@ import { ApiUploadError } from '../services/api';
 import { useApp } from '../context/AppContext';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 import { useToast } from '../components/common/Toast';
+import { EnterBarcodeForm } from '../components/EnterBarcodeForm';
 import type {
   Pet,
   PackageShape,
@@ -988,6 +989,7 @@ function BarcodeStep({
   onSkip: () => void;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
+  const [entering, setEntering] = useState(false);
   const scannedRef = useRef(false);
 
   useEffect(() => {
@@ -1000,10 +1002,27 @@ function BarcodeStep({
     onScanned(data);
   }, [onScanned]);
 
+  if (entering) {
+    return (
+      <EnterBarcodeForm
+        topInset={false}
+        onBack={() => setEntering(false)}
+        onSubmit={code => {
+          if (scannedRef.current) return;
+          scannedRef.current = true;
+          onScanned(code);
+        }}
+      />
+    );
+  }
+
   if (!permission?.granted) {
     return (
       <View style={barcodeStyles.container}>
         <Text style={barcodeStyles.permText}>Camera permission is required to scan barcodes.</Text>
+        <Pressable style={barcodeStyles.permEnter} onPress={() => setEntering(true)}>
+          <Text style={barcodeStyles.permEnterText}>Enter barcode</Text>
+        </Pressable>
         <Pressable style={barcodeStyles.skipBtn} onPress={onSkip}>
           <Text style={barcodeStyles.skipBtnText}>Skip</Text>
         </Pressable>
@@ -1025,9 +1044,12 @@ function BarcodeStep({
           barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'code93', 'itf14', 'qr'] }}
           onBarcodeScanned={handleBarCodeScanned}
         />
-        <View style={barcodeStyles.overlay}>
+        <View style={barcodeStyles.overlay} pointerEvents="none">
           <View style={barcodeStyles.scanLine} />
         </View>
+        <Pressable onPress={() => setEntering(true)} style={barcodeStyles.enterBtn}>
+          <Text style={barcodeStyles.enterBtnText}>Enter barcode</Text>
+        </Pressable>
       </View>
       <Text style={barcodeStyles.hint}>Point your camera at the barcode</Text>
       <Pressable style={barcodeStyles.skipBtn} onPress={onSkip}>
@@ -1083,6 +1105,23 @@ const barcodeStyles = StyleSheet.create({
     opacity: 0.7,
     borderRadius: 1,
   },
+  enterBtn: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    zIndex: 2,
+    elevation: 6,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  enterBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
   hint: {
     fontSize: 14,
     color: colors.textSecondary,
@@ -1111,6 +1150,18 @@ const barcodeStyles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 40,
     marginBottom: 20,
+  },
+  permEnter: {
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    marginBottom: 8,
+  },
+  permEnterText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 

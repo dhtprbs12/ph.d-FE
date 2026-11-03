@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, ActivityIndicator, Image, Platform, Pressable,
+  StyleSheet, ActivityIndicator, Image, Platform, Pressable,
   KeyboardAvoidingView, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ import type { PetSex } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 import { DOG_BREEDS, CAT_BREEDS } from '../data/breeds';
 import FoodSearchInput, { FoodSelection } from '../components/FoodSearchInput';
+import { EnterBarcodeForm } from '../components/EnterBarcodeForm';
 import { LookupRequestCard } from '../components/LookupRequestCard';
 import { BarcodeRegisterFields } from '../components/BarcodeRegisterFields';
 import { AnalysisNotice } from '../components/AnalysisNotice';
@@ -78,6 +79,7 @@ export default function SignupScreen({ navigation }: Props) {
   const [missQuery, setMissQuery] = useState('');
 
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeEntry, setBarcodeEntry] = useState(false);
   const [scanLooking, setScanLooking] = useState(false);
   const scanRef = useRef(false);
   const cameraRef = useRef<CameraView>(null);
@@ -142,11 +144,14 @@ export default function SignupScreen({ navigation }: Props) {
     if (!cameraPermission?.granted) {
       const result = await requestCameraPermission();
       if (!result.granted) {
-        Alert.alert('Camera Permission', 'Camera access is needed to scan barcodes.');
+        scanRef.current = false;
+        setBarcodeEntry(true);
+        setScannerOpen(true);
         return;
       }
     }
     scanRef.current = false;
+    setBarcodeEntry(false);
     setScannerOpen(true);
   };
 
@@ -767,6 +772,21 @@ export default function SignupScreen({ navigation }: Props) {
       </ScrollView>
 
       <Modal visible={scannerOpen} animationType="slide" presentationStyle="fullScreen">
+        {barcodeEntry ? (
+          <EnterBarcodeForm
+            submitting={scanLooking}
+            onBack={() => {
+              if (scanLooking) return;
+              if (!cameraPermission?.granted) {
+                setBarcodeEntry(false);
+                setScannerOpen(false);
+                return;
+              }
+              setBarcodeEntry(false);
+            }}
+            onSubmit={code => handleBarcodeScan({ data: code })}
+          />
+        ) : (
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <CameraView
             ref={cameraRef}
@@ -783,14 +803,21 @@ export default function SignupScreen({ navigation }: Props) {
           )}
           <Pressable
             onPress={() => setScannerOpen(false)}
-            style={{ position: 'absolute', top: 60, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}
+            style={{ position: 'absolute', top: insets.top + 12, left: 20, zIndex: 2, elevation: 6, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}
           >
             <Ionicons name="close" size={24} color={colors.white} />
           </Pressable>
-          <View style={{ position: 'absolute', bottom: 80, left: 0, right: 0, alignItems: 'center' }}>
+          <View style={{ position: 'absolute', bottom: insets.bottom + 92, left: 0, right: 0, zIndex: 2, elevation: 6, alignItems: 'center' }}>
             <Text style={{ color: colors.white, fontSize: 16, fontWeight: '600' }}>Point at the barcode on the food bag</Text>
           </View>
+          <Pressable
+            onPress={() => setBarcodeEntry(true)}
+            style={{ position: 'absolute', left: 20, right: 20, bottom: insets.bottom + 24, zIndex: 2, elevation: 6, backgroundColor: '#fff', borderRadius: 14, alignItems: 'center', paddingVertical: 14 }}
+          >
+            <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '600' }}>Enter barcode</Text>
+          </Pressable>
         </View>
+        )}
       </Modal>
     </KeyboardAvoidingView>
 

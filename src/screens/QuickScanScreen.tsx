@@ -12,6 +12,7 @@ import api from '../services/api';
 import petFoodService from '../services/petFoodService';
 import { toTitleCase } from '../utils/helpers';
 import { FoodPreviewSheet, type FoodPreview } from '../components/FoodPreviewSheet';
+import { EnterBarcodeForm } from '../components/EnterBarcodeForm';
 import { useToast } from '../components/common/Toast';
 import { lookupByBarcode, ackLookup } from '../services/lookupService';
 
@@ -32,6 +33,7 @@ export function QuickScanScreen() {
   const [missedScan, setMissedScan] = useState<{ barcode: string; photoUri?: string } | null>(null);
   const [foodSetInfo, setFoodSetInfo] = useState<{ name: string } | null>(null);
   const [foodPreview, setFoodPreview] = useState<(FoodPreview & { productId: string; brand?: string; replacing?: boolean }) | null>(null);
+  const [entering, setEntering] = useState(false);
 
   useEffect(() => {
     if (!permission?.granted) requestPermission();
@@ -88,6 +90,7 @@ export function QuickScanScreen() {
             return;
           } catch {
             toast.show({ message: 'Failed to set current food', type: 'error' });
+            scannedRef.current = false;
           }
           setLooking(false);
           return;
@@ -133,6 +136,7 @@ export function QuickScanScreen() {
         setNotFound(true);
       } else {
         toast.show({ message: 'Something went wrong. Try again.', type: 'error' });
+        scannedRef.current = false;
       }
       setLooking(false);
     }
@@ -145,11 +149,27 @@ export function QuickScanScreen() {
     setLooking(false);
   };
 
-  if (!permission?.granted) {
+  useEffect(() => {
+    if (notFound) setEntering(false);
+  }, [notFound]);
+
+  if (!permission?.granted && !notFound) {
+    if (entering) {
+      return (
+        <EnterBarcodeForm
+          submitting={looking}
+          onBack={() => { if (!looking) setEntering(false); }}
+          onSubmit={code => handleBarCodeScanned({ data: code })}
+        />
+      );
+    }
     return (
       <SafeAreaView style={s.safe}>
         <View style={s.center}>
           <Text style={s.permText}>Camera permission is required.</Text>
+          <Pressable onPress={() => setEntering(true)} style={s.permEnter}>
+            <Text style={s.permEnterText}>Enter barcode</Text>
+          </Pressable>
           <Pressable onPress={() => navigation.goBack()} style={s.backBtn}>
             <Text style={s.backBtnText}>Go Back</Text>
           </Pressable>
@@ -159,6 +179,14 @@ export function QuickScanScreen() {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {entering ? (
+        <EnterBarcodeForm
+          submitting={looking}
+          onBack={() => { if (!looking) setEntering(false); }}
+          onSubmit={code => handleBarCodeScanned({ data: code })}
+        />
+      ) : (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={s.header}>
@@ -185,9 +213,14 @@ export function QuickScanScreen() {
           />
         )}
         {!notFound && !looking && (
-          <View style={s.overlay}>
+          <View style={s.overlay} pointerEvents="none">
             <Text style={s.hint}>Point at the barcode</Text>
           </View>
+        )}
+        {!notFound && !looking && (
+          <Pressable onPress={() => setEntering(true)} style={s.enterBtn}>
+            <Text style={s.enterBtnText}>Enter barcode</Text>
+          </Pressable>
         )}
         {looking && (
           <Modal transparent animationType="fade">
@@ -233,8 +266,9 @@ export function QuickScanScreen() {
           </View>
         )}
       </View>
+    </SafeAreaView>
+      )}
 
-      {/* Food Set Success Modal */}
       {foodSetInfo && (
         <Modal transparent animationType="fade">
           <View style={s.loadingModal}>
@@ -276,7 +310,7 @@ export function QuickScanScreen() {
           }
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -292,8 +326,21 @@ const s = StyleSheet.create({
   title: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
   cameraContainer: { flex: 1, position: 'relative', margin: 16, borderRadius: 20, overflow: 'hidden', backgroundColor: '#000' },
   camera: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  overlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', zIndex: 1 },
   hint: { color: '#fff', fontSize: 14, marginTop: 20, fontWeight: '500' },
+  enterBtn: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 16,
+    zIndex: 2,
+    elevation: 6,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  enterBtnText: { color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
   loadingModal: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -387,6 +434,14 @@ const s = StyleSheet.create({
   successBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   permText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginBottom: 16 },
+  permEnter: {
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    marginBottom: 12,
+  },
+  permEnterText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   backBtn: { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.primary },
   backBtnText: { color: colors.primary, fontWeight: '600' },
 });
