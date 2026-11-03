@@ -28,11 +28,10 @@ import * as communityService from '../services/communityService';
 import type { RecentActivity } from '../services/communityService';
 import gamificationService, { GamificationSummary } from '../services/gamificationService';
 import petFoodService, { CurrentFood } from '../services/petFoodService';
-import checkinService, { DailyLog } from '../services/checkinService';
+import checkinService from '../services/checkinService';
 import DailyLogSheets from '../components/DailyLogSheets';
 import { scheduleDailyReminders } from '../services/dailyReminders';
-import { calendarDaysOnFood, formatFoodDay, formatLogTime, phoneYmd } from '../utils/foodTime';
-import { isVomitLog, latestMealAndHealth, logSummary } from '../utils/dailyLog';
+import { calendarDaysOnFood, formatFoodDay, phoneYmd } from '../utils/foodTime';
 import { useToast } from '../components/common/Toast';
 import { LookupRequestCard } from '../components/LookupRequestCard';
 import { SwitchFoodDialog } from '../components/SwitchFoodDialog';
@@ -298,6 +297,14 @@ function QuickActionRow({
 
 /* ─── Current Food Card ────────────────────────────────────────── */
 
+function manufacturerLine(name?: string | null, manufacturer?: string | null) {
+  const maker = (manufacturer || '').trim();
+  if (!maker) return '';
+  const product = (name || '').trim().toLowerCase();
+  if (product.includes(maker.toLowerCase())) return '';
+  return toTitleCase(maker);
+}
+
 function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const [currentFood, setCurrentFood] = useState<CurrentFood | null>(null);
   const [showFoodInput, setShowFoodInput] = useState(false);
@@ -310,7 +317,6 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   const [searching, setSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
-  const [recentLogs, setRecentLogs] = useState<DailyLog[]>([]);
   const [logSheet, setLogSheet] = useState<'meal' | 'health' | null>(null);
   const toast = useToast();
   const searchTimer = useRef<NodeJS.Timeout | null>(null);
@@ -318,15 +324,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
 
   const loadFoodAndLogs = useCallback(() => {
     if (!pet?.id) return;
-    petFoodService.getCurrentFood(pet.id).then(food => {
-      setCurrentFood(food);
-      return checkinService.getCheckins(pet.id, '2020-01-01', phoneYmd()).then(logs => {
-        const rows = logs.checkins || [];
-        const tagged = rows.some(row => row.petFoodId);
-        const onThisFood = food && tagged ? rows.filter(row => row.petFoodId === food.id) : rows;
-        setRecentLogs(latestMealAndHealth(onThisFood));
-      });
-    }).catch(() => setRecentLogs([]));
+    petFoodService.getCurrentFood(pet.id).then(setCurrentFood).catch(() => {});
     const today = phoneYmd();
     checkinService.getCheckins(pet.id, today, today)
       .then(r => scheduleDailyReminders(pet.name, (r.checkins?.length ?? 0) > 0))
@@ -440,6 +438,7 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
   };
 
   const hasProductId = currentFood?.productId != null;
+  const maker = manufacturerLine(currentFood?.productName, currentFood?.manufacturer);
 
   return (
     <View style={[styles.card, shadows.card]}>
@@ -460,16 +459,13 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
               <Text style={[typography.labelLarge, { color: colors.textPrimary }]} numberOfLines={1}>
                 {toTitleCase(currentFood.productName)}
               </Text>
-              {currentFood.analysisPending ? (
-                <Text style={[typography.bodySmall, { color: colors.primary, fontWeight: '600' }]}>Analysis in progress</Text>
-              ) : null}
-              {currentFood.manufacturer ? (
+              {maker ? (
                 <Text style={[typography.labelMedium, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {toTitleCase(currentFood.manufacturer)}
+                  {maker}
                 </Text>
               ) : null}
               <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-                {pet.name} · Day {foodDays}
+                Day {foodDays}
               </Text>
             </View>
             <Pressable onPress={toggleFoodSearch} hitSlop={8} style={[styles.switchBadge, { flexShrink: 0 }]}>
@@ -478,6 +474,12 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
           </View>
           {!showFoodInput && (
           <>
+          {currentFood.analysisPending ? (
+            <View style={styles.pendingNote}>
+              <Text style={styles.pendingTitle}>Analysis in progress</Text>
+              <Text style={styles.pendingBody}>You can still log. These logs connect to this product when it's done.</Text>
+            </View>
+          ) : null}
           <View style={styles.logActions}>
             <Pressable
               onPress={() => setLogSheet('meal')}
@@ -498,18 +500,6 @@ function CurrentFoodCard({ pet, navigation }: { pet: Pet; navigation: Nav }) {
               <Text style={styles.logBtnText}>Log Pet Health</Text>
             </Pressable>
           </View>
-          {recentLogs.length > 0 && (
-            <Text style={[typography.titleLarge, { color: colors.textPrimary }]}>Latest logs</Text>
-          )}
-          {recentLogs.map(entry => (
-            <Text
-              key={entry.id}
-              style={[typography.labelMedium, { color: isVomitLog(entry) ? colors.danger : colors.textPrimary }]}
-              numberOfLines={2}
-            >
-              {formatLogTime(entry.loggedAt)} - {logSummary(entry)}
-            </Text>
-          ))}
           {/* Scan nudge for free-text food */}
           {!hasProductId && !currentFood.analysisPending && (
             <Pressable
@@ -1897,6 +1887,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
     borderRadius: radius.medium,
+  },
+  pendingNote: {
+    backgroundColor: '#E7F4EE',
+    borderRadius: radius.medium,
+    padding: spacing.sm,
+    gap: 4,
+  },
+  pendingTitle: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  pendingBody: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    lineHeight: 20,
   },
   foodInput: {
     borderWidth: 1,

@@ -74,50 +74,45 @@ export function LookupRequestCard({
   return (
     <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md, gap: spacing.sm }}>
       {onBack ? (
-        <Pressable onPress={onBack} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, paddingVertical: 6 }}>
-          <Ionicons name="chevron-back" size={28} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 22, fontWeight: '700' }}>Go Back</Text>
+        <Pressable onPress={onBack} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2, paddingVertical: 6 }}>
+          <Ionicons name="chevron-back" size={18} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Back</Text>
         </Pressable>
       ) : null}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        <Ionicons name="search" size={26} color={colors.textPrimary} />
-        <Text style={{ fontSize: 22, fontWeight: '700', color: colors.textPrimary, flex: 1 }}>
-          No product found
-        </Text>
-      </View>
-      <Text style={[typography.titleMedium, { color: colors.textPrimary }]}>
+      <Text style={{ fontSize: 22, fontWeight: '700', color: colors.textPrimary }}>
         We'll look this up for {petName}
       </Text>
       <Text style={[typography.bodyMedium, { color: colors.textSecondary }]}>
         Write the brand, the product name, and the protein as they appear on the package.
       </Text>
-      <TextInput
-        value={brand}
-        onChangeText={setBrand}
-        onFocus={(event) => revealField(event.target)}
-        placeholder="Brand (Required)"
-        placeholderTextColor={colors.textSecondary}
-        style={inputStyle}
-      />
-      <TextInput
-        value={queryName}
-        onChangeText={setQueryName}
-        onFocus={(event) => revealField(event.target)}
-        placeholder="Product name (Required)"
-        placeholderTextColor={colors.textSecondary}
-        style={inputStyle}
-      />
-      <TextInput
-        value={protein}
-        onChangeText={setProtein}
-        onFocus={(event) => revealField(event.target)}
-        placeholder="Protein (Required)"
-        placeholderTextColor={colors.textSecondary}
-        style={inputStyle}
-      />
-      {!ready ? (
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Brand, product name, and protein are required</Text>
-      ) : null}
+      <Field label="Brand">
+        <TextInput
+          value={brand}
+          onChangeText={setBrand}
+          onFocus={(event) => revealField(event.target)}
+          placeholderTextColor={colors.textSecondary}
+          style={inputStyle}
+        />
+      </Field>
+      <Field label="Product name">
+        <TextInput
+          value={queryName}
+          onChangeText={setQueryName}
+          onFocus={(event) => revealField(event.target)}
+          placeholderTextColor={colors.textSecondary}
+          style={inputStyle}
+        />
+      </Field>
+      <Field label="Protein">
+        <TextInput
+          value={protein}
+          onChangeText={setProtein}
+          onFocus={(event) => revealField(event.target)}
+          placeholderTextColor={colors.textSecondary}
+          style={inputStyle}
+        />
+      </Field>
+      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginTop: 6 }}>Optional</Text>
       <ChoiceRow
         label="Life stage"
         options={stages}
@@ -130,15 +125,19 @@ export function LookupRequestCard({
         selected={foodForm}
         onSelect={(id) => setFoodForm(current => current === id ? null : id)}
       />
-      <TextInput
-        value={pastedUrl}
-        onChangeText={setPastedUrl}
-        onFocus={(event) => onLinkFocus(event.target)}
-        placeholder="Product page link (optional)"
-        placeholderTextColor={colors.textSecondary}
-        autoCapitalize="none"
-        style={inputStyle}
-      />
+      <Field label="Product page link">
+        <TextInput
+          value={pastedUrl}
+          onChangeText={setPastedUrl}
+          onFocus={(event) => onLinkFocus(event.target)}
+          placeholder="https://"
+          placeholderTextColor={colors.textSecondary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          style={inputStyle}
+        />
+      </Field>
       {linkOffer && !pastedUrl ? (
         <Pressable onPress={() => { setPastedUrl(linkOffer); setLinkOffer(null); }}>
           <Text style={{ color: colors.primary, fontWeight: '600' }}>Use this link?</Text>
@@ -147,16 +146,18 @@ export function LookupRequestCard({
       <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
         A product page link lets us open that exact food. We'll still look it up by name if you skip it.
       </Text>
-      <TextInput
-        value={email}
-        onChangeText={setEmail}
-        onFocus={(event) => revealField(event.target)}
-        placeholder="Email me too. Optional."
-        placeholderTextColor={colors.textSecondary}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        style={inputStyle}
-      />
+      <Field label="Email">
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          onFocus={(event) => revealField(event.target)}
+          placeholder="We'll reply here too"
+          placeholderTextColor={colors.textSecondary}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          style={inputStyle}
+        />
+      </Field>
       <Pressable
         disabled={!ready || submitting}
         onPress={() => onRequest({
@@ -174,6 +175,7 @@ export function LookupRequestCard({
           borderRadius: radius.medium,
           padding: spacing.md,
           alignItems: 'center',
+          marginTop: 6,
         }}
       >
         <Text style={{ color: colors.white, fontWeight: '700' }}>{submitting ? 'Sending...' : actionLabel}</Text>
@@ -181,27 +183,29 @@ export function LookupRequestCard({
       {onUploadPhotos ? (
       <Pressable
         onPress={() => onUploadPhotos(email.trim())}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: spacing.sm,
-          backgroundColor: colors.card,
-          borderWidth: 1,
-          borderColor: colors.primary,
-          borderRadius: radius.medium,
-          padding: spacing.md,
-        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8 }}
       >
-        <Ionicons name="camera-outline" size={22} color={colors.primary} />
+        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#E7F4EE', alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="camera-outline" size={18} color={colors.primary} />
+        </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.primary, fontWeight: '700' }}>Photograph the product</Text>
+          <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>Photograph the product</Text>
           <Text style={[typography.bodySmall, { color: colors.textSecondary, marginTop: 2 }]}>
-            Use the package for a more accurate report. You'll earn 🦴×20.
+            Use the package for a more accurate report. You'll earn 20 bones.
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
       </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>{label}</Text>
+      {children}
     </View>
   );
 }
@@ -219,7 +223,7 @@ function ChoiceRow({
 }) {
   return (
     <View style={{ gap: spacing.xs }}>
-      <Text style={[typography.labelMedium, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>{label}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
         {options.map(option => {
           const on = option.id === selected;
